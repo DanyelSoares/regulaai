@@ -2,3 +2,5 @@
 *.local.json
 .DS_Store
 Thumbs.db
+watch.js
+Iniciar Sync.bat
