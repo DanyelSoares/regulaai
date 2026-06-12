@@ -1,0 +1,3366 @@
+/* RegulaAI — Aplicação principal (vanilla JS ES5/ES6) */
+// @ts-nocheck
+(function(){
+
+  var DEFAULT_RISCO_CFG = {
+    ativo: true,
+    pesos: {
+      urgencia:         30,
+      uti:              25,
+      opme:             20,
+      semAnexos:        20,
+      prazoVencido:     20,
+      semDut:           15,
+      aderenciaCrit:    25,
+      aderenciaBaixa:   10,
+      altaComplexidade: 10,
+      oncologia:        15
+    },
+    limiares: { baixo: 20, medio: 45, alto: 70 }
+  };
+
+  var State = {
+    route:'dashboard',
+    perfil: localStorage.getItem('regula_perfil') || 'auditor',
+    visaoPerfil: '',        // gestor only: ''|'enfermeiro'|'auditor'
+    visaoEnfermeiros: [],  // gestor only: []=todas | ['E1','E2'...]
+    riscoConfig: JSON.parse(localStorage.getItem('regula_risco_cfg')||'null') || DEFAULT_RISCO_CFG,
+    etapaInstrucoes: JSON.parse(localStorage.getItem('regula_etapa_instr')||'null') || {},
+    vincConfig: JSON.parse(localStorage.getItem('regula_vinc_cfg')||'null') || {},
+    customDutRules: JSON.parse(localStorage.getItem('regula_custom_dut')||'null') || [],
+    guiasViewTab: 'filtro',
+    logsTab: 'usuarios',
+    filtrosAvancados: {
+      flagOpme:false, flagPrio:false, flagOpm:false, flagInternacao:false,
+      flagUti:false, flagSemParam:false, flagAnexo:false, flagDut:false,
+      flagAuditoriaOrigem:false, flagAguardandoAuth:false, flagAguardandoAuthEmpresa:false,
+      flagAuditoriaOperadora:false, flagMsgNaoLida:false,
+      flagIntercambio:false, flagDemandaJudicial:false, flagInconsistencia:false,
+      status:'', nivelAuditoria:'', especialidade:'', natureza:'',
+      auditor:'', tipo:'', regime:'', executante:'',
+      congenere:'', classificacao:'', origem:'', solicitante:'',
+      fluxo:'', etapa:'', parecer:'', statusGerencial:'',
+      cotacao:'', comAnexo:'', tipoTaxa:'', statusEtapa:'',
+      prestador:'', localAtendimento:'', procedimento:'',
+      dataDeEmissao:'', dataAteEmissao:''
+    },
+    guias: MOCK.buildGuias(),
+    guiasPagina: 1,
+    filtros: { q:'', status:'', fluxo:'', origem:'', risco:'', benef:'', prest:'', tipo:'', congenere:'', solicitante:'', opme:'', uti:'', regimeAte:'', especialidade:'', dataDeEmissao:'', dataAteEmissao:'', sortCol:'', sortDir:'' }
+  };
+
+  // Recupera pareceres salvos
+  var saved = JSON.parse(localStorage.getItem('regula_pareceres')||'{}');
+  for(var i=0;i<State.guias.length;i++){ if(saved[State.guias[i].numero]) State.guias[i].parecerOperadora = saved[State.guias[i].numero]; }
+
+  // Recupera estado de anexos (categoria + anotações)
+  var savedAnx = JSON.parse(localStorage.getItem('regula_anexos')||'{}');
+  for(var ai=0;ai<State.guias.length;ai++){
+    var gg=State.guias[ai];
+    for(var aj=0;aj<gg.anexosLista.length;aj++){
+      var ax=gg.anexosLista[aj]; var st=savedAnx[ax.id];
+      if(st){ if(st.categoria) ax.categoria=st.categoria; if(st.anotacoes) ax.anotacoes=st.anotacoes; }
+    }
+  }
+  function persistAnexo(ax){
+    var sv=JSON.parse(localStorage.getItem('regula_anexos')||'{}');
+    sv[ax.id]={categoria:ax.categoria,anotacoes:ax.anotacoes};
+    localStorage.setItem('regula_anexos',JSON.stringify(sv));
+  }
+
+  // Cadastro de enfermeiras — cada uma atende a um subconjunto de fluxos
+  var ENFERMEIROS = [
+    {id:'E1', nome:'Renata Lopes',   cor:'#0a8a43', fluxos:['F3','F4','F7'], especialidade:'Ambulatorial / Exames'},
+    {id:'E2', nome:'Carla Mendonça', cor:'#2faa66', fluxos:['F2','F6'],      especialidade:'Alta Complexidade / Bariátrica'}
+  ];
+
+  var perfilDef = {
+    enfermeiro: {nome: ENFERMEIROS[0].nome, cor: ENFERMEIROS[0].cor,
+                 perms:['ver','triagem','complemento'],
+                 fluxos: ENFERMEIROS[0].fluxos, enfermeiroId: ENFERMEIROS[0].id},
+    auditor:    {nome:'Dr. Marcos Vinícius',cor:'#066b34', perms:['ver','triagem','complemento','parecer','aprovar','reprovar','junta']},
+    gestor:     {nome:'Patrícia Andrade',  cor:'#054f27', perms:['ver','triagem','complemento','parecer','aprovar','reprovar','junta','config','parametrizar','logs']}
+  };
+  function can(act){ return perfilDef[State.perfil].perms.indexOf(act)>=0; }
+
+  // Retorna a etapa atualmente em execução de uma guia
+  function etapaAtualDe(g){
+    for(var i=0;i<g.etapas.length;i++){ if(g.etapas[i].status==='em_execucao') return g.etapas[i]; }
+    return g.etapas[0]||null;
+  }
+
+  // Filtra as guias visíveis de acordo com o perfil ativo
+  // Enfermeiro: só guias nos seus fluxos E cuja etapa atual é de responsabilidade do enfermeiro
+  // Auditor: guias cuja etapa atual é de responsabilidade do auditor (inclui fluxos sem etapa enfermeiro)
+  // Gestor: tudo; se State.visaoPerfil estiver definido, aplica a mesma lógica do perfil simulado
+  function guiasVisiveis(){
+    var base = State.guias;
+    var efetivo = State.perfil === 'gestor' ? State.visaoPerfil : State.perfil;
+    if(!efetivo) return base;
+    if(efetivo === 'enfermeiro'){
+      // Gestor pode filtrar por enfermeira específica; perfil enfermeiro usa seu próprio cadastro
+      var fluxosEnf;
+      if(State.perfil==='gestor' && State.visaoEnfermeiros.length){
+        // uma ou mais enfermeiras selecionadas: união dos fluxos
+        fluxosEnf = ENFERMEIROS
+          .filter(function(e){ return State.visaoEnfermeiros.indexOf(e.id)>=0; })
+          .reduce(function(acc,e){ return acc.concat(e.fluxos); },[]);
+      } else if(State.perfil==='enfermeiro'){
+        var enfProp=null;
+        for(var ej=0;ej<ENFERMEIROS.length;ej++){ if(ENFERMEIROS[ej].id===perfilDef.enfermeiro.enfermeiroId){enfProp=ENFERMEIROS[ej];break;} }
+        fluxosEnf = enfProp ? enfProp.fluxos : [];
+      } else {
+        fluxosEnf = ENFERMEIROS.reduce(function(acc,e){ return acc.concat(e.fluxos); },[]);
+      }
+      return base.filter(function(g){
+        if(fluxosEnf.indexOf(g.fluxo.id) < 0) return false;
+        var et = etapaAtualDe(g);
+        return et && et.responsavel === 'enfermeiro';
+      });
+    }
+    if(efetivo === 'auditor'){
+      return base.filter(function(g){
+        var et = etapaAtualDe(g);
+        return et && et.responsavel === 'auditor';
+      });
+    }
+    return base;
+  }
+
+  // Barra de visão compartilhada entre Dashboard e Guias (apenas Gestor)
+  function renderVisaoBar(wrap){
+    var totalTodos=State.guias.length;
+    var enfAtivo=State.visaoPerfil==='enfermeiro';
+
+    // Linha principal: sempre Todos | Enfermeiros | Auditor
+    var mainBar=el('div',{class:'visao-bar'});
+    mainBar.innerHTML=
+      ico('eye',13)+' <span style="font-size:12px;font-weight:600;color:var(--g-700)">Simular visão:</span>'+
+      '<button class="visao-btn'+(State.visaoPerfil===''?' active':'')+'" data-v="">'+
+        ico('layout-dashboard',12)+' Todos ('+totalTodos+')</button>'+
+      '<button class="visao-btn'+(enfAtivo?' active':'')+'" data-v="enfermeiro">'+
+        ico('stethoscope',12)+' Enfermeiros'+(enfAtivo?' '+ico('chevron-up',11):' '+ico('chevron-down',11))+'</button>'+
+      '<button class="visao-btn'+(State.visaoPerfil==='auditor'?' active':'')+'" data-v="auditor">'+
+        ico('search',12)+' Auditor</button>';
+
+    $$('.visao-btn',mainBar).forEach(function(b){
+      b.onclick=function(){
+        State.visaoPerfil=b.getAttribute('data-v');
+        State.visaoEnfermeiros=[];   // sempre reseta seleção individual
+        render();
+      };
+    });
+    wrap.appendChild(mainBar);
+
+    // Segunda linha: enfermeiras individuais — só quando "Enfermeiros" está ativo
+    if(enfAtivo){
+      var subBar=el('div',{class:'visao-enf-row'});
+      var nSel=State.visaoEnfermeiros.length;
+      subBar.innerHTML=
+        '<span class="visao-enf-label">'+ico('corner-down-right',12)+
+        (nSel?' <b>'+nSel+'</b> selecionada'+(nSel>1?'s':'')+':' : ' Selecione uma ou mais:')+'</span>'+
+        ENFERMEIROS.map(function(e){
+          var sel=State.visaoEnfermeiros.indexOf(e.id)>=0;
+          return '<button class="visao-btn enf-btn'+(sel?' active':'')+'" data-enf-id="'+e.id+'"'+
+            ' style="--enf-cor:'+e.cor+'">' +
+            '<span class="enf-dot" style="background:'+e.cor+'"></span>'+
+            esc(e.nome)+'</button>';
+        }).join('')+
+        (nSel?'<button class="visao-btn" id="btnEnfClear" style="font-size:11px;opacity:.7">'+ico('x',11)+' Limpar</button>':'');
+
+      $$('.enf-btn',subBar).forEach(function(b){
+        b.onclick=function(){
+          var id=b.getAttribute('data-enf-id');
+          var idx=State.visaoEnfermeiros.indexOf(id);
+          if(idx>=0) State.visaoEnfermeiros.splice(idx,1);
+          else State.visaoEnfermeiros.push(id);
+          render();
+        };
+      });
+      var clr=subBar.querySelector('#btnEnfClear');
+      if(clr) clr.onclick=function(){ State.visaoEnfermeiros=[]; render(); };
+      wrap.appendChild(subBar);
+    }
+
+    // Banner contextual
+    if(State.visaoPerfil){
+      var bann=el('div',{class:'perfil-banner info'});
+      var label='';
+      if(State.visaoPerfil==='enfermeiro'){
+        if(State.visaoEnfermeiros.length){
+          var nomes=ENFERMEIROS.filter(function(e){return State.visaoEnfermeiros.indexOf(e.id)>=0;}).map(function(e){return '<b>'+esc(e.nome.split(' ')[0])+'</b>';});
+          label='Enf. '+nomes.join(' + ');
+        } else {
+          label='Todos os enfermeiros ('+ENFERMEIROS.map(function(e){return e.nome.split(' ')[0];}).join(', ')+')';
+        }
+      } else {
+        label='Auditor — etapas de auditoria médica / junta médica';
+      }
+      var guias=guiasVisiveis();
+      bann.innerHTML=ico('eye',14)+' Simulando visão: '+label+' — <b>'+guias.length+'</b> guia(s) visíveis.'+
+        ' <button class="chip-rm" id="btnSairVisao2" style="font-size:12px;margin-left:8px;vertical-align:middle">Voltar visão completa</button>';
+      wrap.appendChild(bann);
+      setTimeout(function(){ var b=$('#btnSairVisao2'); if(b) b.onclick=function(){State.visaoPerfil='';State.visaoEnfermeiros=[];render();}; },0);
+    }
+  }
+
+  /* === Aplica risco calculado ao iniciar (depois que guiaAderencia estiver disponível) === */
+  // aplicarRiscos() é chamado no bindNav após DOM pronto, quando guiaAderencia já funciona.
+
+  /* === Utilidades === */
+  function $(s,r){return (r||document).querySelector(s);}
+  function $$(s,r){return Array.prototype.slice.call((r||document).querySelectorAll(s));}
+  function el(tag, attrs, html){ var e=document.createElement(tag); if(attrs) for(var k in attrs){ if(k==='class') e.className=attrs[k]; else if(k==='html') e.innerHTML=attrs[k]; else e.setAttribute(k,attrs[k]); } if(html!=null) e.innerHTML=html; return e; }
+  function esc(s){ if(s==null) return ''; return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]}); }
+  function mask(v){ if(State.perfil==='gestor') return v; if(!v) return ''; return v.replace(/\d(?=\d{2})/g,'•'); }
+  function toast(msg,kind){ var t=el('div',{class:'toast '+(kind||'')},esc(msg)); $('#toastRoot').appendChild(t); setTimeout(function(){t.style.opacity=0; setTimeout(function(){t.remove()},300)},2800); }
+  function ico(name,size){ size=size||14; return '<i data-lucide="'+name+'" width="'+size+'" height="'+size+'" style="vertical-align:middle"></i>'; }
+  function icoLg(name){ return '<i data-lucide="'+name+'" width="40" height="40"></i>'; }
+  function lcIcons(){ if(typeof lucide!=='undefined') lucide.createIcons(); }
+
+  function statusBadge(s){
+    var cls='muted';
+    if(s==='Liberada') cls='';
+    else if(s==='Negada') cls='danger';
+    else if(s==='Em junta médica') cls='info';
+    else if(s==='Aguardando complemento'||s==='Aguardando documentação'||s==='Em correção pelo prestador') cls='warn';
+    else if(s==='Sem parametrização') cls='dark';
+    return '<span class="badge '+cls+'">'+esc(s)+'</span>';
+  }
+  function riskPill(r){ return '<span class="risk '+r+'">'+r.charAt(0).toUpperCase()+r.slice(1)+'</span>'; }
+  function aderenciaBar(p){
+    var cls = p>=90?'alta':(p>=70?'mod':(p>=50?'baixa':'crit'));
+    return '<div class="ader '+cls+'"><div class="t"><div class="f" style="width:'+p+'%"></div></div><div class="v">'+p+'%</div></div>';
+  }
+  function guiaAderencia(g){ if(!g._cache) g._cache = AI.analisarGuiaComIA(g,{}); return g._cache.aderencia; }
+
+  function calcRiscoScore(g){
+    var p=State.riscoConfig.pesos, score=0;
+    if(g.regime==='Urgência')                               score+=+p.urgencia||0;
+    if(g.uti)                                               score+=+p.uti||0;
+    if(g.opme)                                              score+=+p.opme||0;
+    if(!g.anexos)                                           score+=+p.semAnexos||0;
+    if(g.prazoVencido)                                      score+=+p.prazoVencido||0;
+    if(!g.dut && g.procedimentos.some(function(p2){return p2.dut;})) score+=+p.semDut||0;
+    var ad=guiaAderencia(g);
+    if(ad<50)       score+=+p.aderenciaCrit||0;
+    else if(ad<70)  score+=+p.aderenciaBaixa||0;
+    if(g.fluxo.id==='F2'||g.fluxo.id==='F5') score+=+p.altaComplexidade||0;
+    if(g.fluxo.id==='F8')                     score+=+p.oncologia||0;
+    return score;
+  }
+
+  function calcRisco(g){
+    var score=calcRiscoScore(g), lim=State.riscoConfig.limiares;
+    if(score<=+lim.baixo) return 'baixo';
+    if(score<=+lim.medio) return 'medio';
+    if(score<=+lim.alto)  return 'alto';
+    return 'critico';
+  }
+
+  function aplicarRiscos(){
+    if(!State.riscoConfig.ativo) return;
+    State.guias.forEach(function(g){ g.risco=calcRisco(g); });
+  }
+
+  /* === Date Range Picker === */
+  function makeDateRangePicker(container, initDe, initAte, onChange){
+    var _de=initDe||'', _ate=initAte||'', _step=0, _hover='';
+    var now=new Date(), _vy=now.getFullYear(), _vm=now.getMonth();
+    var MESES=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+    var DIAS=['D','S','T','Q','Q','S','S'];
+    var _dayEls=[];
+    var _statusEl=null;
+    var wrapEl=el('div',{class:'drp-wrap'});
+    var trigEl=el('button',{class:'drp-trigger'});
+    var panEl=el('div',{class:'drp-panel'});
+    wrapEl.appendChild(trigEl); wrapEl.appendChild(panEl);
+    container.appendChild(wrapEl);
+
+    function iso(y,m0,d){ var mm=m0+1; return y+'-'+(mm<10?'0':'')+mm+'-'+(d<10?'0':'')+d; }
+    function br(s){ if(!s) return ''; var p=s.split('-'); return p[2]+'/'+p[1]+'/'+p[0]; }
+    var todayStr=iso(now.getFullYear(),now.getMonth(),now.getDate());
+
+    function calcClass(ds){
+      var cls='drp-day';
+      if(ds===todayStr) cls+=' today';
+      var lo=_de, hi=_ate;
+      if(_step===1&&_hover){
+        lo=_hover<_de?_hover:_de;
+        hi=_hover>=_de?_hover:_de;
+      }
+      if(lo&&hi){
+        if(ds===lo&&ds===hi) cls+=' range-start range-end';
+        else if(ds===lo) cls+=' range-start';
+        else if(ds===hi) cls+=' range-end';
+        else if(ds>lo&&ds<hi) cls+=' in-range';
+      } else if(_de&&ds===_de) cls+=' range-start range-end';
+      return cls;
+    }
+
+    function refreshClasses(){
+      _dayEls.forEach(function(item){ item.el.className=calcClass(item.ds); });
+      if(_statusEl) _statusEl.textContent=_step===0?'Selecione a data inicial':'Selecione a data final';
+    }
+
+    function updateTrigger(){
+      trigEl.innerHTML=ico('calendar',13)+' '+(_de?br(_de)+(_ate?' – '+br(_ate):'…'):'<span style="color:var(--muted)">Período</span>');
+      trigEl.className='drp-trigger'+(_de||_ate?' active':'');
+      lcIcons();
+    }
+
+    function buildPanel(){
+      _dayEls=[];
+      panEl.innerHTML='';
+
+      // Nav header
+      var hd=el('div',{class:'drp-month-hd'});
+      var prev=el('button',{class:'drp-nav'},'‹');
+      prev.onclick=function(e){e.stopPropagation();if(_vm===0){_vm=11;_vy--;}else _vm--;buildPanel();};
+      var nxt=el('button',{class:'drp-nav'},'›');
+      nxt.onclick=function(e){e.stopPropagation();if(_vm===11){_vm=0;_vy++;}else _vm++;buildPanel();};
+      hd.appendChild(prev);
+      hd.appendChild(el('span',{class:'drp-month-name'},MESES[_vm]+' '+_vy));
+      hd.appendChild(nxt);
+      panEl.appendChild(hd);
+
+      // Table calendar
+      var tbl=document.createElement('table');
+      tbl.className='drp-cal';
+      // Header row
+      var thead=document.createElement('thead');
+      var hdRow=document.createElement('tr');
+      DIAS.forEach(function(d){
+        var th=document.createElement('th');
+        th.className='drp-day-hd'; th.textContent=d;
+        hdRow.appendChild(th);
+      });
+      thead.appendChild(hdRow); tbl.appendChild(thead);
+      // Body
+      var tbody=document.createElement('tbody');
+      var firstDow=new Date(_vy,_vm,1).getDay();
+      var daysIn=new Date(_vy,_vm+1,0).getDate();
+      var row=document.createElement('tr');
+      for(var e2=0;e2<firstDow;e2++){
+        var et=document.createElement('td'); et.className='drp-day empty'; row.appendChild(et);
+      }
+      for(var d=1;d<=daysIn;d++){
+        if(row.children.length===7){ tbody.appendChild(row); row=document.createElement('tr'); }
+        var ds=iso(_vy,_vm,d);
+        var td=document.createElement('td');
+        td.className=calcClass(ds); td.textContent=String(d);
+        _dayEls.push({el:td,ds:ds});
+        (function(dateStr,elem){
+          elem.onmouseenter=function(){if(_step===1){_hover=dateStr;refreshClasses();}};
+          elem.onclick=function(e){
+            e.stopPropagation();
+            if(_step===0){_de=dateStr;_ate='';_step=1;_hover='';updateTrigger();refreshClasses();}
+            else{
+              if(dateStr<_de){var t=_de;_de=dateStr;_ate=t;}
+              else if(dateStr===_de){_step=0;return;}
+              else{_ate=dateStr;}
+              _step=0;_hover='';
+              panEl.classList.remove('open');
+              updateTrigger();onChange(_de,_ate);
+            }
+          };
+        })(ds,td);
+        row.appendChild(td);
+      }
+      // Pad last row
+      while(row.children.length>0&&row.children.length<7){
+        var ep=document.createElement('td'); ep.className='drp-day empty'; row.appendChild(ep);
+      }
+      if(row.children.length>0) tbody.appendChild(row);
+      tbl.appendChild(tbody);
+      tbl.onmouseleave=function(){if(_step===1){_hover='';refreshClasses();}};
+      panEl.appendChild(tbl);
+
+      // Status
+      _statusEl=el('div',{class:'drp-status'});
+      _statusEl.textContent=_step===0?'Selecione a data inicial':'Selecione a data final';
+      panEl.appendChild(_statusEl);
+
+      // Footer
+      if(_de||_ate){
+        var foot=el('div',{class:'drp-foot'});
+        var clrBtn=el('button',{class:'btn ghost'});
+        clrBtn.innerHTML=ico('x',11)+' Limpar'; clrBtn.style.fontSize='11px';
+        clrBtn.onclick=function(e){e.stopPropagation();_de='';_ate='';_step=0;_hover='';updateTrigger();buildPanel();onChange('','');};
+        foot.appendChild(clrBtn); panEl.appendChild(foot);
+      }
+      lcIcons();
+    }
+
+    trigEl.onclick=function(e){
+      e.stopPropagation();
+      if(panEl.classList.contains('open')) panEl.classList.remove('open');
+      else{buildPanel();panEl.classList.add('open');}
+    };
+    panEl.onclick=function(e){e.stopPropagation();};
+    document.addEventListener('click',function(){panEl.classList.remove('open');});
+    updateTrigger();
+    return { clear:function(){_de='';_ate='';_step=0;_hover='';updateTrigger();} };
+  }
+
+  /* === Custom select === */
+  function makeCustomSelect(sel){
+    var wrap=el('div',{class:'csel'});
+    var trigger=el('div',{class:'csel-trigger'});
+    var drop=el('div',{class:'csel-drop'});
+
+    function refreshTrigger(){
+      var cur=sel.options[sel.selectedIndex];
+      trigger.innerHTML=esc(cur?cur.text:'')+'<i data-lucide="chevron-down" width="11" height="11" style="vertical-align:middle;opacity:.6"></i>';
+      lcIcons();
+    }
+    function closeAll(){ document.querySelectorAll('.csel.open').forEach(function(x){x.classList.remove('open')}); }
+
+    Array.prototype.forEach.call(sel.options,function(o){
+      var item=el('div',{class:'csel-item'+(o.selected?' active':'')});
+      item.textContent=o.text;
+      item.setAttribute('data-v',o.value);
+      item.onclick=function(e){
+        e.stopPropagation();
+        sel.value=o.value;
+        drop.querySelectorAll('.csel-item').forEach(function(x){x.classList.toggle('active',x.getAttribute('data-v')===o.value)});
+        refreshTrigger();
+        wrap.classList.remove('open');
+        sel.dispatchEvent(new Event('change'));
+      };
+      drop.appendChild(item);
+    });
+
+    trigger.onclick=function(e){
+      e.stopPropagation();
+      var wasOpen=wrap.classList.contains('open');
+      closeAll();
+      if(!wasOpen) wrap.classList.add('open');
+    };
+
+    refreshTrigger();
+    sel.parentNode.insertBefore(wrap,sel);
+    wrap.appendChild(trigger);
+    wrap.appendChild(drop);
+    wrap.appendChild(sel);
+  }
+  document.addEventListener('click',function(){ document.querySelectorAll('.csel.open').forEach(function(x){x.classList.remove('open')}); });
+
+  /* === Sidebar collapse === */
+  var _sidebarCollapsed = localStorage.getItem('regula_sidebar')==='1';
+  function applySidebarState(){
+    var app=document.getElementById('app');
+    var btn=document.getElementById('sidebarToggle');
+    if(!app||!btn) return;
+    app.classList.toggle('sidebar-collapsed',_sidebarCollapsed);
+    btn.innerHTML=_sidebarCollapsed
+      ?'<i data-lucide="chevron-right" width="12" height="12"></i>'
+      :'<i data-lucide="chevron-left" width="12" height="12"></i>';
+    btn.title=_sidebarCollapsed?'Expandir menu':'Recolher menu';
+    lcIcons();
+  }
+
+  /* === Page loader === */
+  var _plStart=0;
+  function showPageLoader(){
+    _plStart=Date.now();
+    var pl=document.getElementById('pageLoader');
+    if(pl) pl.classList.add('pl--in');
+  }
+  function hidePageLoader(){
+    var pl=document.getElementById('pageLoader');
+    if(!pl) return;
+    var delay=Math.max(0,480-(Date.now()-_plStart));
+    setTimeout(function(){ pl.classList.remove('pl--in'); },delay);
+  }
+
+  /* === Sidebar / nav === */
+  function bindNav(){
+    $$('.nav-item').forEach(function(a){
+      a.onclick=function(){
+        State.route=a.getAttribute('data-route');
+        $$('.nav-item').forEach(function(x){x.classList.remove('active')});
+        a.classList.add('active');
+        render();
+        window.scrollTo({top:0,behavior:'instant'});
+      };
+    });
+    $('#globalSearch').oninput=function(){ State.filtros.q=this.value.toLowerCase(); if(State.route==='guias'||State.route==='dashboard') render(); };
+
+    document.getElementById('sidebarToggle').onclick=function(){
+      _sidebarCollapsed=!_sidebarCollapsed;
+      localStorage.setItem('regula_sidebar',_sidebarCollapsed?'1':'0');
+      applySidebarState();
+    };
+    applySidebarState();
+
+    // Loader double-click → abre page-loader em modo foco (blur no fundo, esfera nítida)
+    var _loaderEl=document.querySelector('.loader');
+    if(_loaderEl){
+      _loaderEl.addEventListener('dblclick',function(e){
+        e.stopPropagation();
+        var pl=document.getElementById('pageLoader');
+        if(!pl||pl.classList.contains('pl--focus')) return;
+        var bd=document.createElement('div');
+        bd.className='loader-focus-bd';
+        document.body.appendChild(bd);
+        pl.classList.add('pl--in','pl--focus');
+        function closeFocus(){
+          pl.classList.remove('pl--in','pl--focus');
+          if(bd.parentNode) document.body.removeChild(bd);
+          document.removeEventListener('keydown',_escHandler);
+        }
+        function _escHandler(ev){ if(ev.key==='Escape') closeFocus(); }
+        // Clicar em qualquer parte do overlay (fora da esfera) fecha
+        pl.addEventListener('click',function _plClick(ev){
+          pl.removeEventListener('click',_plClick);
+          closeFocus();
+        });
+        document.addEventListener('keydown',_escHandler);
+      });
+    }
+
+    // FAB trocar perfil
+    $('#fabBtn').onclick=function(e){ e.stopPropagation(); $('#fabMenu').classList.toggle('open'); lcIcons(); };
+    document.addEventListener('click',function(){ var m=$('#fabMenu'); if(m) m.classList.remove('open'); });
+    $$('#fabMenu button').forEach(function(b){
+      b.onclick=function(e){
+        e.stopPropagation();
+        var p=b.getAttribute('data-profile');
+        var enfId=b.getAttribute('data-enf-id')||'';
+        if(p==='enfermeiro'){
+          var enfSel=null;
+          for(var k=0;k<ENFERMEIROS.length;k++){ if(ENFERMEIROS[k].id===enfId){ enfSel=ENFERMEIROS[k]; break; } }
+          if(!enfSel) enfSel=ENFERMEIROS[0];
+          perfilDef.enfermeiro.nome=enfSel.nome; perfilDef.enfermeiro.cor=enfSel.cor;
+          perfilDef.enfermeiro.fluxos=enfSel.fluxos; perfilDef.enfermeiro.enfermeiroId=enfSel.id;
+        }
+        State.perfil=p; State.visaoPerfil=''; State.visaoEnfermeiros=[];
+        localStorage.setItem('regula_perfil',State.perfil);
+        $('#fabMenu').classList.remove('open');
+        renderUserChip(); render();
+        toast('Perfil: '+(p==='enfermeiro'?perfilDef.enfermeiro.nome:perfilDef[p].nome),'ok');
+      };
+    });
+  }
+
+  function renderUserChip(){
+    var u=perfilDef[State.perfil];
+    $('#userName').textContent=u.nome;
+    $('#userRole').textContent=State.perfil;
+    $('#userAvatar').textContent=u.nome.charAt(0);
+    $('#userAvatar').style.background=u.cor;
+    // Marca ativo no FAB
+    $$('#fabMenu button').forEach(function(b){ b.classList.remove('fab-active'); });
+    $$('#fabMenu button[data-profile="'+State.perfil+'"]').forEach(function(b){
+      var eid=b.getAttribute('data-enf-id')||'';
+      if(State.perfil!=='enfermeiro'||eid===perfilDef.enfermeiro.enfermeiroId) b.classList.add('fab-active');
+    });
+  }
+
+  /* === Views === */
+  function render(){
+    var v=$('#view'); v.innerHTML='';
+    if(State.route==='dashboard') v.appendChild(viewDashboard());
+    else if(State.route==='guias') v.appendChild(viewGuias());
+    else if(State.route==='kanban') v.appendChild(viewKanban());
+    else if(State.route==='param') v.appendChild(viewParam());
+    else if(State.route==='logs') v.appendChild(viewLogs());
+    else if(State.route==='config') v.appendChild(viewConfig());
+    lcIcons();
+    atualizarBreadcrumb && atualizarBreadcrumb();
+  }
+
+  function viewDashboard(){
+    var wrap=el('div');
+    var guias=guiasVisiveis();
+    var tituloExtra='';
+    if(State.perfil==='gestor' && State.visaoPerfil) tituloExtra=' <span class="badge info">Visão: '+State.visaoPerfil+'</span>';
+    var hdr=el('div',{class:'page-title'},'<div><h1>Dashboard Executivo'+tituloExtra+'</h1><p>Visão consolidada de auditoria assistencial e indicadores operacionais.</p></div>');
+    wrap.appendChild(hdr);
+
+    // Banner de contexto de perfil
+    if(State.perfil!=='gestor'){
+      var bann=el('div',{class:'perfil-banner'});
+      var bIcon=State.perfil==='enfermeiro'?'stethoscope':'search';
+      var bMsg=State.perfil==='enfermeiro'
+        ?'Você está visualizando '+guias.length+' guia(s) atribuída(s) ao perfil Enfermeiro nos fluxos: '+perfilDef.enfermeiro.fluxos.join(', ')+'.'
+        :'Você está visualizando '+guias.length+' guia(s) atribuída(s) ao perfil Auditor (etapas de auditoria médica e junta médica).';
+      bann.innerHTML=ico(bIcon,14)+' '+bMsg;
+      wrap.appendChild(bann);
+    }
+
+    // Seletor de visão para Gestor
+    if(State.perfil==='gestor') renderVisaoBar(wrap);
+
+    function count(fn){ return guias.filter(fn).length; }
+    var tempoMedio=guias.length?( guias.reduce(function(a,g){return a+g.diasAuditoria},0)/guias.length).toFixed(1):'—';
+    var kpis=[
+      {t:'Total de guias',          v:guias.length,                                              cls:'',       fn:function(g){return true;}},
+      {t:'Em análise',              v:count(function(g){return g.status==='Em análise'}),         cls:'',       fn:function(g){return g.status==='Em análise';}},
+      {t:'Em junta médica',         v:count(function(g){return g.status==='Em junta médica'}),    cls:'info',   fn:function(g){return g.status==='Em junta médica';}},
+      {t:'Aguardando complemento',  v:count(function(g){return g.status==='Aguardando complemento'}), cls:'warn', fn:function(g){return g.status==='Aguardando complemento';}},
+      {t:'Analisadas',              v:count(function(g){return g.status==='Analisada'}),          cls:'info',   fn:function(g){return g.status==='Analisada';}},
+      {t:'Liberadas',               v:count(function(g){return g.status==='Liberada'}),           cls:'',       fn:function(g){return g.status==='Liberada';}},
+      {t:'Negadas',                 v:count(function(g){return g.status==='Negada'}),             cls:'danger', fn:function(g){return g.status==='Negada';}},
+      {t:'Com OPME',                v:count(function(g){return g.opme}),                          cls:'warn',   fn:function(g){return !!g.opme;},                                  extra:'opme'},
+      {t:'Cotação de OPME',         v:count(function(g){return g.status==='Cotação de OPME'}),    cls:'warn',   fn:function(g){return g.status==='Cotação de OPME';},              extra:'opme'},
+      {t:'Baixa aderência',         v:count(function(g){return guiaAderencia(g)<70}),             cls:'danger', fn:function(g){return guiaAderencia(g)<70;},                       extra:'aderencia'},
+      {t:'Tempo médio (dias)',       v:tempoMedio,                                                 cls:'info',   fn:function(g){return true;},                                      extra:'tempo'},
+      {t:'Etapa com gargalo',        v:'Aud. Prévia',                                              cls:'warn',   fn:function(g){var et=g.etapas&&g.etapas.filter(function(e){return e.status==='Em andamento';})[0]; return !!(et&&et.nome&&et.nome.indexOf('AUD')>=0);}, extra:'etapa'}
+    ];
+
+    function kpiModal(k){
+      var list=guias.filter(k.fn).slice().sort(function(a,b){return b.diasAuditoria-a.diasAuditoria;});
+      var prest=function(g){return ((g.prestadorExe||g.prestadorSol)||{}).nome||'—';};
+      var fluxoNome=function(g){return (g.fluxo||{}).nome||'—';};
+      var adBadge=function(g){
+        var a=guiaAderencia(g);
+        var c=a>=85?'#054f27':a>=70?'#8a6300':'#a01b14';
+        return '<b style="color:'+c+'">'+a+'%</b>';
+      };
+      var etapaAtual=function(g){
+        if(!g.etapas) return '—';
+        var e=g.etapas.filter(function(x){return x.status==='Em andamento';})[0];
+        return e?e.nome:'—';
+      };
+
+      var cols;
+      if(k.extra==='tempo'){
+        cols=[
+          {h:'Nº Guia',        f:function(g){return esc(g.numero);}},
+          {h:'Beneficiário',   f:function(g){return esc(g.beneficiario.nome);}},
+          {h:'Prestador',      f:function(g){return esc(prest(g));}},
+          {h:'Status',         f:function(g){return statusBadge(g.status);}},
+          {h:'Dias em auditoria',f:function(g){return '<b>'+g.diasAuditoria+'</b>';}},
+          {h:'Aderência',      f:function(g){return adBadge(g);}}
+        ];
+      } else if(k.extra==='aderencia'){
+        list=list.slice().sort(function(a,b){return guiaAderencia(a)-guiaAderencia(b);});
+        cols=[
+          {h:'Nº Guia',      f:function(g){return esc(g.numero);}},
+          {h:'Beneficiário', f:function(g){return esc(g.beneficiario.nome);}},
+          {h:'Fluxo',        f:function(g){return esc(fluxoNome(g));}},
+          {h:'Status',       f:function(g){return statusBadge(g.status);}},
+          {h:'Aderência',    f:function(g){return adBadge(g);}}
+        ];
+      } else if(k.extra==='opme'){
+        cols=[
+          {h:'Nº Guia',      f:function(g){return esc(g.numero);}},
+          {h:'Beneficiário', f:function(g){return esc(g.beneficiario.nome);}},
+          {h:'Prestador',    f:function(g){return esc(prest(g));}},
+          {h:'Tipo',         f:function(g){return esc(g.tipo);}},
+          {h:'Status',       f:function(g){return statusBadge(g.status);}},
+          {h:'OPME',         f:function(g){return g.opme?'<span class="badge warn">Sim</span>':'<span class="badge muted">Não</span>';}}
+        ];
+      } else if(k.extra==='etapa'){
+        // Ranking de gargalos — substituído por render especial abaixo
+        cols=null;
+      } else {
+        cols=[
+          {h:'Nº Guia',      f:function(g){return esc(g.numero);}},
+          {h:'Beneficiário', f:function(g){return esc(g.beneficiario.nome);}},
+          {h:'Prestador',    f:function(g){return esc(prest(g));}},
+          {h:'Tipo',         f:function(g){return esc(g.tipo);}},
+          {h:'Status',       f:function(g){return statusBadge(g.status);}},
+          {h:'Aderência',    f:function(g){return adBadge(g);}}
+        ];
+      }
+
+      // ── Etapa com gargalo: ranking analítico ────────────────────────────────
+      if(k.extra==='etapa'){
+        // Acumula horas por etapa em todas as guias
+        var rankMap={};
+        guias.forEach(function(g){
+          (g.etapas||[]).forEach(function(e){
+            if(e.status==='aguardando') return;
+            var horas=e.horasReais||0;
+            if(e.status==='em_execucao') horas=g.diasAuditoria*24; // tempo parado até agora
+            if(!rankMap[e.nome]) rankMap[e.nome]={nome:e.nome,totalH:0,cnt:0,stuck:0,prazo:e.prazoHoras||24};
+            rankMap[e.nome].totalH+=horas;
+            rankMap[e.nome].cnt++;
+            if(e.status==='em_execucao') rankMap[e.nome].stuck++;
+          });
+        });
+        var ranking=Object.keys(rankMap).map(function(n){
+          var r=rankMap[n];
+          return {nome:n,media:Math.round(r.totalH/r.cnt),cnt:r.cnt,stuck:r.stuck,prazo:r.prazo};
+        }).sort(function(a,b){return b.media-a.media;}).slice(0,10);
+
+        var maxH=ranking.length?ranking[0].media:1;
+        function fmtH(h){return h>=48?Math.round(h/24)+'d':h+'h';}
+        var rankHTML='<div style="display:flex;flex-direction:column;gap:6px;padding:4px 0">';
+        ranking.forEach(function(r,idx){
+          var pct=Math.round(r.media/maxH*100);
+          var overPrazo=r.media>r.prazo;
+          var barColor=overPrazo?'#e53935':'var(--g-400)';
+          rankHTML+=
+            '<div style="display:grid;grid-template-columns:22px 1fr 60px 70px;align-items:center;gap:10px;padding:7px 10px;border-radius:8px;background:'+(idx%2===0?'var(--g-50)':'#fff')+'">'+
+              '<span style="font-size:13px;font-weight:700;color:var(--muted);text-align:right">#'+(idx+1)+'</span>'+
+              '<div>'+
+                '<div style="font-size:12.5px;font-weight:600;color:var(--g-800);margin-bottom:4px">'+esc(r.nome)+'</div>'+
+                '<div style="background:var(--g-100);border-radius:99px;height:6px;overflow:hidden">'+
+                  '<div style="width:'+pct+'%;height:100%;background:'+barColor+';border-radius:99px;transition:width .4s"></div>'+
+                '</div>'+
+              '</div>'+
+              '<div style="text-align:right">'+
+                '<div style="font-size:14px;font-weight:700;color:'+(overPrazo?'#a01b14':'var(--g-800)')+'">'+fmtH(r.media)+'</div>'+
+                '<div style="font-size:10px;color:var(--muted)">média</div>'+
+              '</div>'+
+              '<div style="text-align:center">'+
+                (r.stuck?'<span class="badge danger" style="font-size:10px">'+r.stuck+' parada'+(r.stuck>1?'s':'')+'</span>':'<span class="badge muted" style="font-size:10px">'+r.cnt+' passaram</span>')+
+              '</div>'+
+            '</div>';
+        });
+        rankHTML+='</div>'+
+          '<div style="margin-top:10px;padding:8px 10px;background:var(--g-50);border-radius:8px;font-size:11.5px;color:var(--muted)">'+
+            ico('info',11)+' Barras em <span style="color:#e53935;font-weight:600">vermelho</span> indicam etapas acima do prazo configurado. Clique em uma linha para ver as guias nessa etapa.'+
+          '</div>';
+
+        var m=modal('Ranking de Gargalos','Tempo médio por etapa — '+guias.length+' guias analisadas', rankHTML,
+          ranking.length+' etapas · '+ranking.filter(function(r){return r.stuck>0;}).length+' com guias paradas agora'
+        );
+        setTimeout(function(){
+          $$('[data-etapa]',m).forEach(function(row){
+            row.style.cursor='pointer';
+            row.onclick=function(){
+              var nome=row.getAttribute('data-etapa');
+              var sub=guias.filter(function(g){
+                return (g.etapas||[]).some(function(e){return e.nome===nome&&e.status==='em_execucao';});
+              });
+              if(sub.length){
+                var t2='<table style="width:100%"><thead><tr><th>Nº Guia</th><th>Beneficiário</th><th>Dias</th><th>Status</th></tr></thead><tbody>'+
+                  sub.map(function(g,i){return '<tr class="'+(i%2===0?'log-row-a':'log-row-b')+' kpi-modal-row" data-num="'+esc(g.numero)+'"><td>'+esc(g.numero)+'</td><td>'+esc(g.beneficiario.nome)+'</td><td><b>'+g.diasAuditoria+'</b></td><td>'+statusBadge(g.status)+'</td></tr>';}).join('')+
+                  '</tbody></table>';
+                var m2=modal(esc(nome),'Guias paradas nesta etapa',t2,sub.length+' guia(s)');
+                setTimeout(function(){
+                  $$('.kpi-modal-row',m2).forEach(function(tr){
+                    tr.onclick=function(){var g=guias.filter(function(x){return x.numero===tr.getAttribute('data-num');})[0];if(g)openGuia(g,'etapas');};
+                  });
+                },0);
+              }
+            };
+          });
+        },0);
+        return;
+      }
+
+      var thead='<thead><tr>'+cols.map(function(c){return '<th>'+esc(c.h)+'</th>';}).join('')+'</tr></thead>';
+      var tbody;
+      if(!list.length){
+        tbody='<tbody><tr><td colspan="'+cols.length+'"><div class="empty">'+icoLg('inbox')+'<div>Nenhuma guia para este indicador.</div></div></td></tr></tbody>';
+      } else {
+        tbody='<tbody>'+list.map(function(g,i){
+          return '<tr class="'+(i%2===0?'log-row-a':'log-row-b')+' kpi-modal-row" data-num="'+esc(g.numero)+'">'+
+            cols.map(function(c){return '<td>'+c.f(g)+'</td>';}).join('')+
+          '</tr>';
+        }).join('')+'</tbody>';
+      }
+      var footTxt=list.length+' guia(s)';
+      if(k.extra==='tempo'&&list.length) footTxt+=' · Tempo médio: <b>'+tempoMedio+' dias</b>';
+      var m=modal(k.t, list.length+' guia(s) — clique em uma linha para abrir',
+        '<table style="width:100%">'+thead+tbody+'</table>',
+        footTxt
+      );
+      setTimeout(function(){
+        $$('.kpi-modal-row',m).forEach(function(tr){
+          tr.style.cursor='pointer';
+          tr.onclick=function(){
+            var num=tr.getAttribute('data-num');
+            var g=guias.filter(function(x){return x.numero===num;})[0];
+            if(g) openGuia(g,'resumo');
+          };
+        });
+      },0);
+    }
+
+    var grid=el('div',{class:'kpi-grid'});
+    kpis.forEach(function(k){
+      var card=el('div',{class:'kpi '+k.cls},'<h4>'+esc(k.t)+'</h4><div class="v">'+esc(k.v)+'</div>');
+      // Distingue clique de arrastar (seleção de texto)
+      var _mx=0,_my=0;
+      card.addEventListener('mousedown',function(e){_mx=e.clientX;_my=e.clientY;});
+      card.addEventListener('click',function(e){
+        var dx=e.clientX-_mx, dy=e.clientY-_my;
+        if(Math.sqrt(dx*dx+dy*dy)>6) return; // foi arrastar
+        kpiModal(k);
+      });
+      grid.appendChild(card);
+    });
+    wrap.appendChild(grid);
+
+    var panels=el('div',{class:'panels'});
+
+    // Distribuição por status (barras)
+    var pa=el('div',{class:'panel'},'<h3>Distribuição por status <span class="badge muted">Tempo real</span></h3>');
+    var bars=el('div',{class:'bars'});
+    MOCK.STATUS.forEach(function(s){
+      var c=count(function(g){return g.status===s}); if(c===0) return;
+      var pct=Math.round(c/guias.length*100);
+      var row=el('div',{class:'bar-row',style:'cursor:pointer',title:'Duplo clique: ver guias com status "'+esc(s)+'"'},'<div>'+esc(s)+'</div><div class="bar-track"><div class="bar-fill" style="width:'+pct+'%"></div></div><div>'+c+'</div>');
+      row.ondblclick=function(){
+        State.filtros={q:'',status:s,fluxo:'',origem:'',risco:'',sortCol:'',sortDir:''};
+        State.route='guias';
+        $$('.nav-item').forEach(function(x){x.classList.toggle('active',x.getAttribute('data-route')==='guias')});
+        toast('Filtrando guias por status: '+s,'ok'); render();
+      };
+      row.querySelector('.bar-track').onclick=function(e){
+        e.stopPropagation();
+        var fill=this.querySelector('.bar-fill');
+        var isActive=fill.classList.contains('bar-selected');
+        $$('.bar-fill').forEach(function(x){x.classList.remove('bar-selected')});
+        $$('.bar-row').forEach(function(x){x.classList.remove('bar-active')});
+        $$('.bars').forEach(function(x){x.classList.remove('has-selection')});
+        if(!isActive){
+          fill.classList.add('bar-selected');
+          row.classList.add('bar-active');
+          bars.classList.add('has-selection');
+          updateDonut(guias.filter(function(g){return g.status===s}),s);
+        } else {
+          updateDonut(guias,null);
+        }
+      };
+      bars.appendChild(row);
+    });
+    pa.appendChild(bars); panels.appendChild(pa);
+
+    // Donut de aderência média
+    var avg=guias.length?Math.round(guias.reduce(function(a,g){return a+guiaAderencia(g)},0)/guias.length):0;
+    var pb=el('div',{class:'panel',style:'text-align:center'},'<h3 style="text-align:left">Aderência regulatória média</h3>');
+    var donutEl=el('div',{class:'donut',id:'donut-aderencia',style:'--p:'+avg},'<span>'+avg+'%</span>');
+    var avgCls=AI.classificaAderencia(avg);
+    var clrMap={alta:'var(--g-700)',mod:'#8a6300',baixa:'#a85700',crit:'var(--danger)'};
+    var donutLblEl=el('div',{id:'donut-label',style:'font-size:13px;font-weight:700;letter-spacing:.2px;color:'+(clrMap[avgCls.cls]||'var(--g-600)')},avgCls.label);
+    var donutHint=el('div',{style:'font-size:11px;color:var(--muted);margin-top:6px;line-height:1.4'},'Clique nas barras<br>para filtrar por grupo');
+    var donutLegend=el('div',{style:'margin-top:14px;display:flex;flex-direction:column;gap:4px;text-align:left;border-top:1px solid var(--g-100);padding-top:11px'});
+    donutLegend.innerHTML=
+      '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:3px">Faixas de classificação</div>'+
+      '<div style="display:flex;align-items:center;gap:7px;font-size:11.5px"><span style="width:9px;height:9px;border-radius:50%;background:var(--g-500);flex-shrink:0;display:inline-block"></span><span style="color:var(--ink)">Alta</span><span style="margin-left:auto;color:var(--muted)">&ge; 90%</span></div>'+
+      '<div style="display:flex;align-items:center;gap:7px;font-size:11.5px"><span style="width:9px;height:9px;border-radius:50%;background:#8a6300;flex-shrink:0;display:inline-block"></span><span style="color:var(--ink)">Moderada</span><span style="margin-left:auto;color:var(--muted)">70 – 89%</span></div>'+
+      '<div style="display:flex;align-items:center;gap:7px;font-size:11.5px"><span style="width:9px;height:9px;border-radius:50%;background:#a85700;flex-shrink:0;display:inline-block"></span><span style="color:var(--ink)">Baixa</span><span style="margin-left:auto;color:var(--muted)">50 – 69%</span></div>'+
+      '<div style="display:flex;align-items:center;gap:7px;font-size:11.5px"><span style="width:9px;height:9px;border-radius:50%;background:var(--danger);flex-shrink:0;display:inline-block"></span><span style="color:var(--ink)">Crítica</span><span style="margin-left:auto;color:var(--muted)">&lt; 50%</span></div>';
+    pb.appendChild(donutEl); pb.appendChild(donutLblEl); pb.appendChild(donutHint); pb.appendChild(donutLegend);
+    panels.appendChild(pb);
+    var _donutCur=avg, _donutTimer=null, _tipGuias=guias;
+    function updateDonut(filteredGs, filterName){
+      _tipGuias=filteredGs;
+      var d=document.getElementById('donut-aderencia'), l=document.getElementById('donut-label');
+      if(!d||!l) return;
+      var a=filteredGs.length?Math.round(filteredGs.reduce(function(acc,g){return acc+guiaAderencia(g)},0)/filteredGs.length):0;
+      clearInterval(_donutTimer);
+      var from=_donutCur, to=a, dir=from<to?1:-1;
+      if(from===to){ l.textContent=AI.classificaAderencia(a).label+(filterName?' · '+filterName:''); return; }
+      _donutTimer=setInterval(function(){
+        from+=dir;
+        d.style.setProperty('--p',from);
+        d.querySelector('span').textContent=from+'%';
+        if(from===to){ clearInterval(_donutTimer); _donutCur=to; var fc=AI.classificaAderencia(to); var cm={alta:'var(--g-700)',mod:'#8a6300',baixa:'#a85700',crit:'var(--danger)'}; l.textContent=fc.label+(filterName?' · '+filterName:''); l.style.color=cm[fc.cls]||'var(--g-600)'; }
+      },12);
+    }
+    wrap.appendChild(panels);
+
+    // Tooltip donut aderência
+    var donutTip=el('div',{class:'donut-tip'});
+    document.body.appendChild(donutTip);
+    function buildDonutTip(gs){
+      var n=gs.length; if(!n) return '<em style="color:var(--muted)">Sem guias no filtro</em>';
+      var alta=0,mod=0,baixa=0,crit=0,motivos={};
+      gs.forEach(function(g){
+        var a=guiaAderencia(g);
+        var cache=g._cache; if(!cache){ cache=AI.analisarGuiaComIA(g,{}); g._cache=cache; }
+        if(a>=90) alta++; else if(a>=70) mod++; else if(a>=50) baixa++; else crit++;
+        cache.criteriosNaoCumpridos.forEach(function(c){ motivos[c]=(motivos[c]||0)+1; });
+      });
+      var pct=function(v){ return Math.round(v/n*100)+'%'; };
+      var h='<div class="donut-tip-title">Distribuição das '+n+' guias</div>';
+      if(alta) h+='<div class="donut-tip-row alta"><span class="donut-tip-dot"></span><span>Alta &ge;90%</span><b style="margin-left:auto">'+alta+' &nbsp;('+pct(alta)+')</b></div>';
+      if(mod)  h+='<div class="donut-tip-row mod"><span class="donut-tip-dot"></span><span>Moderada 70–89%</span><b style="margin-left:auto">'+mod+' &nbsp;('+pct(mod)+')</b></div>';
+      if(baixa)h+='<div class="donut-tip-row baixa"><span class="donut-tip-dot"></span><span>Baixa 50–69%</span><b style="margin-left:auto">'+baixa+' &nbsp;('+pct(baixa)+')</b></div>';
+      if(crit) h+='<div class="donut-tip-row crit"><span class="donut-tip-dot"></span><span>Crítica &lt;50%</span><b style="margin-left:auto">'+crit+' &nbsp;('+pct(crit)+')</b></div>';
+      var top=Object.keys(motivos).sort(function(a,b){return motivos[b]-motivos[a];}).slice(0,4);
+      if(top.length){
+        h+='<div class="donut-tip-sep"></div><div class="donut-tip-title">Principais fatores de redução</div>';
+        top.forEach(function(m){ h+='<div class="donut-tip-factor">· '+esc(m)+'<b style="float:right;margin-left:10px">'+motivos[m]+' guia'+(motivos[m]!==1?'s':'')+'</b></div>'; });
+      }
+      h+='<div class="donut-tip-sep"></div><div class="donut-tip-title">Como é calculado</div>'+
+        '<div style="font-size:11px;color:var(--ink);line-height:1.55;margin-top:3px">'+
+          'A IA pontua cada guia em <b>5 dimensões</b>: documentação, DUT, vinculações de procedimentos, Mat/Med e cobertura contratual. Cada dimensão tem um <b>peso proporcional</b> ao seu impacto regulatório.'+
+        '</div>'+
+        '<div style="font-size:10.5px;color:var(--muted);margin-top:7px;line-height:1.6">'+
+          '<span style="color:var(--g-600);font-weight:700">Alta (&ge;90%)</span> — todos os critérios essenciais atendidos, sem pendências documentais.<br>'+
+          '<span style="color:#8a6300;font-weight:700">Moderada (70–89%)</span> — pequenas lacunas, geralmente documentais ou em itens secundários.<br>'+
+          '<span style="color:#a85700;font-weight:700">Baixa (50–69%)</span> — critérios importantes ausentes; requer complemento do prestador.<br>'+
+          '<span style="color:var(--danger);font-weight:700">Crítica (&lt;50%)</span> — falhas significativas; indicado encaminhamento para junta médica.'+
+        '</div>';
+      return h;
+    }
+    pb.addEventListener('mouseenter',function(){
+      donutTip.innerHTML=buildDonutTip(_tipGuias);
+      donutTip.classList.add('visible');
+    });
+    pb.addEventListener('mousemove',function(e){
+      var PAD=10;
+      var tw=donutTip.offsetWidth, th=donutTip.offsetHeight;
+      var vw=window.innerWidth, vh=window.innerHeight;
+      // prefer right of cursor, fall back to left
+      var tx=e.clientX+18;
+      if(tx+tw>vw-PAD) tx=e.clientX-tw-14;
+      if(tx<PAD) tx=PAD;
+      // prefer below cursor, fall back to above
+      var ty=e.clientY-14;
+      if(ty+th>vh-PAD) ty=vh-th-PAD;
+      if(ty<PAD) ty=PAD;
+      donutTip.style.left=tx+'px'; donutTip.style.top=ty+'px';
+    });
+    pb.addEventListener('mouseleave',function(){ donutTip.classList.remove('visible'); });
+
+    // Ranking fluxos
+    var pc=el('div',{class:'panel',style:'margin-top:14px'},'<h3>Ranking de fluxos mais utilizados <span class="badge muted">duplo clique para filtrar</span></h3>');
+    var fluxoCount={}; guias.forEach(function(g){fluxoCount[g.fluxo.nome]=(fluxoCount[g.fluxo.nome]||0)+1});
+    var fluxoById={}; MOCK.FLUXOS.forEach(function(f){fluxoById[f.nome]=f.id});
+    var br=el('div',{class:'bars'});
+    Object.keys(fluxoCount).sort(function(a,b){return fluxoCount[b]-fluxoCount[a]}).forEach(function(k){
+      var c=fluxoCount[k], pct=Math.round(c/guias.length*100);
+      var row=el('div',{class:'bar-row',style:'cursor:pointer',title:'Duplo clique: ver guias do fluxo "'+esc(k)+'"'},'<div>'+esc(k)+'</div><div class="bar-track"><div class="bar-fill" style="width:'+pct+'%"></div></div><div>'+c+'</div>');
+      row.ondblclick=function(){
+        State.filtros={q:'',status:'',fluxo:fluxoById[k]||'',origem:'',risco:'',sortCol:'',sortDir:''};
+        State.route='guias';
+        $$('.nav-item').forEach(function(x){x.classList.toggle('active',x.getAttribute('data-route')==='guias')});
+        toast('Filtrando guias por fluxo: '+k,'ok'); render();
+      };
+      row.querySelector('.bar-track').onclick=function(e){
+        e.stopPropagation();
+        var fill=this.querySelector('.bar-fill');
+        var isActive=fill.classList.contains('bar-selected');
+        $$('.bar-fill').forEach(function(x){x.classList.remove('bar-selected')});
+        $$('.bar-row').forEach(function(x){x.classList.remove('bar-active')});
+        $$('.bars').forEach(function(x){x.classList.remove('has-selection')});
+        if(!isActive){
+          fill.classList.add('bar-selected');
+          row.classList.add('bar-active');
+          br.classList.add('has-selection');
+          updateDonut(guias.filter(function(g){return g.fluxo.nome===k}),k.length>25?k.slice(0,23)+'…':k);
+        } else {
+          updateDonut(guias,null);
+        }
+      };
+      br.appendChild(row);
+    });
+    pc.appendChild(br); wrap.appendChild(pc);
+
+    wrap.appendChild(el('div',{style:'margin-top:8px;font-size:12px;color:var(--muted)'},ico('lightbulb')+' Dica: dê duplo clique em uma barra de status ou fluxo para abrir a relação filtrada de guias.'));
+
+    return wrap;
+  }
+
+  function viewGuias(){
+    var wrap=el('div');
+    var guias=guiasVisiveis();
+    var _especMap={'Internação':'Clínica Médica','Cirurgia':'Cirurgia Geral','Quimioterapia':'Oncologia','Cirurgia neuro':'Neurocirurgia','Cirurgia ortopédica':'Ortopedia','Exame imagem':'Radiologia','Exame':'Clínica Médica','Hemodinâmica':'Cardiologia','Junta médica':'Multiprofissional'};
+    wrap.appendChild(el('div',{class:'page-title'},'<div><h1>Relação de Guias</h1><p>Filtre, audite e emita parecer da operadora com apoio da análise técnica.</p></div><div style="display:flex;gap:8px;align-items:center"><button class="btn ghost" id="btnClear">'+ico('x',13)+' Limpar filtros</button><button class="btn-animated" id="btnExport">'+ico('download')+' Exportar Excel</button></div>'));
+
+    // Banner de contexto de perfil
+    if(State.perfil!=='gestor'){
+      var bann=el('div',{class:'perfil-banner'});
+      var bIcon=State.perfil==='enfermeiro'?'stethoscope':'search';
+      var bMsg=State.perfil==='enfermeiro'
+        ?'Exibindo '+guias.length+' guia(s) nos seus fluxos ('+perfilDef.enfermeiro.fluxos.join(', ')+') com etapa de enfermagem ativa.'
+        :'Exibindo '+guias.length+' guia(s) em etapas de auditoria médica atribuídas ao Auditor.';
+      bann.innerHTML=ico(bIcon,14)+' '+bMsg;
+      wrap.appendChild(bann);
+    } else {
+      renderVisaoBar(wrap);
+    }
+
+    // ── Abas Relação / Filtro aprofundado ─────────────────────
+    var guiasTabsWrap=el('div',{style:'display:flex;gap:0;margin-bottom:-1px;position:relative;z-index:2'});
+    [['filtro',ico('filter',13)+' Filtro aprofundado'],['relacao',ico('list',13)+' Relação de guia']].forEach(function(pair){
+      var btn=el('button',{style:'padding:8px 18px;font-size:13px;font-weight:600;border:1.5px solid var(--g-100);border-bottom:'+(State.guiasViewTab===pair[0]?'1.5px solid var(--g-50)':'none')+';border-radius:8px 8px 0 0;background:'+(State.guiasViewTab===pair[0]?'var(--g-50)':'#fff')+';color:'+(State.guiasViewTab===pair[0]?'var(--g-700)':'var(--muted)')+';cursor:pointer;margin-right:3px;display:flex;align-items:center;gap:6px'},pair[1]);
+      btn.onclick=function(){ State.guiasViewTab=pair[0]; render(); };
+      guiasTabsWrap.appendChild(btn);
+    });
+    wrap.appendChild(guiasTabsWrap);
+
+    var box=el('div',{class:'table-wrap',style:'border-radius:0 8px 8px 8px'});
+    function opts(arr,sel,first){ var s='<option value="">'+first+'</option>'; arr.forEach(function(x){s+='<option value="'+esc(x)+'"'+(sel===x?' selected':'')+'>'+esc(x)+'</option>'}); return s; }
+
+    if(State.guiasViewTab==='relacao'){
+      var filt=el('div',{class:'filters'});
+      filt.innerHTML=
+        '<select id="fStatus">'+opts(MOCK.STATUS,State.filtros.status,'Todos os status')+'</select>'+
+        '<select id="fFluxo"><option value="">Todos os fluxos</option>'+MOCK.FLUXOS.map(function(f){return '<option value="'+f.id+'"'+(State.filtros.fluxo===f.id?' selected':'')+'>'+esc(f.nome)+'</option>'}).join('')+'</select>'+
+        '<select id="fOrigem">'+opts(MOCK.ORIGENS,State.filtros.origem,'Todas as origens')+'</select>'+
+        '<select id="fRisco">'+opts(['baixo','medio','alto','critico'],State.filtros.risco,'Todos os riscos')+'</select>'+
+        '<select id="fEspec">'+(function(){var s='<option value="">Especialidade</option>';var seen={};guias.forEach(function(g){var e=_especMap[g.tipo];if(e&&!seen[e]){seen[e]=1;s+='<option value="'+esc(e)+'"'+(State.filtros.especialidade===e?' selected':'')+'>'+esc(e)+'</option>';}});return s;}())+'</select>'+
+        '<select id="fOpme">'+opts(['Sim','Não'],State.filtros.opme,'OPME')+'</select>'+
+        '<select id="fUti">'+opts(['Sim','Não'],State.filtros.uti,'UTI')+'</select>'+
+        '<select id="fRegimeAte">'+opts(['Ambulatorial','Internação'],State.filtros.regimeAte,'Regime de atendimento')+'</select>'+
+        '<div class="spacer"></div>'+
+        '<div id="fPeriodoWrap"></div>';
+      box.appendChild(filt);
+    } else {
+      // ── Filtro aprofundado ────────────────────────────────────
+      var filtAdv=el('div',{class:'filters'});
+      filtAdv.innerHTML='<div class="spacer"></div><div id="faPeriodoWrap"></div>';
+      box.appendChild(filtAdv);
+
+      var fa=State.filtrosAvancados;
+      var advWrap=el('div',{style:'padding:14px 18px 10px;border-bottom:1px solid var(--g-100)'});
+
+      // Checkboxes
+      var chkList=[
+        {key:'flagAuditoriaOrigem',       label:'Exibir guias sob auditoria na origem'},
+        {key:'flagAguardandoAuth',        label:'Exibir guias aguardando autorização'},
+        {key:'flagAguardandoAuthEmpresa', label:'Exibir guias aguardando autorização da empresa'},
+        {key:'flagAuditoriaOperadora',    label:'Exibir guias sob auditoria na operadora'},
+        {key:'flagMsgNaoLida',            label:'Exibir guias com MSG não lida'},
+        {key:'flagOpme',                  label:'Exibir somente guias com OPME'},
+        {key:'flagPrio',                  label:'Exibir guias com status de prioridade'},
+        {key:'flagIntercambio',           label:'Exibir somente retornos de intercâmbio'},
+        {key:'flagDemandaJudicial',       label:'Exibir guias com demanda judicial'},
+        {key:'flagInconsistencia',        label:'Exibir guias com inconsistência da Origem'},
+        {key:'flagInternacao',            label:'Exibir guias com data de internação preenchida'},
+        {key:'flagUti',                   label:'Exibir somente guias com UTI'},
+        {key:'flagDut',                   label:'Exibir somente guias com DUT obrigatória'},
+        {key:'flagAnexo',                 label:'Exibir somente guias com documentação anexada'},
+        {key:'flagSemParam',              label:'Exibir guias sem parametrização'}
+      ];
+      var chkGrid=el('div',{style:'columns:3;column-gap:20px;column-rule:1px solid var(--g-100);margin-bottom:14px'});
+      chkList.forEach(function(c){
+        var lbl=el('label',{style:'display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--ink);cursor:pointer;user-select:none;break-inside:avoid;padding:3px 0'});
+        lbl.innerHTML='<input type="checkbox" data-fakey="'+c.key+'"'+(fa[c.key]?' checked':'')+' style="width:14px;height:14px;flex-shrink:0;accent-color:var(--g-600);cursor:pointer"> '+esc(c.label);
+        chkGrid.appendChild(lbl);
+      });
+      advWrap.appendChild(el('div',{style:'font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:8px'},'Flags de exibição'));
+      advWrap.appendChild(chkGrid);
+
+      // Dropdowns grid
+      var ddList=[
+        {id:'faStatus',    label:'Status',               opts:MOCK.STATUS, key:'status'},
+        {id:'faNivel',     label:'Nível de auditoria',   opts:['Auditoria Prévia','Auditoria Concorrente','Auditoria Retrospectiva'], key:'nivelAuditoria'},
+        {id:'faEspec',     label:'Especialidade',        opts:(function(){var s={};guias.forEach(function(g){var e=_especMap[g.tipo];if(e)s[e]=1;});return Object.keys(s).sort();}()), key:'especialidade'},
+        {id:'faNatureza',  label:'Natureza',             opts:['Internação','Eletiva','Ambulatorial'], key:'natureza'},
+        {id:'faAuditor',   label:'Auditor',              opts:MOCK.USUARIOS.filter(function(u){return u.perfil==='auditor';}).map(function(u){return u.nome;}), key:'auditor'},
+        {id:'faTipo',      label:'Tipo de auditoria',    opts:(function(){var s={};guias.forEach(function(g){if(g.tipo)s[g.tipo]=1;});return Object.keys(s).sort();}()), key:'tipo'},
+        {id:'faRegime',    label:'Regime',               opts:['Urgência','Eletivo'], key:'regime'},
+        {id:'faExecut',    label:'Executante',           opts:MOCK.PRESTADORES.map(function(p){return p.nome;}), key:'executante'},
+        {id:'faCong',      label:'Congênere',            opts:(function(){var s={};guias.forEach(function(g){if(g.congenere)s[g.congenere]=1;});return Object.keys(s).sort();}()), key:'congenere'},
+        {id:'faClassif',   label:'Classificação',        opts:['Alta','Média','Baixa'], key:'classificacao'},
+        {id:'faOrigem',    label:'Local de emissão',     opts:MOCK.ORIGENS, key:'origem'},
+        {id:'faSolic',     label:'Solicitante',          opts:(function(){var s={};guias.forEach(function(g){s[g.solicitante]=1;});return Object.keys(s).sort();}()), key:'solicitante'},
+        {id:'faProcesso',  label:'Processo de auditoria',opts:MOCK.FLUXOS.map(function(f){return f.nome;}), key:'fluxo'},
+        {id:'faEtapa',     label:'Etapa',                opts:(function(){var s={};MOCK.FLUXOS.forEach(function(f){f.etapas.forEach(function(e){s[e]=1;});});return Object.keys(s).sort();}()), key:'etapa'},
+        {id:'faParecer',   label:'Parecer',              opts:['Aprovado','Negado','Aprovado com ressalva','Solicitar complemento'], key:'parecer'},
+        {id:'faStatusGer', label:'Status gerencial',     opts:MOCK.STATUS, key:'statusGerencial'},
+        {id:'faCotacao',   label:'Cotação',              opts:['Com cotação de OPME','Sem cotação'], key:'cotacao'},
+        {id:'faAnexoD',    label:'Anexo',                opts:['Com documentação','Sem documentação'], key:'comAnexo'},
+        {id:'faTipoTaxa',  label:'Tipo de Taxa',         opts:(function(){var s={};guias.forEach(function(g){g.diariasTaxas.forEach(function(d){s[d.desc]=1;});});return Object.keys(s).sort();}()), key:'tipoTaxa'},
+        {id:'faStatEtapa', label:'Status da etapa',      opts:['Em execução','Aguardando','Concluída'], key:'statusEtapa'},
+        {id:'faPrest',     label:'Prestador Principal',  opts:MOCK.PRESTADORES.map(function(p){return p.nome;}), key:'prestador'},
+        {id:'faLocalAte',  label:'Local de Atendimento', opts:MOCK.PRESTADORES.map(function(p){return p.nome;}), key:'localAtendimento'},
+        {id:'faProc',      label:'Procedimento',         opts:(function(){var s={};guias.forEach(function(g){g.procedimentos.forEach(function(p){s[p.cod]=1;});});return Object.keys(s).sort();}()), key:'procedimento'}
+      ];
+      advWrap.appendChild(el('hr',{style:'border:none;border-top:1px solid var(--g-100);margin:14px 0 12px'},''));
+      advWrap.appendChild(el('div',{style:'font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:8px'},'Filtros por campo'));
+      var ddGrid=el('div',{style:'display:grid;grid-template-columns:repeat(4,1fr);gap:8px 12px'});
+      ddList.forEach(function(d){
+        var wrap2=el('div');
+        wrap2.innerHTML='<label style="font-size:10.5px;font-weight:600;color:var(--muted);display:block;margin-bottom:3px;text-transform:uppercase;letter-spacing:.4px">'+esc(d.label)+'</label>'+
+          '<select id="'+d.id+'" style="width:100%;box-sizing:border-box;border:1.5px solid var(--g-200);border-radius:6px;padding:6px 10px;font-size:12px;font-family:inherit;background:#fff;color:var(--ink)">'+
+          '<option value="">— Independente —</option>'+
+          d.opts.map(function(o){return '<option value="'+esc(o)+'"'+(fa[d.key]===o?' selected':'')+'>'+esc(o)+'</option>';}).join('')+
+          '</select>';
+        ddGrid.appendChild(wrap2);
+      });
+      advWrap.appendChild(ddGrid);
+
+      // Botões aplicar/limpar
+      var advBtns=el('div',{style:'display:flex;gap:8px;margin-top:12px;align-items:center'});
+      var btnApl=el('button',{class:'btn',style:'display:flex;align-items:center;gap:6px;font-size:12.5px'},ico('search',13)+' Pesquisar');
+      var btnLimpAdv=el('button',{class:'btn ghost',style:'display:flex;align-items:center;gap:6px;font-size:12.5px'},ico('x',13)+' Limpar filtros');
+      var countLabel=el('span',{style:'margin-left:auto;font-size:12.5px;color:var(--g-600);font-weight:600'});
+      advBtns.appendChild(btnApl); advBtns.appendChild(btnLimpAdv); advBtns.appendChild(countLabel);
+      advWrap.appendChild(advBtns);
+      box.appendChild(advWrap);
+
+      // Wiring (after DOM is appended via setTimeout)
+      setTimeout(function(){
+        chkList.forEach(function(c){
+          var inp=box.querySelector('[data-fakey="'+c.key+'"]');
+          if(inp) inp.onchange=function(){ State.filtrosAvancados[c.key]=this.checked; };
+        });
+        ddList.forEach(function(d){
+          var sel=document.getElementById(d.id);
+          if(sel) sel.onchange=function(){ State.filtrosAvancados[d.key]=this.value; };
+        });
+        var _fadrp=makeDateRangePicker(
+          document.getElementById('faPeriodoWrap'),
+          State.filtrosAvancados.dataDeEmissao,
+          State.filtrosAvancados.dataAteEmissao,
+          function(de,ate){ State.filtrosAvancados.dataDeEmissao=de; State.filtrosAvancados.dataAteEmissao=ate; }
+        );
+        btnApl.onclick=function(){ State.guiasPagina=1; render(); };
+        btnLimpAdv.onclick=function(){
+          State.filtrosAvancados={flagOpme:false,flagPrio:false,flagUti:false,flagDut:false,flagAnexo:false,flagInternacao:false,flagSemParam:false,flagAuditoriaOrigem:false,flagAguardandoAuth:false,flagAguardandoAuthEmpresa:false,flagAuditoriaOperadora:false,flagMsgNaoLida:false,flagIntercambio:false,flagDemandaJudicial:false,flagInconsistencia:false,status:'',nivelAuditoria:'',especialidade:'',natureza:'',auditor:'',tipo:'',regime:'',executante:'',congenere:'',classificacao:'',origem:'',solicitante:'',fluxo:'',etapa:'',parecer:'',statusGerencial:'',cotacao:'',comAnexo:'',tipoTaxa:'',statusEtapa:'',prestador:'',localAtendimento:'',procedimento:'',dataDeEmissao:'',dataAteEmissao:''};
+          if(_fadrp) _fadrp.clear();
+          render();
+        };
+        // show result count
+        var _faRows=box.querySelectorAll('tbody tr.guia-mainrow');
+        countLabel.textContent=(_faRows.length)+' guia(s) listada(s)';
+      },30);
+    }
+
+    var t=el('table'); t.innerHTML=
+    '<colgroup>'+
+      '<col style="width:100px">'+
+      '<col style="width:22%">'+
+      '<col style="width:22%">'+
+      '<col style="width:100px">'+
+      '<col>'+
+      '<col>'+
+    '</colgroup>'+
+    '<thead><tr>'+
+      '<th data-sort="guia">Guia <span class="sort-ico"></span></th>'+
+      '<th data-sort="benef">Beneficiário <span class="sort-ico"></span></th>'+
+      '<th data-sort="prest">Prestador <span class="sort-ico"></span></th>'+
+      '<th data-sort="tipo">Tipo <span class="sort-ico"></span></th>'+
+      '<th data-sort="fluxo">Fluxo <span class="sort-ico"></span></th>'+
+      '<th data-sort="etapa">Etapa atual <span class="sort-ico"></span></th>'+
+    '</tr></thead>';
+    $$('th[data-sort]',t).forEach(function(th){
+      var col=th.getAttribute('data-sort'), ico2=th.querySelector('.sort-ico');
+      th.classList.add('th-sort');
+      if(State.filtros.sortCol===col){ th.classList.add('sort-active'); ico2.textContent=State.filtros.sortDir==='asc'?'▲':'▼'; } else { ico2.textContent='⇅'; }
+      th.onclick=function(){
+        if(State.filtros.sortCol===col){ if(State.filtros.sortDir==='asc') State.filtros.sortDir='desc'; else { State.filtros.sortCol=''; State.filtros.sortDir=''; } }
+        else { State.filtros.sortCol=col; State.filtros.sortDir='asc'; }
+        render();
+      };
+    });
+    var tb=el('tbody');
+    var rows = guias.filter(function(g){
+      if(State.guiasViewTab==='filtro'){
+        var fa=State.filtrosAvancados;
+        if(fa.flagAuditoriaOrigem&&g.origem!=='Web Prestador') return false;
+        if(fa.flagAguardandoAuth&&g.status!=='Aguardando complemento'&&g.status!=='Aguardando documentação') return false;
+        if(fa.flagAguardandoAuthEmpresa&&g.status!=='Aguardando documentação') return false;
+        if(fa.flagAuditoriaOperadora&&g.status!=='Em análise'&&g.status!=='Em junta médica'&&g.status!=='Cotação de OPME') return false;
+        if(fa.flagInconsistencia&&!(g.prazoVencido||(!g.anexos&&g.dut))) return false;
+        if(fa.flagOpme&&!g.opme) return false;
+        if(fa.flagPrio&&g.prio!=='Alta') return false;
+        if(fa.flagUti&&!g.uti) return false;
+        if(fa.flagDut&&!g.dut) return false;
+        if(fa.flagAnexo&&!g.anexos) return false;
+        if(fa.flagInternacao&&!g.internacao) return false;
+        if(fa.flagSemParam&&g.status!=='Sem parametrização') return false;
+        if(fa.status&&g.status!==fa.status) return false;
+        if(fa.regime&&g.regime!==fa.regime) return false;
+        if(fa.natureza&&g.natureza!==fa.natureza) return false;
+        if(fa.tipo&&g.tipo!==fa.tipo) return false;
+        if(fa.fluxo&&g.fluxo.nome!==fa.fluxo) return false;
+        if(fa.origem&&g.origem!==fa.origem) return false;
+        if(fa.solicitante&&g.solicitante!==fa.solicitante) return false;
+        if(fa.congenere&&g.congenere!==fa.congenere) return false;
+        if(fa.prestador&&g.prestadorSol.nome!==fa.prestador) return false;
+        if(fa.executante&&g.prestadorExe.nome!==fa.executante) return false;
+        if(fa.localAtendimento&&g.prestadorExe.nome!==fa.localAtendimento) return false;
+        if(fa.classificacao&&g.prio!==fa.classificacao) return false;
+        if(fa.especialidade){var _espec=_especMap[g.tipo]||'';if(_espec!==fa.especialidade) return false;}
+        if(fa.cotacao==='Com cotação de OPME'&&!g.opme) return false;
+        if(fa.cotacao==='Sem cotação'&&g.opme) return false;
+        if(fa.comAnexo==='Com documentação'&&!g.anexos) return false;
+        if(fa.comAnexo==='Sem documentação'&&g.anexos) return false;
+        if(fa.tipoTaxa&&!g.diariasTaxas.some(function(d){return d.desc===fa.tipoTaxa;})) return false;
+        if(fa.statusEtapa){var _etStMap={'Em execução':'em_execucao','Aguardando':'aguardando','Concluída':'concluida'};var _etStAtual='';for(var si=0;si<g.etapas.length;si++){if(g.etapas[si].status==='em_execucao'){_etStAtual=g.etapas[si].status;break;}}if(!_etStAtual||_etStAtual!==_etStMap[fa.statusEtapa]) return false;}
+        if(fa.procedimento&&!g.procedimentos.some(function(p){return p.cod===fa.procedimento;})) return false;
+        if(fa.etapa){var etAtualFa='';for(var ei=0;ei<g.etapas.length;ei++){if(g.etapas[ei].status==='em_execucao'){etAtualFa=g.etapas[ei].nome;break;}}if(etAtualFa!==fa.etapa) return false;}
+        if(fa.dataDeEmissao&&g.dataEmissao<fa.dataDeEmissao) return false;
+        if(fa.dataAteEmissao&&g.dataEmissao>fa.dataAteEmissao) return false;
+        return true;
+      }
+      var f=State.filtros, q=f.q;
+      if(f.status&&g.status!==f.status) return false;
+      if(f.fluxo&&g.fluxo.id!==f.fluxo) return false;
+      if(f.origem&&g.origem!==f.origem) return false;
+      if(f.risco&&g.risco!==f.risco) return false;
+      if(f.benef&&g.beneficiario.nome!==f.benef) return false;
+      if(f.prest&&g.prestadorSol.nome!==f.prest) return false;
+      if(f.tipo&&g.tipo!==f.tipo) return false;
+      if(f.congenere&&g.congenere!==f.congenere) return false;
+      if(f.solicitante&&g.solicitante!==f.solicitante) return false;
+      if(f.opme==='Sim'&&!g.opme) return false;
+      if(f.opme==='Não'&&g.opme) return false;
+      if(f.uti==='Sim'&&!g.uti) return false;
+      if(f.uti==='Não'&&g.uti) return false;
+      if(f.regimeAte){var _isInter=g.natureza==='Internação'||g.tipo==='Cirurgia'||g.tipo==='Cirurgia neuro'||g.tipo==='Cirurgia ortopédica'||g.diariasTaxas.some(function(d){return d.desc.indexOf('Diária')>=0;});if(f.regimeAte==='Internação'&&!_isInter) return false; if(f.regimeAte==='Ambulatorial'&&_isInter) return false;}
+      if(f.especialidade&&(_especMap[g.tipo]||'')!==f.especialidade) return false;
+      if(f.dataDeEmissao&&g.dataEmissao<f.dataDeEmissao) return false;
+      if(f.dataAteEmissao&&g.dataEmissao>f.dataAteEmissao) return false;
+      if(q && (g.numero+' '+g.beneficiario.nome+' '+g.prestadorSol.nome+' '+g.tipo).toLowerCase().indexOf(q)<0) return false;
+      return true;
+    });
+
+    // Chips de filtros rápidos
+    var quickChips=[
+      {key:'benef',label:'Beneficiário'},
+      {key:'prest',label:'Prestador'},
+      {key:'tipo',label:'Tipo'},
+      {key:'congenere',label:'Congênere'},
+      {key:'origem',label:'Origem'},
+      {key:'solicitante',label:'Solicitante'}
+    ].filter(function(c){return State.filtros[c.key]});
+    if(quickChips.length){
+      var chipsBar=el('div',{class:'active-filters'});
+      quickChips.forEach(function(c){
+        var val=State.filtros[c.key];
+        var chip=el('div',{class:'active-chip'});
+        chip.innerHTML='<span class="chip-lbl">'+esc(c.label)+'</span>'+esc(val.length>32?val.slice(0,30)+'…':val)+'<button class="chip-rm" title="Remover filtro">×</button>';
+        chip.querySelector('.chip-rm').onclick=function(){ State.filtros[c.key]=''; render(); };
+        chipsBar.appendChild(chip);
+      });
+      box.appendChild(chipsBar);
+    }
+    var _sfns={guia:function(g){return g.numero;},benef:function(g){return g.beneficiario.nome;},prest:function(g){return g.prestadorSol.nome;},tipo:function(g){return g.tipo;},fluxo:function(g){return g.fluxo.nome;},etapa:function(g){for(var i=0;i<g.etapas.length;i++){if(g.etapas[i].status==='em_execucao')return g.etapas[i].nome;}return g.etapas[g.etapas.length-1].nome;}};
+    if(State.filtros.sortCol&&State.filtros.sortDir&&_sfns[State.filtros.sortCol]){
+      var _sf=_sfns[State.filtros.sortCol],_sd=State.filtros.sortDir==='asc'?1:-1;
+      rows=rows.slice().sort(function(a,b){var av=_sf(a),bv=_sf(b);return av<bv?-_sd:av>bv?_sd:0;});
+    }
+    // Paginação
+    var PAGE_SIZE=15;
+    var totalPages=Math.max(1,Math.ceil(rows.length/PAGE_SIZE));
+    if(State.guiasPagina>totalPages) State.guiasPagina=1;
+    var pagina=State.guiasPagina;
+    var pageRows=rows.slice((pagina-1)*PAGE_SIZE, pagina*PAGE_SIZE);
+
+    function bindDbl(cell, key, val){
+      cell.title='Duplo clique para filtrar por este valor';
+      cell.ondblclick=function(e){
+        e.stopPropagation();
+        State.filtros[key]=State.filtros[key]===val?'':val;
+        State.guiasPagina=1;
+        if(State.filtros[key]) toast('Filtrando: '+val,'ok');
+        render();
+        };
+      }
+    if(!pageRows.length) tb.appendChild(el('tr',{},'<td colspan="6"><div class="empty"><div class="ico">'+icoLg('inbox')+'</div>Nenhuma guia encontrada com os filtros atuais.</div></td>'));
+    pageRows.forEach(function(g){
+      var etAtual=''; for(var i=0;i<g.etapas.length;i++){ if(g.etapas[i].status==='em_execucao'){ etAtual=g.etapas[i].nome; break;} }
+      if(!etAtual) etAtual=g.etapas[g.etapas.length-1].nome;
+      var p=guiaAderencia(g);
+      var tr=el('tr',{class:'guia-mainrow'});
+      var _gespec=_especMap[g.tipo]||'';
+      // L1 = linha 1 (texto principal), L2 = margin-top:5px, L3 = margin-top:9px a partir de L2
+      var L2H='min-height:20px;display:flex;align-items:center;'; // âncora fixa de altura para L2
+      tr.innerHTML=
+        // GUIA
+        '<td><b>'+esc(g.numero)+'</b>'+(g.prazoVencido?' <span class="badge danger">prazo</span>':'')+
+          '<div style="margin-top:5px">'+statusBadge(g.status)+'</div>'+
+          '<div style="margin-top:9px">'+(_gespec?'<span class="badge muted" style="font-size:10px">'+ico('stethoscope',10)+' '+esc(_gespec)+'</span>':'<span style="font-size:10px;color:transparent">—</span>')+'</div>'+
+        '</td>'+
+        // BENEFICIÁRIO
+        '<td class="cell-dbl'+(State.filtros.benef===g.beneficiario.nome?' cell-filtered':'')+'">'+
+          '<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;max-width:200px">'+esc(g.beneficiario.nome)+'</span>'+
+          '<div style="color:var(--muted);font-size:11px;margin-top:5px;'+L2H+'">'+mask(g.beneficiario.cpf)+'</div>'+
+          '<div style="margin-top:9px"><span class="badge muted'+(State.filtros.congenere===g.congenere?' cell-filtered':'')+'" style="font-size:10px" title="Congênere">'+ico('map-pin',10)+' '+esc(g.congenere||'—')+'</span></div>'+
+        '</td>'+
+        // PRESTADOR
+        '<td class="cell-dbl'+(State.filtros.prest===g.prestadorSol.nome?' cell-filtered':'')+'">'+
+          '<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;max-width:200px">'+esc(g.prestadorSol.nome)+'</span>'+
+          '<div style="margin-top:5px;'+L2H+'"><span class="badge muted'+(State.filtros.origem===g.origem&&State.filtros.origem?' cell-filtered':'')+'" style="font-size:10px" title="Origem">'+esc(g.origem)+'</span></div>'+
+          '<div style="margin-top:9px;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px" title="Solicitante">'+(g.solicitante&&g.solicitante!=='—'?esc(g.solicitante):'<span style="color:transparent">—</span>')+'</div>'+
+        '</td>'+
+        // TIPO
+        '<td class="cell-dbl'+(State.filtros.tipo===g.tipo?' cell-filtered':'')+'">'+
+          esc(g.tipo.toUpperCase())+
+          '<div style="margin-top:5px;'+L2H+'gap:3px;flex-wrap:wrap">'+((g.opme||g.uti)?((g.opme?'<span class="badge warn">OPME</span>':'')+(g.uti?'<span class="badge info">UTI</span>':'')):'<span style="color:transparent;font-size:10px">—</span>')+'</div>'+
+          '<div style="margin-top:9px"><span class="ader-val '+(p>=90?'alta':p>=70?'mod':p>=50?'baixa':'crit')+'" title="Aderência">'+p+'%</span></div>'+
+        '</td>'+
+        // FLUXO
+        '<td>'+
+          '<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;max-width:180px" title="'+esc(g.fluxo.nome)+'">'+esc(g.fluxo.nome)+'</span>'+
+          '<div style="margin-top:5px;'+L2H+'"></div>'+
+          '<div style="margin-top:9px"><span class="badge muted" style="font-size:10px">'+esc(g.fluxo.id)+'</span></div>'+
+        '</td>'+
+        // ETAPA ATUAL
+        '<td>'+
+          '<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;max-width:180px" title="'+esc(etAtual)+'">'+esc(etAtual)+'</span>'+
+          '<div style="margin-top:5px;'+L2H+'"></div>'+
+          '<div style="margin-top:9px">'+riskPill(g.risco)+'</div>'+
+        '</td>';
+      bindDbl(tr.cells[1],'benef',g.beneficiario.nome);
+      // duplo clique no badge de congênere dentro da célula do beneficiário
+      var _congBadge=tr.cells[1].querySelector('[title="Congênere"]');
+      if(_congBadge) _congBadge.addEventListener('dblclick',function(e){e.stopPropagation();State.filtros.congenere=State.filtros.congenere===g.congenere?'':g.congenere;State.guiasPagina=1;if(State.filtros.congenere)toast('Filtrando: '+g.congenere,'ok');render();});
+      bindDbl(tr.cells[2],'prest',g.prestadorSol.nome);
+      var _origBadge=tr.cells[2].querySelector('[title="Origem"]');
+      if(_origBadge) _origBadge.addEventListener('dblclick',function(e){e.stopPropagation();State.filtros.origem=State.filtros.origem===g.origem?'':g.origem;State.guiasPagina=1;if(State.filtros.origem)toast('Filtrando: '+g.origem,'ok');render();});
+      bindDbl(tr.cells[3],'tipo',g.tipo);
+      var trSub=el('tr',{class:'guia-subrow'});
+      trSub.innerHTML=
+        '<td></td>'+
+        '<td></td>'+
+        '<td></td>'+
+        '<td></td>'+
+        '<td></td>'+
+        '<td><div class="row-actions">'+
+            '<div class="btn-wrap"><button class="btn sm" data-act="abrir" title="Visualizar guia"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>'+
+            '<div class="btn-wrap"><button class="btn sm" data-act="ia" title="Análise IA">'+ico('sparkles')+'</button></div>'+
+            (can('parecer')?'<div class="btn-wrap"><button class="btn sm" data-act="par" title="Parecer">'+ico('stethoscope')+'</button></div>':'')+
+          '</div></td>';
+      trSub.querySelector('[data-act="abrir"]').onclick=function(e){e.stopPropagation();openGuia(g,'resumo')};
+      trSub.querySelector('[data-act="ia"]').onclick=function(e){e.stopPropagation();openGuia(g,'ia')};
+      var pb=trSub.querySelector('[data-act="par"]'); if(pb) pb.onclick=function(e){e.stopPropagation();openParecer(g)};
+      tb.appendChild(tr);
+      tb.appendChild(trSub);
+    });
+
+    t.appendChild(tb); box.appendChild(t);
+
+    // ── Paginação ──────────────────────────────────────────────────
+    if(totalPages>1){
+      var pgBar=el('div',{class:'pg-bar'});
+      var pgInfo=el('span',{class:'pg-info'});
+      var ini=(pagina-1)*PAGE_SIZE+1, fim=Math.min(pagina*PAGE_SIZE,rows.length);
+      pgInfo.textContent='Mostrando '+ini+'–'+fim+' de '+rows.length;
+      var pgPrev=el('button',{class:'pg-btn'+(pagina===1?' disabled':'')},ico('chevron-left',13));
+      var pgNext=el('button',{class:'pg-btn'+(pagina===totalPages?' disabled':'')},ico('chevron-right',13));
+      pgPrev.disabled=(pagina===1);
+      pgNext.disabled=(pagina===totalPages);
+      pgPrev.onclick=function(){if(State.guiasPagina>1){State.guiasPagina--;render();}};
+      pgNext.onclick=function(){if(State.guiasPagina<totalPages){State.guiasPagina++;render();}};
+      var pgNums=el('div',{class:'pg-nums'});
+      for(var pi=1;pi<=totalPages;pi++){
+        (function(p2){
+          var btn=el('button',{class:'pg-num'+(p2===pagina?' active':'')},String(p2));
+          btn.onclick=function(){State.guiasPagina=p2;render();};
+          pgNums.appendChild(btn);
+        })(pi);
+      }
+      pgBar.appendChild(pgPrev); pgBar.appendChild(pgNums); pgBar.appendChild(pgNext); pgBar.appendChild(pgInfo);
+      box.appendChild(pgBar);
+    }
+
+    // ── Resumo (tabela separada abaixo da paginação) ────────────────
+    if(rows.length){
+      var byStatus={}, byCong={}, byTipo={}, byRisco={};
+      rows.forEach(function(g){
+        byStatus[g.status]=(byStatus[g.status]||0)+1;
+        byCong[g.congenere]=(byCong[g.congenere]||0)+1;
+        byTipo[g.tipo]=(byTipo[g.tipo]||0)+1;
+        byRisco[g.risco]=(byRisco[g.risco]||0)+1;
+      });
+      var tsum=document.createElement('table');
+      tsum.innerHTML=
+        '<colgroup>'+
+          '<col style="width:100px">'+
+          '<col style="width:22%">'+
+          '<col style="width:22%">'+
+          '<col style="width:100px">'+
+          '<col>'+
+          '<col>'+
+        '</colgroup>';
+      var tsRow=document.createElement('tr'); tsRow.className='guias-tfoot';
+
+      var ts0=document.createElement('td');
+      ts0.innerHTML='<div class="tfoot-lbl">'+ico('hash',11)+' <b>'+rows.length+'</b> guia'+(rows.length!==1?'s':'')+'</div>'+
+        '<div class="tfoot-sub">'+Object.keys(byStatus).map(function(s){return '<span class="badge muted" style="font-size:10px">'+esc(s)+' <b>'+byStatus[s]+'</b></span>';}).join('')+'</div>';
+      tsRow.appendChild(ts0);
+
+      var ts1=document.createElement('td');
+      ts1.innerHTML='<div class="tfoot-lbl">'+ico('map-pin',11)+' Congênere</div>'+
+        '<div class="tfoot-sub">'+Object.keys(byCong).map(function(c){return '<span class="badge muted" style="font-size:10px">'+esc(c)+' <b>'+byCong[c]+'</b></span>';}).join('')+'</div>';
+      tsRow.appendChild(ts1);
+
+      tsRow.appendChild(document.createElement('td'));
+
+      var ts3=document.createElement('td');
+      ts3.innerHTML='<div class="tfoot-lbl">'+ico('tag',11)+' Tipo</div>'+
+        '<div class="tfoot-sub">'+Object.keys(byTipo).map(function(s){return '<span class="badge muted" style="font-size:10px">'+esc(s)+' <b>'+byTipo[s]+'</b></span>';}).join('')+'</div>';
+      tsRow.appendChild(ts3);
+
+      tsRow.appendChild(document.createElement('td'));
+
+      var ts5=document.createElement('td');
+      ts5.innerHTML='<div class="tfoot-lbl">'+ico('alert-triangle',11)+' Risco</div>'+
+        '<div class="tfoot-sub">'+Object.keys(byRisco).map(function(r){return '<span class="badge muted" style="font-size:10px">'+esc(r)+' <b>'+byRisco[r]+'</b></span>';}).join('')+'</div>';
+      tsRow.appendChild(ts5);
+
+      var tsTb=document.createElement('tbody'); tsTb.appendChild(tsRow);
+      tsum.appendChild(tsTb); box.appendChild(tsum);
+    }
+
+    wrap.appendChild(box);
+
+    setTimeout(function(){
+      $('#fStatus').onchange=function(){State.filtros.status=this.value;render()};
+      $('#fFluxo').onchange=function(){State.filtros.fluxo=this.value;render()};
+      $('#fOrigem').onchange=function(){State.filtros.origem=this.value;render()};
+      $('#fRisco').onchange=function(){State.filtros.risco=this.value;render()};
+      $('#fOpme').onchange=function(){State.filtros.opme=this.value;render()};
+      $('#fUti').onchange=function(){State.filtros.uti=this.value;render()};
+      $('#fRegimeAte').onchange=function(){State.filtros.regimeAte=this.value;render()};
+      var fesp=$('#fEspec'); if(fesp) fesp.onchange=function(){State.filtros.especialidade=this.value;render();};
+      ['#fStatus','#fFluxo','#fOrigem','#fRisco','#fEspec','#fOpme','#fUti','#fRegimeAte'].forEach(function(id){ var s=$(id); if(s) makeCustomSelect(s); });
+      var _drpInstance = makeDateRangePicker(
+        $('#fPeriodoWrap'),
+        State.filtros.dataDeEmissao,
+        State.filtros.dataAteEmissao,
+        function(de, ate){ State.filtros.dataDeEmissao=de; State.filtros.dataAteEmissao=ate; render(); }
+      );
+      $('#btnClear').onclick=function(){
+        State.filtros={q:'',status:'',fluxo:'',origem:'',risco:'',benef:'',prest:'',tipo:'',congenere:'',solicitante:'',opme:'',uti:'',regimeAte:'',especialidade:'',dataDeEmissao:'',dataAteEmissao:'',sortCol:'',sortDir:''};
+        if(_drpInstance) _drpInstance.clear();
+        $('#globalSearch').value=''; render();
+      };
+      var _exportBtn=$('#btnExport');
+      if(_exportBtn) _exportBtn.onclick=function(){
+        try{ exportXLS(rows); }
+        catch(e){ toast('Erro na exportação: '+(e.message||String(e)),'danger'); }
+      };
+    },0);
+
+    return wrap;
+  }
+
+  function exportXLS(rows){
+    var total=rows.length||1;
+    var dt=new Date().toLocaleString('pt-BR');
+    var fname='RegulaAI_'+new Date().toISOString().slice(0,10)+'.xls';
+
+    /* ─── helpers ─── */
+    function bar(val,max,w){w=w||18;var f=max>0?Math.min(w,Math.max(0,Math.round((val/max)*w))):0;return '▓'.repeat(f)+'░'.repeat(w-f);}
+    function countBy(arr,fn){var r={};arr.forEach(function(x){var k=fn(x);r[k]=(r[k]||0)+1;});return r;}
+    function etapaNome(g){for(var i=0;i<g.etapas.length;i++){if(g.etapas[i].status==='em_execucao')return g.etapas[i].nome;}return g.etapas[g.etapas.length-1].nome;}
+    function riscoBadge(r){var bg={baixo:'#dcfce7',medio:'#fef9c3',alto:'#ffedd5',critico:'#fee2e2'}[r]||'#eee';var fg={baixo:'#16a34a',medio:'#a16207',alto:'#ea580c',critico:'#b91c1c'}[r]||'#333';return 'background:'+bg+';color:'+fg+';font-weight:bold';}
+    function statusStyle(s){if(s==='Liberada')return 'background:#dcfce7;color:#16a34a';if(s==='Negada')return 'background:#fee2e2;color:#b91c1c';if(s==='Em junta médica')return 'background:#f3e8ff;color:#7e22ce';if(s==='Em análise')return 'background:#e0f2fe;color:#0369a1';if(s.indexOf('Aguardando')>=0)return 'background:#fef9c3;color:#a16207';return '';}
+    function adhStyle(p){return p>=90?'color:#16a34a':p>=70?'color:#a16207':'color:#b91c1c';}
+    function td(content,style,cls){return '<td'+(style?' style="'+style+'"':'')+(cls?' class="'+cls+'"':'')+'>'+(content==null?'':content)+'</td>';}
+    function th(content){return '<td class="hdr">'+content+'</td>';}
+
+    /* ─── CSS ─── */
+    var css=[
+      'body{font-family:Calibri,Arial,sans-serif;font-size:11pt;color:#1a1a1a}',
+      'table{border-collapse:collapse}',
+      '.hdr{background:#054f27;color:#fff;font-weight:bold;padding:8px 12px;border:1px solid #033d1c;font-size:10.5pt;white-space:nowrap;vertical-align:middle}',
+      '.ra{background:#f0faf4;padding:7px 12px;border:1px solid #c8e6d4;vertical-align:top}',
+      '.rb{background:#ffffff;padding:7px 12px;border:1px solid #c8e6d4;vertical-align:top}',
+      '.title-row{background:#054f27;color:#fff;font-size:16pt;font-weight:bold;padding:14px 18px;border:none}',
+      '.sub-row{background:#066b34;color:#d1fae5;font-size:9.5pt;padding:6px 18px;border:none}',
+      '.sec{background:#0a8a43;color:#fff;font-weight:bold;font-size:10pt;padding:8px 12px;border:1px solid #066b34}',
+      '.kv{font-size:18pt;font-weight:bold;color:#054f27;text-align:center;padding:10px 8px;border:1px solid #c8e6d4}',
+      '.kl{font-size:8.5pt;color:#666;text-align:center;padding:4px 8px;background:#f5fbf7;border:1px solid #c8e6d4;font-weight:600;text-transform:uppercase;letter-spacing:.4pt}',
+      '.bar{font-family:Consolas,monospace;font-size:9.5pt;color:#0a8a43;padding:7px 12px;border:1px solid #c8e6d4;letter-spacing:1px}',
+      '.tot{background:#c7eed8;font-weight:bold;padding:7px 12px;border:1px solid #a8d8bb}',
+      '.blank{border:none;padding:6px}',
+    ].join('');
+
+    /* ─── SHEET 1: Guias ─── */
+    var hdr1=['Guia','Beneficiário','CPF','Prestador','Tipo','Fluxo','Etapa Atual','Status','Origem','Aderência','Risco','Dias','Prazo Vencido','OPME','UTI'];
+    var adhs=rows.map(function(g){return guiaAderencia(g);});
+    var avgAdh=Math.round(adhs.reduce(function(a,b){return a+b;},0)/total);
+
+    var dataRows=rows.map(function(g,i){
+      var cls=i%2===0?'ra':'rb', adh=guiaAderencia(g);
+      return '<tr>'+
+        td('<b>'+esc(g.numero)+'</b>',null,cls)+
+        td(esc(g.beneficiario.nome),null,cls)+
+        td(esc(mask(g.beneficiario.cpf)),'font-size:9pt;color:#888',cls)+
+        td(esc(g.prestadorSol.nome),null,cls)+
+        td(esc(g.tipo.toUpperCase()),'font-weight:500',cls)+
+        td(esc(g.fluxo.nome),'font-size:9.5pt',cls)+
+        td(esc(etapaNome(g)),'font-size:9pt',cls)+
+        td(esc(g.status),statusStyle(g.status),null)+
+        td(esc(g.origem),'font-size:9.5pt',cls)+
+        td(adh+'%','text-align:center;font-weight:bold;'+adhStyle(adh),cls)+
+        td(g.risco.charAt(0).toUpperCase()+g.risco.slice(1),riscoBadge(g.risco)+';text-align:center;padding:7px 12px;border:1px solid #c8e6d4')+
+        td(g.diasAuditoria,'text-align:center',cls)+
+        td(g.prazoVencido?'SIM':'NÃO','text-align:center;font-weight:bold;color:'+(g.prazoVencido?'#b91c1c':'#16a34a'),cls)+
+        td(g.opme?'✓':'—','text-align:center;color:'+(g.opme?'#0a8a43':'#bbb'),cls)+
+        td(g.uti?'✓':'—','text-align:center;color:'+(g.uti?'#0a8a43':'#bbb'),cls)+
+      '</tr>';
+    }).join('');
+
+    var sheet1=
+      '<tr><td colspan="'+hdr1.length+'" class="title-row">RegulaAI Saúde — Relação de Guias</td></tr>'+
+      '<tr><td colspan="'+hdr1.length+'" class="sub-row">Exportado em: '+dt+'   |   Total de guias: '+rows.length+'   |   Aderência média: '+avgAdh+'%</td></tr>'+
+      '<tr>'+hdr1.map(th).join('')+'</tr>'+
+      dataRows+
+      '<tr>'+td('TOTAL','font-weight:bold','tot')+td('','','tot')+td('','','tot')+td('','','tot')+td('','','tot')+td('','','tot')+td('','','tot')+td('','','tot')+td('','','tot')+td(avgAdh+'%','text-align:center;font-weight:bold','tot')+td('','','tot')+td('','','tot')+td(rows.filter(function(g){return g.prazoVencido;}).length+' c/ prazo','text-align:center;font-size:9pt','tot')+td(rows.filter(function(g){return g.opme;}).length+' c/ OPME','text-align:center;font-size:9pt','tot')+td(rows.filter(function(g){return g.uti;}).length+' c/ UTI','text-align:center;font-size:9pt','tot')+'</tr>';
+
+    /* ─── SHEET 2: Indicadores ─── */
+    var byStatus=countBy(rows,function(g){return g.status;});
+    var byRisco=countBy(rows,function(g){return g.risco;});
+    var byFluxo=countBy(rows,function(g){return g.fluxo.nome;});
+    var adhAlta=adhs.filter(function(a){return a>=90;}).length;
+    var adhMod=adhs.filter(function(a){return a>=70&&a<90;}).length;
+    var adhBaixa=adhs.filter(function(a){return a>=50&&a<70;}).length;
+    var adhCrit=adhs.filter(function(a){return a<50;}).length;
+
+    var COLS2=27; // 1 label + 24 bar segments + count + pct
+
+    function statusColor(s){
+      if(s==='Liberada') return '#16a34a';
+      if(s==='Negada') return '#b91c1c';
+      if(s==='Em junta médica') return '#7e22ce';
+      if(s==='Em análise') return '#0369a1';
+      if(s.indexOf('Aguardando')>=0||s.indexOf('Correção')>=0||s.indexOf('Solicitado')>=0) return '#a16207';
+      return '#4b7a59';
+    }
+    function vizBar(val,tot2,color){
+      var W=24,f=tot2>0?Math.min(W,Math.max(0,Math.round(val/tot2*W))):0,h='';
+      for(var i=0;i<W;i++) h+='<td style="background:'+(i<f?color:'#eef2ef')+';width:12px;height:22px;border:1px solid #fff;padding:0;font-size:1pt"> </td>';
+      return h;
+    }
+    function secHdr2(title){
+      return '<tr><td class="blank" colspan="'+COLS2+'"></td></tr>'+
+             '<tr><td colspan="'+COLS2+'" class="sec">'+title+'</td></tr>'+
+             '<tr>'+th('Categoria')+'<td colspan="24" class="hdr" style="text-align:center;letter-spacing:.4pt">Proporção visual</td>'+th('Qtd')+th('%')+'</tr>';
+    }
+    function totRow2(n){
+      return '<tr>'+td('TOTAL','font-weight:bold;padding:6px 10px','tot')+
+             '<td colspan="24" class="tot"></td>'+
+             td(n,'text-align:center;font-weight:bold','tot')+td('100%','text-align:center','tot')+'</tr>';
+    }
+
+    // KPIs
+    var kpiLbls=['Total de Guias','Em Análise','Junta Médica','Com OPME','Prazo Vencido','Negadas'];
+    var kpiVals=[rows.length,byStatus['Em análise']||0,byStatus['Em junta médica']||0,
+      rows.filter(function(g){return g.opme;}).length,
+      rows.filter(function(g){return g.prazoVencido;}).length,
+      byStatus['Negada']||0];
+    var kpiSection=
+      '<tr><td class="blank" colspan="'+COLS2+'"></td></tr>'+
+      '<tr><td colspan="'+COLS2+'" class="sec">▶ INDICADORES EXECUTIVOS</td></tr>'+
+      '<tr>'+kpiLbls.map(function(l){return td(l,'','kl');}).join('')+'</tr>'+
+      '<tr>'+kpiVals.map(function(v){return td(v,'','kv');}).join('')+'</tr>';
+
+    // Por Status
+    var statusSection=
+      secHdr2('▶ GRÁFICO — DISTRIBUIÇÃO POR STATUS')+
+      MOCK.STATUS.filter(function(s){return byStatus[s];}).map(function(s){
+        var c=byStatus[s],p=Math.round(c/total*100);
+        return '<tr>'+td(esc(s),(statusStyle(s)||'padding:6px 10px')+';border:1px solid #c8e6d4')+
+          vizBar(c,total,statusColor(s))+
+          td(c,'text-align:center;font-weight:700;border:1px solid #c8e6d4')+
+          td(p+'%','text-align:center;border:1px solid #c8e6d4')+'</tr>';
+      }).join('')+totRow2(rows.length);
+
+    // Por Risco
+    var riscoSection=
+      secHdr2('▶ GRÁFICO — RISCO REGULATÓRIO')+
+      [{key:'baixo',lbl:'Baixo',  color:'#16a34a',bg:'#dcfce7',fg:'#16a34a'},
+       {key:'medio',lbl:'Médio',  color:'#a16207',bg:'#fef9c3',fg:'#a16207'},
+       {key:'alto', lbl:'Alto',   color:'#ea580c',bg:'#ffedd5',fg:'#ea580c'},
+       {key:'critico',lbl:'Crítico',color:'#b91c1c',bg:'#fee2e2',fg:'#b91c1c'}
+      ].map(function(r){
+        var c=byRisco[r.key]||0,p=Math.round(c/total*100);
+        return '<tr>'+td(r.lbl,'background:'+r.bg+';color:'+r.fg+';font-weight:bold;padding:6px 10px;border:1px solid #c8e6d4')+
+          vizBar(c,total,r.color)+
+          td(c,'text-align:center;font-weight:700;border:1px solid #c8e6d4')+
+          td(p+'%','text-align:center;border:1px solid #c8e6d4')+'</tr>';
+      }).join('')+totRow2(rows.length);
+
+    // Aderência
+    var adhSection=
+      secHdr2('▶ GRÁFICO — ADERÊNCIA REGULATÓRIA')+
+      [{lbl:'Alta ≥ 90%',     cnt:adhAlta, color:'#16a34a',bg:'#dcfce7',fg:'#16a34a'},
+       {lbl:'Moderada 70–89%',cnt:adhMod,  color:'#a16207',bg:'#fef9c3',fg:'#a16207'},
+       {lbl:'Baixa 50–69%',   cnt:adhBaixa,color:'#ea580c',bg:'#ffedd5',fg:'#ea580c'},
+       {lbl:'Crítica < 50%',  cnt:adhCrit, color:'#b91c1c',bg:'#fee2e2',fg:'#b91c1c'}
+      ].map(function(r){
+        var p=Math.round(r.cnt/total*100);
+        return '<tr>'+td(r.lbl,'background:'+r.bg+';color:'+r.fg+';font-weight:bold;padding:6px 10px;border:1px solid #c8e6d4')+
+          vizBar(r.cnt,total,r.color)+
+          td(r.cnt,'text-align:center;font-weight:700;border:1px solid #c8e6d4')+
+          td(p+'%','text-align:center;border:1px solid #c8e6d4')+'</tr>';
+      }).join('')+
+      '<tr>'+td('Média geral: '+avgAdh+'%','font-weight:bold;padding:6px 10px;color:'+(avgAdh>=90?'#16a34a':avgAdh>=70?'#a16207':'#b91c1c'),'tot')+
+      '<td colspan="24" class="tot"></td>'+
+      td(avgAdh+'%','text-align:center;font-size:14pt;font-weight:bold;color:'+(avgAdh>=90?'#16a34a':avgAdh>=70?'#a16207':'#b91c1c'),'tot')+
+      td('','','tot')+'</tr>';
+
+    // Por Fluxo
+    var fluxoColors=['#0a8a43','#0369a1','#7e22ce','#a16207','#ea580c','#b91c1c','#066b34','#1d4ed8'];
+    var fluxoSection=
+      secHdr2('▶ GRÁFICO — RANKING DE FLUXOS')+
+      Object.keys(byFluxo).sort(function(a,b){return byFluxo[b]-byFluxo[a];}).map(function(k,i){
+        var c=byFluxo[k],p=Math.round(c/total*100);
+        return '<tr>'+td(esc(k),'font-size:9.5pt;padding:6px 10px;border:1px solid #c8e6d4')+
+          vizBar(c,total,fluxoColors[i%fluxoColors.length])+
+          td(c,'text-align:center;font-weight:700;border:1px solid #c8e6d4')+
+          td(p+'%','text-align:center;border:1px solid #c8e6d4')+'</tr>';
+      }).join('');
+
+    var sheet2=
+      '<tr><td colspan="'+COLS2+'" class="title-row">RegulaAI Saúde — Indicadores & Gráficos</td></tr>'+
+      '<tr><td colspan="'+COLS2+'" class="sub-row">Exportado em: '+dt+'   |   Base: '+rows.length+' guias   |   Aderência média: '+avgAdh+'%</td></tr>'+
+      kpiSection+statusSection+riscoSection+adhSection+fluxoSection;
+
+    /* ─── HTML Workbook ─── */
+    var xml='<!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets>'+
+      '<x:ExcelWorksheet><x:Name>Guias</x:Name><x:WorksheetOptions><x:Selected/></x:WorksheetOptions></x:ExcelWorksheet>'+
+      '<x:ExcelWorksheet><x:Name>Indicadores</x:Name><x:WorksheetOptions></x:WorksheetOptions></x:ExcelWorksheet>'+
+      '</x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->';
+
+    var html='<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">'+
+      '<head><meta charset="UTF-8"><meta name="ProgId" content="Excel.Sheet">'+xml+
+      '<style>'+css+'</style></head>'+
+      '<body>'+
+        '<table x:Name="Guias">'+sheet1+'</table>'+
+        '<br style="mso-break-type:excel-sheet-break; page-break-before:always">'+
+        '<table x:Name="Indicadores">'+sheet2+'</table>'+
+      '</body></html>';
+
+    var bom='﻿';
+    var blob=new Blob([bom+html],{type:'application/vnd.ms-excel;charset=utf-8'});
+    var a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download=fname;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(a.href); }, 200);
+    toast('Excel gerado: '+rows.length+' guias em 2 abas','ok');
+  }
+
+  function viewKanban(){
+    var wrap=el('div');
+
+    // Ordem das colunas seguindo a sequência dos fluxos
+    var KB_ORDER=['Em análise','Aguardando complemento','Aguardando documentação','Em junta médica','Cotação de OPME','Analisada','Em correção pelo prestador','Liberada','Negada','Encerrada','Sem parametrização'];
+    var KB_CFG={
+      'Em análise':             {ico:'clock',           cor:'#4a7fa5'},
+      'Aguardando complemento': {ico:'hourglass',       cor:'#b07a1a'},
+      'Aguardando documentação':{ico:'file-clock',      cor:'#c08030'},
+      'Em junta médica':        {ico:'users',           cor:'#6b57b0'},
+      'Cotação de OPME':        {ico:'tag',             cor:'#0e7490'},
+      'Analisada':              {ico:'check-circle',    cor:'#2faa66'},
+      'Em correção pelo prestador':{ico:'pencil',       cor:'#8b6830'},
+      'Liberada':               {ico:'badge-check',     cor:'#0a8a43'},
+      'Negada':                 {ico:'x-circle',        cor:'#b91c1c'},
+      'Encerrada':              {ico:'archive',         cor:'#6b7280'},
+      'Sem parametrização':     {ico:'alert-triangle',  cor:'#9b6020'},
+    };
+
+    var guias=guiasVisiveis();
+    var total=guias.length;
+    var hdrActions='<div style="display:flex;gap:8px;align-items:center">'+
+      '<span style="font-size:12px;color:var(--muted)">'+total+' guia(s) visíveis</span>'+
+    '</div>';
+    wrap.appendChild(el('div',{class:'page-title'},'<div><h1>'+ico('columns-3',18)+' Kanban de Guias</h1><p>Acompanhamento visual por status — clique em qualquer card para detalhar.</p></div>'+hdrActions));
+
+    var kb=el('div',{class:'kanban'});
+
+    KB_ORDER.forEach(function(s){
+      var cfg=KB_CFG[s]||{ico:'circle',cor:'#6b7280'};
+      var lst=guias.filter(function(g){return g.status===s});
+
+      var col=el('div',{class:'k-col'});
+      col.style.cssText='--kcor:'+cfg.cor;
+
+      col.innerHTML=
+        '<div class="k-col-hd">'+
+          '<div class="k-col-hd-left">'+
+            '<span class="k-col-icon">'+ico(cfg.ico,13)+'</span>'+
+            '<span class="k-col-title">'+esc(s)+'</span>'+
+          '</div>'+
+          '<span class="k-count">'+lst.length+'</span>'+
+        '</div>'+
+        '<div class="k-col-body" id="kcol-'+s.replace(/\s/g,'_')+'"></div>';
+
+      kb.appendChild(col);
+
+      var body=col.querySelector('.k-col-body');
+      if(!lst.length){
+        body.innerHTML='<div class="k-empty">'+ico('inbox',22)+'<br>Sem guias</div>';
+      }
+      lst.forEach(function(g){
+        var ad=guiaAderencia(g);
+        var riscoCor={baixo:'#10b981',medio:'#f59e0b',alto:'#f97316',critico:'#ef4444'}[g.risco]||'#6b7280';
+        var et=etapaAtualDe(g);
+        var etapaLabel=et?esc(et.nome):'—';
+        var badges=(g.opme?'<span class="badge warn" style="font-size:10px">OPME</span>':'')+
+                   (g.uti?'<span class="badge info" style="font-size:10px">UTI</span>':'')+
+                   (g.regime==='Urgência'?'<span class="badge danger" style="font-size:10px">URG</span>':'');
+
+        var c=el('div',{class:'k-card'});
+        c.style.cssText='--risco-cor:'+riscoCor;
+        c.innerHTML=
+          '<div class="k-card-top">'+
+            '<span class="k-num">'+esc(g.numero)+'</span>'+
+            riskPill(g.risco)+
+          '</div>'+
+          '<div class="k-beneficiario">'+ico('user',11)+' '+esc(g.beneficiario.nome)+'</div>'+
+          '<div class="k-tipo">'+esc(g.tipo.toUpperCase())+
+            (badges?'<div class="k-badges">'+badges+'</div>':'')+
+          '</div>'+
+          '<div class="k-etapa">'+ico('git-branch',10)+' '+esc(g.fluxo.nome)+' &rsaquo; <b>'+etapaLabel+'</b></div>'+
+          '<div class="k-card-foot">'+
+            aderenciaBar(ad)+
+            '<span class="k-regime'+(g.regime==='Urgência'?' urgente':'')+'">'+esc(g.regime)+'</span>'+
+          '</div>';
+        c.onclick=function(){openGuia(g,'resumo')};
+        body.appendChild(c);
+      });
+    });
+
+    wrap.appendChild(kb);
+    return wrap;
+  }
+
+  // ── Fluxos: lógica compartilhada ──────────────────────────────────
+  var INSTR_DEFAULT={
+    'ANÁLISE ADM - REGULAÇÃO URG':       'Verificar dados administrativos da guia: beneficiário, prestador, vínculo contratual e cobertura. Validar elegibilidade e regime de urgência.',
+    'SETOR ADMINISTRATIVO':              'Conferir dados cadastrais do beneficiário e prestador. Verificar contrato, DLP e vínculo ativo no sistema.',
+    'SOLICITAR CONTRATO/DLP/VÍNCULO':   'Solicitar ao prestador a documentação de contrato, DLP e vínculo vigente. Registrar pendência e aguardar retorno.',
+    'AUDITORIA PRÉVIA':                  'Realizar análise documental prévia: verificar completude dos anexos, justificativa clínica, indicação do procedimento e aderência à DUT.',
+    'SOLICITAR CORREÇÃO AO PRESTADOR':  'Identificar inconsistências na guia e solicitar correção formal ao prestador, detalhando os itens pendentes.',
+    'ANALISAR HISTÓRICOS E TRATAMENTO ANTERIORES': 'Consultar histórico clínico do beneficiário: tratamentos anteriores, internações, guias relacionadas e evolução do quadro.',
+    'PATOLOGIAS ANTERIORES AO PLANO':   'Verificar se a condição possui carência ou é prévia à adesão ao plano. Avaliar cobertura conforme contrato.',
+    'ABORDAGEM PRESENCIAL FILIAL':       'Acionar equipe da filial para contato presencial com prestador ou beneficiário, conforme necessidade do caso.',
+    'AUDITORIA EXTERNA - TRIAGEM ENFERMEIRA': 'Enfermeira auditora realiza triagem clínica: avaliar indicação, regime, complexidade e encaminhar para auditor médico se necessário.',
+    'AUDITORIA EXTERNA - MÉDICO':        'Médico auditor realiza análise técnica completa: indicação clínica, necessidade do procedimento, alternativas e conformidade com DUT.',
+    'AUDITORIA PRÉVIA (DOCUMENTAÇÃO)':  'Conferir documentação técnica recebida: laudos, exames, relatórios e demais anexos exigidos para a autorização.',
+    'AUDITORIA PRÉVIA (DOCUMENTAÇÃO MÉDICO)': 'Médico auditor confere documentação técnica: laudo do médico assistente, exames de imagem, patologia e histórico clínico.',
+    'AUDITORIA EXTERNA - CONTATO MÉDICO ASSISTENTE': 'Realizar contato com o médico assistente para esclarecimentos sobre indicação clínica, alternativas terapêuticas e necessidade do procedimento.',
+    'CONTATO MÉDICO ASSIST. PELA OPERADORA': 'Operadora entra em contato com médico assistente para obter informações complementares sobre o caso.',
+    'AUDITORIA ESPECIALIZADA (ANALÍTICA/BUCO/NEURO)': 'Auditor especializado (analítico, bucomaxilofacial ou neurológico) realiza análise aprofundada conforme especialidade do procedimento.',
+    'AUDITORIA MÉDICA URG/PA':           'Médico auditor analisa guia de urgência/pronto-atendimento: verificar necessidade, pertinência e cobertura em regime de urgência.',
+    'JUNTA MÉDICA':                      'Convocar junta médica com especialistas para análise colegiada de casos complexos ou de alto custo. Emitir parecer fundamentado.',
+    'GARANTIA DE ATENDIMENTO':           'Emitir garantia de atendimento ao beneficiário após análise favorável. Comunicar prestador e beneficiário do prazo e condições.',
+    'COTAÇÃO OPME':                      'Solicitar cotação de OPME a no mínimo 3 fornecedores. Verificar equivalência técnica entre os itens cotados. Registrar fornecedor selecionado e justificativa.',
+    'PARAMETRIZAÇÃO':                    'Cadastrar regras de parametrização para o procedimento no sistema. Vincular procedimentos, pacotes, Mat/Med e diárias conforme protocolo.',
+    'FINALIZAR GUIA':                    'Emitir parecer final da operadora (autorização, negativa ou solicitação de complemento). Registrar decisão, motivo e notificar prestador.',
+    'ENCERRAR PROCESSO':                 'Encerrar o processo administrativo da guia após conclusão de todas as etapas. Arquivar documentação e registrar em log.',
+    'PROCESSO ENCERRADO':                'Processo finalizado. Nenhuma ação adicional necessária. Guia disponível apenas para consulta.'
+  };
+
+  function getInstr(fid, idx, nome){
+    var key=fid+'|'+idx;
+    if(State.etapaInstrucoes[key]!==undefined) return State.etapaInstrucoes[key];
+    return INSTR_DEFAULT[nome]||'';
+  }
+
+  function buildFluxosUI(container){
+    var fluxos=MOCK.FLUXOS;
+    var subBar=el('div',{class:'cfg-sub-tab-bar'});
+    var subContent=el('div',{class:'cfg-sub-content'});
+    fluxos.forEach(function(f,i){
+      var btn=el('button',{class:'cfg-sub-tab'+(i===0?' active':''),'data-fid':f.id},f.id);
+      btn.title=f.nome;
+      subBar.appendChild(btn);
+    });
+    container.appendChild(subBar);
+    container.appendChild(subContent);
+
+    function showFluxo(fid){
+      $$('.cfg-sub-tab',subBar).forEach(function(b){ b.classList.toggle('active',b.getAttribute('data-fid')===fid); });
+      var f=null; for(var i=0;i<fluxos.length;i++){ if(fluxos[i].id===fid){ f=fluxos[i]; break; } }
+      if(!f){ subContent.innerHTML=''; return; }
+      subContent.innerHTML='';
+
+      var VINC_LABELS={'proc':'Procedimentos','pac':'Pacotes','matmed':'Mat/Med','dt':'Diárias/Taxas'};
+      var VINC_ICO={'proc':'stethoscope','pac':'package','matmed':'pill','dt':'calendar-days'};
+      var VINC_COLS={'proc':['cod','desc','ia'],'pac':['cod','desc'],'matmed':['cod','desc','opme'],'dt':['cod','desc']};
+      var VINC_DATA={'proc':MOCK.PROCEDIMENTOS,'pac':MOCK.PACOTES,'matmed':MOCK.MATMED,'dt':MOCK.DIARIAS_TAXAS};
+      var COL_LABELS={cod:'Código',desc:'Descrição',peso:'Peso',obrig:'Obrig.',ia:'IA',opme:'OPME'};
+
+      var hd=el('div',{class:'fluxo-hd'});
+      hd.innerHTML=
+        '<div class="fluxo-hd-id">'+esc(f.id)+'</div>'+
+        '<div class="fluxo-hd-info" style="flex:1">'+
+          '<div class="fluxo-hd-nome">'+esc(f.nome)+'</div>'+
+          '<div class="fluxo-hd-meta">'+
+            '<span class="badge">'+esc(f.regime)+'</span>'+
+            '<span style="font-size:12px;color:var(--muted)">'+f.etapas.length+' etapas</span>'+
+          '</div>'+
+        '</div>'+
+        '<button class="btn-animated" id="btnSalvarFluxo">'+ico('save',13)+' Salvar instruções</button>';
+      subContent.appendChild(hd);
+
+      var vincBar=el('div',{class:'vinc-tab-bar'});
+      var btnSub=el('button',{class:'vinc-tab active','data-vinc':'subfluxos'});
+      btnSub.innerHTML=ico('git-branch',12)+' Subfluxos';
+      vincBar.appendChild(btnSub);
+      (f.vinc||[]).forEach(function(v){
+        var vBtn=el('button',{class:'vinc-tab','data-vinc':v});
+        vBtn.innerHTML=ico(VINC_ICO[v]||'link',12)+' '+(VINC_LABELS[v]||v);
+        vincBar.appendChild(vBtn);
+      });
+
+      var vincPanel=el('div',{class:'vinc-panel'});
+
+      function buildSubfluxos(){
+        var ol=el('ol',{class:'fluxo-etapas-ol'});
+        f.etapas.forEach(function(nome,idx){
+          var key=fid+'|'+idx;
+          var isOpme=nome==='COTAÇÃO OPME';
+          var isJunta=nome.indexOf('JUNTA')>=0;
+          var isFim=nome.indexOf('FINALIZAR')>=0||nome.indexOf('ENCERR')>=0||nome.indexOf('PROCESSO ENCERRADO')>=0;
+          var li=el('li',{class:'fluxo-etapa-item'});
+          li.innerHTML=
+            '<div class="fe-header">'+
+              '<span class="fe-num">'+(idx+1)+'</span>'+
+              '<span class="fe-nome">'+esc(nome)+'</span>'+
+              (isOpme?'<span class="badge warn" style="font-size:10px">OPME</span>':'')+
+              (isJunta?'<span class="badge info" style="font-size:10px">JUNTA</span>':'')+
+              (isFim?'<span class="badge" style="font-size:10px">FIM</span>':'')+
+            '</div>'+
+            '<div class="fe-instr-wrap">'+
+              '<label class="fe-instr-lbl">'+ico('sparkles',11)+' Instrução para a IA</label>'+
+              '<textarea class="fe-instr" data-key="'+key+'" rows="3" placeholder="Descreva o que a IA deve realizar nesta etapa...">'+esc(getInstr(fid,idx,nome))+'</textarea>'+
+            '</div>';
+          ol.appendChild(li);
+        });
+        var wrap2=el('div',{style:'padding:14px'}); wrap2.appendChild(ol); return wrap2;
+      }
+
+      function showVinc(vkey){
+        $$('.vinc-tab',vincBar).forEach(function(b){b.classList.toggle('active',b.getAttribute('data-vinc')===vkey);});
+        vincPanel.innerHTML='';
+        if(vkey==='subfluxos'){
+          vincPanel.appendChild(buildSubfluxos());
+        } else {
+          var data=VINC_DATA[vkey]||[], cols=VINC_COLS[vkey]||['cod','desc'];
+          var box=el('div',{class:'table-wrap'});
+          var tv=el('table');
+          tv.innerHTML='<thead><tr>'+cols.map(function(c){return '<th>'+(COL_LABELS[c]||c.toUpperCase())+'</th>';}).join('')+'<th style="width:70px;text-align:center">Peso</th><th style="width:90px;text-align:center">Status</th><th>Instrução IA</th></tr></thead>';
+          var tbv=el('tbody');
+          data.forEach(function(r){
+            var cfg_key=vkey+'|'+r.cod;
+            var cfg=State.vincConfig[cfg_key]||{};
+            var peso=cfg.peso!=null?cfg.peso:r.peso;
+            var status=cfg.status||'ativo';
+            var instr=cfg.instr||'';
+            var trv=el('tr');
+            var staticCols=cols.map(function(c){
+              var val=r[c];
+              if(typeof val==='boolean') val=val?'<span class="badge">Sim</span>':'<span class="badge muted">Não</span>';
+              return '<td>'+(val==null?'—':esc(String(val)))+'</td>';
+            }).join('');
+            trv.innerHTML=staticCols+
+              '<td style="text-align:center"><input type="number" class="vinc-peso" min="0" max="100" data-vkey="'+vkey+'" data-cod="'+esc(r.cod)+'" value="'+peso+'" style="width:52px;text-align:center;border:1.5px solid var(--g-200);border-radius:6px;padding:3px 5px;font-size:12px"></td>'+
+              '<td style="text-align:center"><button class="vinc-status-btn '+(status==='ativo'?'active':'')+'" data-vkey="'+vkey+'" data-cod="'+esc(r.cod)+'" data-status="'+status+'" style="font-size:11px;padding:3px 10px;border-radius:12px;border:1.5px solid;cursor:pointer;font-weight:600;background:'+(status==='ativo'?'var(--g-700)':'#fff')+';color:'+(status==='ativo'?'#fff':'var(--muted)')+';border-color:'+(status==='ativo'?'var(--g-700)':'var(--g-200)')+'">'+esc(status==='ativo'?'Ativo':'Inativo')+'</button></td>'+
+              '<td><textarea class="vinc-instr" data-vkey="'+vkey+'" data-cod="'+esc(r.cod)+'" rows="2" readonly placeholder="Duplo clique para editar..." title="Duplo clique para editar" style="width:100%;font-size:11.5px;border:1.5px solid var(--g-100);border-radius:6px;padding:4px 7px;resize:none;font-family:inherit;color:var(--ink);cursor:pointer;background:#fafdfb">'+esc(instr)+'</textarea></td>';
+            tbv.appendChild(trv);
+          });
+          tv.appendChild(tbv); box.appendChild(tv);
+
+          // Duplo clique na instrução IA → abre modal de edição
+          box.addEventListener('dblclick',function(e){
+            var ta=e.target.closest('.vinc-instr');
+            if(!ta) return;
+            var vk=ta.getAttribute('data-vkey'), cod=ta.getAttribute('data-cod');
+            var descTd=ta.closest('tr').cells[1];
+            var descTxt=descTd?descTd.textContent.trim():cod;
+            var cur=ta.value;
+            var bodyHTML=
+              '<div style="margin-bottom:10px;font-size:12.5px;color:var(--muted)">Item: <b>'+esc(descTxt)+'</b></div>'+
+              '<textarea id="vincInstrModal" maxlength="3000" rows="14" style="width:100%;font-size:13px;line-height:1.55;border:1.5px solid var(--g-200);border-radius:8px;padding:10px 14px;resize:vertical;font-family:inherit;color:var(--ink);box-sizing:border-box">'+esc(cur)+'</textarea>'+
+              '<div style="display:flex;justify-content:flex-end;margin-top:5px"><span id="vincInstrCount" style="font-size:11px;color:var(--muted)">'+cur.length+' / 3000</span></div>';
+            var footHTML='<button class="btn ghost" id="vincInstrCancel">'+ico('x',13)+' Cancelar</button>'+
+              '<button class="btn" id="vincInstrSave">'+ico('save',13)+' Salvar</button>';
+            var m=modal(ico('sparkles')+' Instrução para a IA','Editar instrução do item · máx. 3000 caracteres',bodyHTML,footHTML);
+            var mta=m.querySelector('#vincInstrModal');
+            var cnt=m.querySelector('#vincInstrCount');
+            mta.oninput=function(){ cnt.textContent=mta.value.length+' / 3000'; };
+            m.querySelector('#vincInstrCancel').onclick=function(){ m.closest('.modal-backdrop').remove(); };
+            m.querySelector('#vincInstrSave').onclick=function(){
+              var newVal=mta.value;
+              ta.value=newVal;
+              var k=vk+'|'+cod;
+              if(!State.vincConfig[k]) State.vincConfig[k]={};
+              State.vincConfig[k].instr=newVal;
+              localStorage.setItem('regula_vinc_cfg',JSON.stringify(State.vincConfig));
+              m.closest('.modal-backdrop').remove();
+              toast('Instrução salva','ok');
+            };
+            setTimeout(function(){ mta.focus(); mta.setSelectionRange(mta.value.length,mta.value.length); },50);
+          });
+
+          // Toggle status
+          box.addEventListener('click',function(e){
+            var btn=e.target.closest('.vinc-status-btn');
+            if(!btn) return;
+            var k=btn.getAttribute('data-vkey')+'|'+btn.getAttribute('data-cod');
+            var cur=btn.getAttribute('data-status');
+            var novo=cur==='ativo'?'inativo':'ativo';
+            if(!State.vincConfig[k]) State.vincConfig[k]={};
+            State.vincConfig[k].status=novo;
+            btn.setAttribute('data-status',novo);
+            btn.textContent=novo==='ativo'?'Ativo':'Inativo';
+            btn.style.background=novo==='ativo'?'var(--g-700)':'#fff';
+            btn.style.color=novo==='ativo'?'#fff':'var(--muted)';
+            btn.style.borderColor=novo==='ativo'?'var(--g-700)':'var(--g-200)';
+            btn.classList.toggle('active',novo==='ativo');
+            localStorage.setItem('regula_vinc_cfg',JSON.stringify(State.vincConfig));
+          });
+
+          // Salvar peso e instrução
+          var saveBar=el('div',{style:'display:flex;justify-content:flex-end;padding:8px 14px;border-top:1px solid var(--g-100)'});
+          var saveBtn=el('button',{class:'btn-animated'},ico('save',13)+' Salvar parametrização');
+          saveBtn.onclick=function(){
+            $$('.vinc-peso',box).forEach(function(inp){
+              var k=inp.getAttribute('data-vkey')+'|'+inp.getAttribute('data-cod');
+              if(!State.vincConfig[k]) State.vincConfig[k]={};
+              State.vincConfig[k].peso=+inp.value;
+            });
+            $$('.vinc-instr',box).forEach(function(ta){
+              var k=ta.getAttribute('data-vkey')+'|'+ta.getAttribute('data-cod');
+              if(!State.vincConfig[k]) State.vincConfig[k]={};
+              State.vincConfig[k].instr=ta.value;
+            });
+            localStorage.setItem('regula_vinc_cfg',JSON.stringify(State.vincConfig));
+            toast('Parametrização salva','ok');
+          };
+          saveBar.appendChild(saveBtn);
+          vincPanel.appendChild(box);
+          vincPanel.appendChild(saveBar);
+        }
+        lcIcons();
+      }
+
+      $$('.vinc-tab',vincBar).forEach(function(b){ b.onclick=function(){showVinc(b.getAttribute('data-vinc'));}; });
+      subContent.appendChild(vincBar);
+      subContent.appendChild(vincPanel);
+      showVinc('subfluxos');
+
+      setTimeout(function(){
+        var btnSalvar=subContent.querySelector('#btnSalvarFluxo');
+        if(btnSalvar) btnSalvar.onclick=function(){
+          $$('.fe-instr',vincPanel).forEach(function(ta){ State.etapaInstrucoes[ta.getAttribute('data-key')]=ta.value; });
+          localStorage.setItem('regula_etapa_instr',JSON.stringify(State.etapaInstrucoes));
+          toast('Instruções do fluxo '+fid+' salvas','ok');
+        };
+      },0);
+      lcIcons();
+    }
+
+    $$('.cfg-sub-tab',subBar).forEach(function(b){ b.onclick=function(){ showFluxo(b.getAttribute('data-fid')); }; });
+    showFluxo(fluxos[0].id);
+  }
+
+  function viewParam(){
+    var wrap=el('div');
+    wrap.appendChild(el('div',{class:'page-title'},'<div><h1>Painel de Parametrização</h1><p>Fluxos assistenciais, regras DUT e requisitos documentais.</p></div>'));
+    // Helpers de contagem por tipo de vinculação
+    function countVincInstr(prefix){
+      return Object.keys(State.vincConfig).filter(function(k){
+        return k.indexOf(prefix+'|')===0 && State.vincConfig[k].instr;
+      }).length;
+    }
+    function countVincAtivos(prefix, total){
+      var inativos=Object.keys(State.vincConfig).filter(function(k){
+        return k.indexOf(prefix+'|')===0 && State.vincConfig[k].status==='inativo';
+      }).length;
+      return total-inativos;
+    }
+    function countFluxosInstr(){
+      var fids={};
+      Object.keys(State.etapaInstrucoes).forEach(function(k){
+        if(State.etapaInstrucoes[k]) fids[k.split('|')[0]]=true;
+      });
+      return Object.keys(fids).length;
+    }
+    var kpi=el('div',{class:'kpi-grid',style:'margin-bottom:18px'});
+    [
+      {t:'Fluxos sincronizados', v:MOCK.FLUXOS.length,        ia:countFluxosInstr(),      ativos:MOCK.FLUXOS.length,                             total:MOCK.FLUXOS.length},
+      {t:'Procedimentos',        v:MOCK.PROCEDIMENTOS.length,  ia:countVincInstr('proc'),  ativos:countVincAtivos('proc',  MOCK.PROCEDIMENTOS.length), total:MOCK.PROCEDIMENTOS.length},
+      {t:'Pacotes',              v:MOCK.PACOTES.length,        ia:countVincInstr('pac'),   ativos:countVincAtivos('pac',   MOCK.PACOTES.length),        total:MOCK.PACOTES.length},
+      {t:'Mat/Med',              v:MOCK.MATMED.length,         ia:countVincInstr('matmed'),ativos:countVincAtivos('matmed',MOCK.MATMED.length),          total:MOCK.MATMED.length},
+      {t:'Diárias/Taxas',       v:MOCK.DIARIAS_TAXAS.length,  ia:countVincInstr('dt'),    ativos:countVincAtivos('dt',    MOCK.DIARIAS_TAXAS.length),   total:MOCK.DIARIAS_TAXAS.length}
+    ].forEach(function(x){
+      kpi.appendChild(el('div',{class:'kpi param'},
+        '<h4>'+esc(x.t)+'</h4>'+
+        '<div class="v">'+esc(String(x.v))+'</div>'+
+        '<div style="font-size:10.5px;color:rgba(255,255,255,.75);margin-top:5px;display:flex;flex-direction:column;gap:2px">'+
+          '<span>'+x.ativos+' de '+x.total+' ativos</span>'+
+          '<span>'+x.ia+' de '+x.total+' com instrução IA</span>'+
+        '</div>'
+      ));
+    });
+    wrap.appendChild(kpi);
+    var tabs=el('div',{class:'tabs'});
+    ['Fluxos & Etapas','Regras DUT','Documental'].forEach(function(n,i){
+      tabs.appendChild(el('button',{class:'tab'+(i===0?' active':''),'data-tab':n},n));
+    });
+    wrap.appendChild(tabs);
+    var content=el('div'); wrap.appendChild(content);
+
+    function renderTab(name){
+      content.innerHTML='';
+      if(name==='Fluxos & Etapas'){ buildFluxosUI(content); lcIcons(); return; }
+      var isDUT=name==='Regras DUT';
+      var isGestor=State.perfil==='gestor';
+      var prefix, data;
+      if(isDUT){
+        prefix='dut';
+        data=MOCK.REGRAS_DUT.concat(State.customDutRules.map(function(r){ return Object.assign({},r,{_custom:true}); }));
+      } else {
+        prefix='doc';
+        data=MOCK.REGRAS_DOC;
+      }
+
+      // Toolbar DUT
+      if(isDUT){
+        var toolbar=el('div',{style:'display:flex;align-items:center;gap:8px;padding:10px 14px 0;flex-wrap:wrap'});
+        var fileInput=el('input',{type:'file',accept:'.csv,.xls,.xlsx',style:'display:none'});
+        if(isGestor){
+          var btnNovo=el('button',{class:'btn',style:'display:flex;align-items:center;gap:6px;font-size:12.5px',title:'Cadastre novos itens e os parametrize'},
+            ico('plus-circle',14)+' Novo item');
+          var btnImp=el('button',{class:'btn ghost',style:'display:flex;align-items:center;gap:6px;font-size:12.5px',title:'Importe os dados de uma planilha com a configuração pronta'},
+            ico('upload',14)+' Importar planilha');
+          toolbar.appendChild(btnNovo);
+          toolbar.appendChild(btnImp);
+        }
+        var btnExp=el('button',{class:'btn ghost',style:'display:flex;align-items:center;gap:6px;font-size:12.5px',title:'Exporte os dados das configurações atuais'},
+          ico('download',14)+' Exportar planilha');
+        toolbar.appendChild(btnExp);
+        toolbar.appendChild(fileInput);
+        content.appendChild(toolbar);
+
+        if(isGestor){
+          btnNovo.onclick=function(){
+            var fld='font-size:11.5px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px';
+            var inp='width:100%;box-sizing:border-box;border:1.5px solid var(--g-200);border-radius:7px;padding:8px 12px;font-size:13px;font-family:inherit;color:var(--ink)';
+            var bodyHTML=
+              '<div style="display:grid;gap:14px">'+
+              '<div><label style="'+fld+'">CÓDIGO</label>'+
+              '<input id="dutNovoCod" type="text" maxlength="3000" placeholder="Ex.: DUT-042" style="'+inp+'"></div>'+
+              '<div><label style="'+fld+'">DESCRIÇÃO DA DUT</label>'+
+              '<textarea id="dutNovoDesc" rows="3" maxlength="3000" placeholder="Descreva a regra ou critério técnico..." style="'+inp+';resize:vertical"></textarea></div>'+
+              '<div><label style="'+fld+'">DUT <span style="font-weight:400">(texto normativo — opcional)</span></label>'+
+              '<textarea id="dutNovoText" rows="4" maxlength="3000" placeholder="Cole aqui o texto da DUT conforme publicação ANS..." style="'+inp+';resize:vertical"></textarea></div>'+
+              '<div><label style="'+fld+'">EVIDÊNCIA EXIGIDA</label>'+
+              '<textarea id="dutNovoEv" rows="2" maxlength="3000" placeholder="Ex.: Laudo médico com CID + exames confirmatórios" style="'+inp+';resize:vertical"></textarea></div>'+
+              '<div><label style="'+fld+'">INSTRUÇÃO IA <span style="font-weight:400">(opcional)</span></label>'+
+              '<textarea id="dutNovoInstr" rows="3" maxlength="3000" placeholder="Orientações para a IA ao analisar guias com esta DUT..." style="'+inp+';resize:vertical"></textarea>'+
+              '<div style="text-align:right;font-size:11px;color:var(--muted);margin-top:3px"><span id="dutNovoInstrCount">0</span> / 3000</div></div>'+
+              '</div>';
+            var footHTML='<button class="btn ghost" id="dutNovoCancel">'+ico('x',13)+' Cancelar</button>'+
+              '<button class="btn" id="dutNovoSave">'+ico('save',13)+' Cadastrar item</button>';
+            var m=modal(ico('plus-circle')+' Nova Regra DUT','Preencha os campos — Status inicia como Ativo',bodyHTML,footHTML);
+            m.querySelector('#dutNovoCancel').onclick=function(){ m.closest('.modal-backdrop').remove(); };
+            var instrTA=m.querySelector('#dutNovoInstr');
+            var instrCnt=m.querySelector('#dutNovoInstrCount');
+            instrTA.oninput=function(){ instrCnt.textContent=instrTA.value.length; };
+            m.querySelector('#dutNovoSave').onclick=function(){
+              var cod=m.querySelector('#dutNovoCod').value.trim();
+              var desc=m.querySelector('#dutNovoDesc').value.trim();
+              var dutTxt=m.querySelector('#dutNovoText').value.trim();
+              var evidencia=m.querySelector('#dutNovoEv').value.trim();
+              var instr=instrTA.value.trim();
+              if(!cod||!desc){ toast('Código e Descrição são obrigatórios','danger'); return; }
+              var codExists=data.some(function(r){ return String(r.cod).toLowerCase()===cod.toLowerCase(); });
+              if(codExists){ toast('Já existe um item com este código','danger'); return; }
+              State.customDutRules.push({cod:cod,desc:desc,evidencia:evidencia});
+              var vc={};
+              if(dutTxt){ if(!State.vincConfig['duttext|'+cod]) State.vincConfig['duttext|'+cod]={}; State.vincConfig['duttext|'+cod].text=dutTxt; vc=State.vincConfig; }
+              if(instr){ if(!State.vincConfig['dut|'+cod]) State.vincConfig['dut|'+cod]={}; State.vincConfig['dut|'+cod].instr=instr; vc=State.vincConfig; }
+              if(dutTxt||instr) localStorage.setItem('regula_vinc_cfg',JSON.stringify(State.vincConfig));
+              localStorage.setItem('regula_custom_dut',JSON.stringify(State.customDutRules));
+              m.closest('.modal-backdrop').remove();
+              toast('Item cadastrado com sucesso','ok');
+              renderTab('Regras DUT');
+            };
+            setTimeout(function(){ m.querySelector('#dutNovoCod').focus(); },50);
+          };
+
+          btnImp.onclick=function(){ fileInput.value=''; fileInput.click(); };
+        } // end if(isGestor) — novo/imp
+
+        fileInput.onchange=function(){
+          var file=fileInput.files[0];
+          if(!file) return;
+          var reader=new FileReader();
+          reader.onload=function(ev){
+            var text=ev.target.result;
+            var rows=[];
+
+            // Detect HTML/XLS format (our export) vs plain CSV
+            var sniff=text.trimLeft().toLowerCase();
+            if(sniff.indexOf('<html')===0||sniff.indexOf('<!doc')===0||sniff.indexOf('﻿<html')===0||sniff.indexOf('<table')===0){
+              // Parse HTML table with DOMParser
+              var parser=new DOMParser();
+              var doc=parser.parseFromString(text,'text/html');
+              // Find the Regras DUT table (first table that has a DUT-like header)
+              var tables=doc.querySelectorAll('table');
+              var tbl=null;
+              for(var ti=0;ti<tables.length;ti++){
+                var hdr=tables[ti].querySelector('th,td');
+                if(hdr&&(hdr.textContent.toLowerCase().indexOf('c')===0||hdr.textContent.toLowerCase().indexOf('d')>=0)){
+                  tbl=tables[ti]; break;
+                }
+              }
+              if(!tbl&&tables.length) tbl=tables[0];
+              if(!tbl){ toast('Nenhuma tabela encontrada no arquivo','danger'); return; }
+              tbl.querySelectorAll('tr').forEach(function(tr){
+                var cells=[];
+                tr.querySelectorAll('td,th').forEach(function(td){ cells.push(td.textContent.trim()); });
+                if(cells.some(function(c){return c;})) rows.push(cells);
+              });
+            } else {
+              // Parse CSV (comma or semicolon, handles quoted fields)
+              text.split(/\r?\n/).filter(function(l){return l.trim();}).forEach(function(line){
+                var cols=[],cur='',inQ=false;
+                for(var i=0;i<line.length;i++){
+                  var c=line[i];
+                  if(c==='"'){inQ=!inQ;}
+                  else if((c===','||c===';')&&!inQ){cols.push(cur.trim());cur='';}
+                  else cur+=c;
+                }
+                cols.push(cur.trim());
+                rows.push(cols);
+              });
+            }
+
+            if(!rows.length){ toast('Arquivo vazio ou inválido','danger'); return; }
+            // detect and skip header row
+            var startRow=0;
+            var firstCell=(rows[0][0]||'').toLowerCase().replace(/[^a-záéíóúãõç]/g,'');
+            if(firstCell==='codigo'||firstCell==='código'||firstCell==='cod'||firstCell==='c') startRow=1;
+            var parsed=rows.slice(startRow).filter(function(r){return r[0]&&r[0].length>0;}).map(function(r){
+              return {cod:(r[0]||'').trim(),desc:(r[1]||'').trim(),dutText:(r[2]||'').trim(),evidencia:(r[3]||'').trim(),instr:(r[4]||'').trim()};
+            });
+            if(!parsed.length){ toast('Nenhum item encontrado no arquivo','danger'); return; }
+
+            // existing codes (MOCK + custom)
+            var existingCods={};
+            MOCK.REGRAS_DUT.forEach(function(r){existingCods[String(r.cod).toLowerCase()]=true;});
+            State.customDutRules.forEach(function(r){existingCods[String(r.cod).toLowerCase()]=true;});
+            var novos=parsed.filter(function(r){return !existingCods[r.cod.toLowerCase()];});
+            var dups=parsed.length-novos.length;
+
+            // preview modal
+            var prevRows=parsed.slice(0,8);
+            var tableHtml='<table style="width:100%;border-collapse:collapse;font-size:11.5px">'+
+              '<thead><tr style="background:var(--g-700);color:#fff">'+
+              '<th style="padding:6px 10px;text-align:left">Código</th>'+
+              '<th style="padding:6px 10px;text-align:left">Descrição DUT</th>'+
+              '<th style="padding:6px 10px;text-align:left">DUT</th>'+
+              '<th style="padding:6px 10px;text-align:left">Evidência exigida</th>'+
+              '<th style="padding:6px 10px;text-align:left">Instrução IA</th>'+
+              '</tr></thead><tbody>'+
+              prevRows.map(function(r,i){
+                var dup=existingCods[r.cod.toLowerCase()];
+                return '<tr style="background:'+(dup?'#fff7ed':i%2===0?'#f6fdf8':'#fff')+'">'+
+                  '<td style="padding:5px 10px;border:1px solid var(--g-100);font-weight:600;color:'+(dup?'#ea580c':'inherit')+'">'+esc(r.cod)+(dup?' <span style="font-size:10px;color:#ea580c">(duplicado)</span>':'')+'</td>'+
+                  '<td style="padding:5px 10px;border:1px solid var(--g-100)">'+esc(r.desc)+'</td>'+
+                  '<td style="padding:5px 10px;border:1px solid var(--g-100);color:var(--muted)">'+esc(r.dutText?(r.dutText.length>40?r.dutText.slice(0,40)+'…':r.dutText):'—')+'</td>'+
+                  '<td style="padding:5px 10px;border:1px solid var(--g-100)">'+esc(r.evidencia)+'</td>'+
+                  '<td style="padding:5px 10px;border:1px solid var(--g-100);color:var(--muted)">'+esc(r.instr||'—')+'</td>'+
+                  '</tr>';
+              }).join('')+
+              '</tbody></table>'+
+              (parsed.length>8?'<div style="font-size:11px;color:var(--muted);margin-top:6px;text-align:right">+ '+(parsed.length-8)+' linhas não exibidas</div>':'');
+            var resumo='<div style="display:flex;gap:16px;margin-bottom:12px;font-size:12.5px;flex-wrap:wrap">'+
+              '<span>'+ico('file-text',13)+' <b>'+parsed.length+'</b> linhas lidas</span>'+
+              '<span style="color:var(--g-600)">'+ico('check-circle',13)+' <b>'+novos.length+'</b> novo(s)</span>'+
+              (dups?'<span style="color:#ea580c">'+ico('alert-circle',13)+' <b>'+dups+'</b> duplicado(s) — código já cadastrado, serão ignorados</span>':'')+'</div>'+
+              (!novos.length?'<div style="background:#fff7ed;border:1.5px solid #fcd34d;border-radius:8px;padding:10px 14px;font-size:12.5px;color:#92400e;margin-bottom:10px;display:flex;align-items:center;gap:8px">'+
+                ico('alert-triangle',14)+' <span>Todos os itens do arquivo já estão cadastrados. Nenhum código pode ser duplicado — revise o arquivo e tente novamente.</span></div>':'');
+            var footHtml='<button class="btn ghost" id="impCancel">'+ico('x',13)+' Fechar</button>'+
+              (novos.length?'<button class="btn" id="impConfirm">'+ico('upload',13)+' Importar '+novos.length+' item(s) novo(s)</button>':'');
+            var m=modal(ico('upload')+' Importar Regras DUT','Prévia do arquivo: '+esc(file.name),resumo+tableHtml,footHtml);
+            m.querySelector('#impCancel').onclick=function(){ m.closest('.modal-backdrop').remove(); };
+            var confirmBtn=m.querySelector('#impConfirm');
+            if(confirmBtn) confirmBtn.onclick=function(){
+              novos.forEach(function(r){
+                State.customDutRules.push({cod:r.cod,desc:r.desc,evidencia:r.evidencia});
+                if(r.dutText){ if(!State.vincConfig['duttext|'+r.cod]) State.vincConfig['duttext|'+r.cod]={}; State.vincConfig['duttext|'+r.cod].text=r.dutText; }
+                if(r.instr){
+                  var k='dut|'+r.cod;
+                  if(!State.vincConfig[k]) State.vincConfig[k]={};
+                  State.vincConfig[k].instr=r.instr;
+                }
+              });
+              localStorage.setItem('regula_custom_dut',JSON.stringify(State.customDutRules));
+              localStorage.setItem('regula_vinc_cfg',JSON.stringify(State.vincConfig));
+              m.closest('.modal-backdrop').remove();
+              toast(novos.length+' item(s) importado(s) com sucesso','ok');
+              renderTab('Regras DUT');
+            };
+            lcIcons();
+          };
+          reader.readAsText(file,'UTF-8');
+        };
+
+        btnExp.onclick=function(){
+          var allData=MOCK.REGRAS_DUT.concat(State.customDutRules);
+          var css2='table{border-collapse:collapse;font-family:Calibri,sans-serif;font-size:11pt}'+
+            'th{background:#0a8a43;color:#fff;padding:8px 12px;border:1px solid #066b34;font-weight:700;text-align:left}'+
+            'td{padding:7px 12px;border:1px solid #c8e6d4;vertical-align:top}'+
+            'tr:nth-child(even) td{background:#f2faf6}';
+          var rows2='<tr><th>Código</th><th>Descrição DUT</th><th>DUT</th><th>Evidência exigida</th><th>Instrução IA</th></tr>';
+          allData.forEach(function(r){
+            var cod=String(r.cod);
+            var dutTxt=(State.vincConfig['duttext|'+cod]&&State.vincConfig['duttext|'+cod].text)||'';
+            var instr=(State.vincConfig['dut|'+cod]&&State.vincConfig['dut|'+cod].instr)||'';
+            rows2+='<tr><td>'+esc(cod)+'</td><td>'+esc(r.desc||'')+'</td><td>'+esc(dutTxt)+'</td><td>'+esc(r.evidencia||'')+'</td><td>'+esc(instr)+'</td></tr>';
+          });
+          var html2='<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">'+
+            '<head><meta charset="UTF-8"><style>'+css2+'</style></head>'+
+            '<body><table x:Name="Regras DUT">'+rows2+'</table></body></html>';
+          var blob2=new Blob(['﻿'+html2],{type:'application/vnd.ms-excel;charset=utf-8'});
+          var a2=document.createElement('a');
+          a2.href=URL.createObjectURL(blob2);
+          a2.download='regras_dut.xls';
+          document.body.appendChild(a2); a2.click();
+          setTimeout(function(){ document.body.removeChild(a2); URL.revokeObjectURL(a2.href); },200);
+        };
+      }
+
+      var box=el('div',{class:'table-wrap',style:'margin-top:'+(isDUT?'10px':'0')});
+      var t=el('table');
+      var tb=el('tbody');
+
+      function statusBtnHTML(prefix2,cod,status){
+        return '<button class="vinc-status-btn '+(status==='ativo'?'active':'')+'" data-vkey="'+esc(prefix2)+'" data-cod="'+esc(cod)+'" data-status="'+status+'" style="font-size:11px;padding:3px 10px;border-radius:12px;border:1.5px solid;cursor:pointer;font-weight:600;background:'+(status==='ativo'?'var(--g-700)':'#fff')+';color:'+(status==='ativo'?'#fff':'var(--muted)')+';border-color:'+(status==='ativo'?'var(--g-700)':'var(--g-200)')+'">'+esc(status==='ativo'?'Ativo':'Inativo')+'</button>';
+      }
+      function instrBtnHTML(prefix2,cod,hasInstr){
+        return '<button class="dut-instr-btn" data-cod="'+esc(cod)+'" data-vkey="'+esc(prefix2)+'"'+(!hasInstr&&!isGestor?' disabled':'')+
+          ' style="font-size:11px;padding:3px 10px;border-radius:12px;border:1.5px solid;cursor:'+(!hasInstr&&!isGestor?'default':'pointer')+';font-weight:600;white-space:nowrap;opacity:'+(!hasInstr&&!isGestor?'.45':'1')+';'+
+          (hasInstr?'background:var(--g-100);color:var(--g-700);border-color:var(--g-300)':
+            isGestor?'background:#fff;color:var(--muted);border-color:var(--g-200)':
+            'background:#fff;color:var(--g-200);border-color:var(--g-100)')+'">'+
+          ico('sparkles',11)+' '+(hasInstr?'Ler instrução':isGestor?'Adicionar':'Sem instrução')+'</button>';
+      }
+
+      if(isDUT){
+        t.innerHTML='<thead><tr><th>Código</th><th>Descrição</th><th>DUT</th><th>Evidência exigida</th><th>Status</th><th>Instrução IA</th>'+(isGestor?'<th></th>':'')+'</tr></thead>';
+        data.forEach(function(r){
+          var cod=String(r.cod);
+          var cfg=State.vincConfig['dut|'+cod]||{};
+          var status=cfg.status||'ativo';
+          var instr=cfg.instr||'';
+          var dutText=(State.vincConfig['duttext|'+cod]||{}).text||'';
+          var tr=el('tr');
+          if(r._custom) tr.style.background='#f6fdf8';
+          var dutBtn='<button class="dut-text-btn" data-cod="'+esc(cod)+'" style="font-size:11px;padding:3px 10px;border-radius:12px;border:1.5px solid;cursor:pointer;font-weight:600;white-space:nowrap;'+
+            (dutText?'background:var(--g-700);color:#fff;border-color:var(--g-700)':
+              isGestor?'background:#f6fdf8;color:var(--g-600);border-color:var(--g-200)':
+              'background:#fff;color:var(--muted);border-color:var(--g-100);cursor:default;opacity:.45')+'">'+
+            ico('file-text',11)+' '+(dutText?'Ler DUT':isGestor?'Adicionar DUT':'Sem DUT')+'</button>';
+          tr.innerHTML=
+            '<td style="font-weight:600;white-space:nowrap">'+esc(cod)+'</td>'+
+            '<td style="font-size:12.5px">'+esc(r.desc||'')+'</td>'+
+            '<td style="text-align:center">'+dutBtn+'</td>'+
+            '<td style="font-size:12.5px">'+esc(r.evidencia||'')+'</td>'+
+            '<td style="text-align:center">'+statusBtnHTML('dut',cod,status)+'</td>'+
+            '<td style="text-align:center">'+instrBtnHTML('dut',cod,!!instr)+'</td>'+
+            (isGestor?'<td style="text-align:center;width:36px">'+(r._custom?'<button class="dut-del-btn" data-cod="'+esc(cod)+'" title="Excluir item" style="background:none;border:none;cursor:pointer;color:var(--danger);padding:4px;border-radius:5px;line-height:1">'+ico('trash-2',14)+'</button>':'<span style="color:var(--g-200);font-size:10px" title="Item base">—</span>')+'</td>':'');
+          tb.appendChild(tr);
+        });
+      } else {
+        t.innerHTML='<thead><tr><th>Código</th><th>Descrição</th><th>Obrigatório</th><th>Status</th><th>Instrução IA</th></tr></thead>';
+        data.forEach(function(r){
+          var cod=String(r.cod);
+          var cfg=State.vincConfig['doc|'+cod]||{};
+          var status=cfg.status||'ativo';
+          var instr=cfg.instr||'';
+          var tr=el('tr');
+          var obrigCell=typeof r.obrig==='boolean'?(r.obrig?'<span class="badge">Sim</span>':'<span class="badge muted">Não</span>'):esc(String(r.obrig||''));
+          tr.innerHTML=
+            '<td style="font-weight:600;white-space:nowrap">'+esc(cod)+'</td>'+
+            '<td style="font-size:12.5px">'+esc(r.desc||'')+'</td>'+
+            '<td style="text-align:center">'+obrigCell+'</td>'+
+            '<td style="text-align:center">'+statusBtnHTML('doc',cod,status)+'</td>'+
+            '<td style="text-align:center">'+instrBtnHTML('doc',cod,!!instr)+'</td>';
+          tb.appendChild(tr);
+        });
+      }
+
+      t.appendChild(tb); box.appendChild(t);
+
+      box.addEventListener('click',function(e){
+        // Status toggle
+        var sBtn=e.target.closest('.vinc-status-btn');
+        if(sBtn){
+          var sk=sBtn.getAttribute('data-vkey')+'|'+sBtn.getAttribute('data-cod');
+          var cur=sBtn.getAttribute('data-status'), novo=cur==='ativo'?'inativo':'ativo';
+          if(!State.vincConfig[sk]) State.vincConfig[sk]={};
+          State.vincConfig[sk].status=novo;
+          sBtn.setAttribute('data-status',novo);
+          sBtn.textContent=novo==='ativo'?'Ativo':'Inativo';
+          sBtn.style.background=novo==='ativo'?'var(--g-700)':'#fff';
+          sBtn.style.color=novo==='ativo'?'#fff':'var(--muted)';
+          sBtn.style.borderColor=novo==='ativo'?'var(--g-700)':'var(--g-200)';
+          sBtn.classList.toggle('active',novo==='ativo');
+          localStorage.setItem('regula_vinc_cfg',JSON.stringify(State.vincConfig));
+          return;
+        }
+
+        // Ler/editar texto DUT
+        var dtBtn=e.target.closest('.dut-text-btn');
+        if(dtBtn){
+          var dCod=dtBtn.getAttribute('data-cod');
+          var curDut=(State.vincConfig['duttext|'+dCod]||{}).text||'';
+          var dDesc=dtBtn.closest('tr').cells[1].textContent.trim();
+          var readOnly=!isGestor;
+          var bodyDUT=
+            '<div style="margin-bottom:10px;font-size:12.5px;color:var(--muted)">'+ico('file-text',13)+' <b>'+esc(dCod)+'</b> — '+esc(dDesc)+'</div>'+
+            (readOnly
+              ?(curDut?'<div style="font-size:13px;line-height:1.65;color:var(--ink);background:#f6fdf8;border:1.5px solid var(--g-100);border-radius:8px;padding:14px 16px;white-space:pre-wrap;max-height:340px;overflow-y:auto">'+esc(curDut)+'</div>'
+                :'<div style="text-align:center;padding:28px;color:var(--muted);font-size:12.5px">Nenhum texto de DUT cadastrado.</div>')
+              :'<textarea id="dutTA" maxlength="3000" rows="12" style="width:100%;font-size:13px;line-height:1.55;border:1.5px solid var(--g-200);border-radius:8px;padding:10px 14px;resize:vertical;font-family:inherit;color:var(--ink);box-sizing:border-box">'+esc(curDut)+'</textarea>'+
+               '<div style="display:flex;justify-content:flex-end;margin-top:5px"><span id="dutTACnt" style="font-size:11px;color:var(--muted)">'+curDut.length+' / 3000</span></div>');
+          var footDUT='<button class="btn ghost" id="dutClose">'+ico('x',13)+' Fechar</button>'+
+            (!readOnly?'<button class="btn" id="dutSave">'+ico('save',13)+' Salvar DUT</button>':'');
+          var md=modal(ico('file-text')+' Texto da DUT','Regulatório ANS · máx. 3000 caracteres',bodyDUT,footDUT);
+          md.querySelector('#dutClose').onclick=function(){ md.closest('.modal-backdrop').remove(); };
+          if(!readOnly){
+            var dta=md.querySelector('#dutTA'), dcnt=md.querySelector('#dutTACnt');
+            dta.oninput=function(){ dcnt.textContent=dta.value.length+' / 3000'; };
+            md.querySelector('#dutSave').onclick=function(){
+              if(!State.vincConfig['duttext|'+dCod]) State.vincConfig['duttext|'+dCod]={};
+              State.vincConfig['duttext|'+dCod].text=dta.value;
+              localStorage.setItem('regula_vinc_cfg',JSON.stringify(State.vincConfig));
+              md.closest('.modal-backdrop').remove();
+              toast('Texto da DUT salvo','ok');
+              renderTab('Regras DUT');
+            };
+            setTimeout(function(){ dta.focus(); },50);
+          }
+          lcIcons(); return;
+        }
+
+        // Ler/editar instrução IA
+        var iBtn=e.target.closest('.dut-instr-btn');
+        if(iBtn&&!iBtn.disabled){
+          var iCod=iBtn.getAttribute('data-cod'), iVkey=iBtn.getAttribute('data-vkey');
+          var iKey=iVkey+'|'+iCod;
+          var curInstr=(State.vincConfig[iKey]||{}).instr||'';
+          var iDesc=iBtn.closest('tr').cells[1].textContent.trim();
+          var readOnlyI=!isGestor;
+          var bodyI=
+            '<div style="margin-bottom:10px;font-size:12.5px;color:var(--muted)">'+ico('sparkles',13)+' <b>'+esc(iCod)+'</b> — '+esc(iDesc)+'</div>'+
+            (readOnlyI
+              ?(curInstr?'<div style="font-size:13px;line-height:1.65;color:var(--ink);background:#f6fdf8;border:1.5px solid var(--g-100);border-radius:8px;padding:14px 16px;white-space:pre-wrap;max-height:340px;overflow-y:auto">'+esc(curInstr)+'</div>'
+                :'<div style="text-align:center;padding:28px;color:var(--muted);font-size:12.5px">Nenhuma instrução cadastrada para este item.</div>')
+              :'<textarea id="instrTA" maxlength="3000" rows="12" style="width:100%;font-size:13px;line-height:1.55;border:1.5px solid var(--g-200);border-radius:8px;padding:10px 14px;resize:vertical;font-family:inherit;color:var(--ink);box-sizing:border-box">'+esc(curInstr)+'</textarea>'+
+               '<div style="display:flex;justify-content:flex-end;margin-top:5px"><span id="instrTACnt" style="font-size:11px;color:var(--muted)">'+curInstr.length+' / 3000</span></div>');
+          var footI='<button class="btn ghost" id="instrClose">'+ico('x',13)+' Fechar</button>'+
+            (!readOnlyI?'<button class="btn" id="instrSave">'+ico('save',13)+' Salvar instrução</button>':'');
+          var perm=readOnlyI?'Visualização · apenas gestores podem editar':'Editar instrução · máx. 3000 caracteres';
+          var mi=modal(ico('sparkles')+' Instrução para a IA',perm,bodyI,footI);
+          mi.querySelector('#instrClose').onclick=function(){ mi.closest('.modal-backdrop').remove(); };
+          if(!readOnlyI){
+            var ita=mi.querySelector('#instrTA'), icnt=mi.querySelector('#instrTACnt');
+            ita.oninput=function(){ icnt.textContent=ita.value.length+' / 3000'; };
+            mi.querySelector('#instrSave').onclick=function(){
+              if(!State.vincConfig[iKey]) State.vincConfig[iKey]={};
+              State.vincConfig[iKey].instr=ita.value;
+              localStorage.setItem('regula_vinc_cfg',JSON.stringify(State.vincConfig));
+              mi.closest('.modal-backdrop').remove();
+              toast('Instrução salva','ok');
+              renderTab(name);
+            };
+            setTimeout(function(){ ita.focus(); },50);
+          }
+          lcIcons(); return;
+        }
+
+        // Excluir item customizado (gestor only)
+        var del=e.target.closest('.dut-del-btn');
+        if(del&&isGestor){
+          var delCod=del.getAttribute('data-cod');
+          if(!confirm('Excluir o item "'+delCod+'"?')) return;
+          State.customDutRules=State.customDutRules.filter(function(r){ return String(r.cod)!==delCod; });
+          localStorage.setItem('regula_custom_dut',JSON.stringify(State.customDutRules));
+          toast('Item excluído','ok');
+          renderTab('Regras DUT');
+        }
+      });
+
+      content.appendChild(box);
+      lcIcons();
+    }
+    renderTab('Fluxos & Etapas');
+    $$('.tab',tabs).forEach(function(b){ b.onclick=function(){ $$('.tab',tabs).forEach(function(x){x.classList.remove('active')}); b.classList.add('active'); renderTab(b.getAttribute('data-tab')); }; });
+    return wrap;
+  }
+
+  function viewFluxos(){
+    var wrap=el('div');
+    wrap.appendChild(el('div',{class:'page-title'},'<div><h1>Fluxos &amp; Etapas</h1><p>Estrutura de auditoria sincronizada com o Solus. Cada etapa pode ser configurada para atuação da análise técnica.</p></div>'));
+    MOCK.FLUXOS.forEach(function(f){
+      var p=el('div',{class:'panel',style:'margin-bottom:14px'});
+      p.innerHTML='<h3><span><span class="badge dark">'+f.id+'</span> '+esc(f.nome)+' <span class="badge muted">'+f.regime+'</span></span><span class="badge">'+f.etapas.length+' etapas</span></h3>';
+      var tl=el('div',{class:'timeline'});
+      f.etapas.forEach(function(e,i){
+        var ia=MOCK.IA_POR_ETAPA[e]||'apoio';
+        var iaTxt = ia==='auto'?'Automática assistida':(ia==='apoio'?'Apoio':'Não atua');
+        var icoStr = ia==='auto'?ico('bot'):(ia==='apoio'?ico('brain'):'—');
+        tl.appendChild(el('div',{class:'tl-item done'},'<h4>'+(i+1)+'. '+esc(e)+' <span class="tl-ia">'+icoStr+' '+iaTxt+'</span></h4><div class="meta">Vinculações: '+f.vinc.join(', ')+'</div>'));
+      });
+      p.appendChild(tl); wrap.appendChild(p);
+    });
+    return wrap;
+  }
+
+
+  function viewLogs(){
+    if(!State.logFiltros)   State.logFiltros  ={q:'',perfil:'',de:'',ate:'',sortCol:'ts',sortDir:'desc'};
+    if(!State.logFiltrosIA) State.logFiltrosIA ={q:'',tipo:'', de:'',ate:'',sortCol:'ts',sortDir:'desc'};
+    if(!State.logPagina)   State.logPagina   =1;
+    if(!State.logPaginaIA) State.logPaginaIA  =1;
+    var LOG_PER_PAGE=15;
+    var tab=State.logsTab||'usuarios';
+
+    // ── helpers ─────────────────────────────────────────────────────────────
+    function perfilBadge(p){
+      var map={auditor:'',enfermeiro:'warn',gestor:'dark',sistema:'info',ia:'purple'};
+      return '<span class="badge '+(map[p]||'muted')+'">'+esc(p)+'</span>';
+    }
+    function tipoBadge(t){
+      var map={ia:'purple',sistema:'info'};
+      return '<span class="badge '+(map[t]||'muted')+'">'+esc(t==='ia'?'IA':'Sistema')+'</span>';
+    }
+
+    // ── gráfico rosca ────────────────────────────────────────────────────────
+    function makeDonut(segs){
+      var total=segs.reduce(function(s,x){return s+x.v;},0);
+      if(!total) return '';
+      var r=44,cx=60,cy=60,C=2*Math.PI*r,cum=0;
+      var circles=segs.map(function(s){
+        var len=(s.v/total)*C;
+        var off=-cum;
+        cum+=len;
+        return '<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none"'+
+               ' stroke="'+s.c+'" stroke-width="20"'+
+               ' stroke-dasharray="'+len.toFixed(2)+' '+(C-len).toFixed(2)+'"'+
+               ' stroke-dashoffset="'+off.toFixed(2)+'"'+
+               ' stroke-linecap="butt"/>';
+      }).join('');
+      var legend=segs.map(function(s){
+        var pct=((s.v/total)*100).toFixed(0);
+        return '<div class="donut-leg-item">'+
+          '<span class="donut-leg-dot" style="background:'+s.c+'"></span>'+
+          '<span class="donut-leg-label">'+esc(s.label)+'</span>'+
+          '<span class="donut-leg-val">'+s.v+' <span class="donut-leg-pct">'+pct+'%</span></span>'+
+          '</div>';
+      }).join('');
+      return '<div class="donut-wrap">'+
+        '<svg width="120" height="120" viewBox="0 0 120 120">'+
+          '<g transform="rotate(-90 60 60)">'+circles+'</g>'+
+          '<text x="60" y="55" text-anchor="middle" font-size="20" font-weight="700" fill="var(--g-800)">'+total+'</text>'+
+          '<text x="60" y="70" text-anchor="middle" font-size="9" fill="var(--muted)" letter-spacing="1">REGISTROS</text>'+
+        '</svg>'+
+        '<div class="donut-legend">'+legend+'</div>'+
+      '</div>';
+    }
+
+    // ── contagens para o gráfico ─────────────────────────────────────────────
+    var cnts={gestor:0,auditor:0,enfermeiro:0,sistema:0,ia:0};
+    MOCK.LOGS.forEach(function(l){
+      var k=l.tipo==='ia'?'ia':l.tipo==='sistema'?'sistema':l.perfil;
+      if(cnts.hasOwnProperty(k)) cnts[k]++;
+    });
+    var donutUsuarios=makeDonut([
+      {label:'Gestor',     v:cnts.gestor,     c:'#054f27'},
+      {label:'Auditor',    v:cnts.auditor,    c:'#00a84f'},
+      {label:'Enfermeiro', v:cnts.enfermeiro, c:'#0d9488'}
+    ]);
+    var donutSistema=makeDonut([
+      {label:'Sistema',v:cnts.sistema,c:'#2563eb'},
+      {label:'IA',     v:cnts.ia,     c:'#7c3aed'}
+    ]);
+
+    // ── layout principal ─────────────────────────────────────────────────────
+    var wrap=el('div');
+    wrap.appendChild(el('div',{class:'page-title'},
+      '<div><h1>Logs e Rastreabilidade</h1><p>Auditoria de ações do sistema, usuários e análise técnica.</p></div>'
+    ));
+
+    // Abas
+    var tabBar=el('div',{class:'guias-tabs',style:'margin-bottom:0;border-bottom:1px solid var(--g-100)'});
+    [['usuarios',ico('users',13)+' Logs de Usuário'],['sistema_ia',ico('cpu',13)+' Logs Sistema | IA']].forEach(function(pair){
+      var active=tab===pair[0];
+      var btn=el('button',{style:
+        'padding:9px 18px;border:none;cursor:pointer;font-size:13px;font-weight:500;gap:6px;display:inline-flex;align-items:center;'+
+        'border-bottom:'+(active?'2px solid var(--g-50)':'2px solid transparent')+';'+
+        'background:'+(active?'var(--g-50)':'#fff')+';'+
+        'color:'+(active?'var(--g-700)':'var(--muted)')},pair[1]);
+      btn.onclick=function(){ State.logsTab=pair[0]; render(); };
+      tabBar.appendChild(btn);
+    });
+    wrap.appendChild(tabBar);
+
+    var box=el('div',{class:'table-wrap',style:'border-radius:0 0 10px 10px'});
+
+    // ── ABA: Logs de Usuário ─────────────────────────────────────────────────
+    if(tab==='usuarios'){
+      var lf=State.logFiltros;
+      box.innerHTML='<div class="log-chart-row">'+donutUsuarios+'</div>';
+
+      var filt=el('div',{class:'filters'});
+      filt.innerHTML=
+        '<div class="log-period-wrap">'+ico('calendar',13)+
+          '<label class="log-period-lbl">De</label>'+
+          '<input type="date" id="lDe" class="log-date" value="'+esc(lf.de)+'" />'+
+          '<label class="log-period-lbl">Até</label>'+
+          '<input type="date" id="lAte" class="log-date" value="'+esc(lf.ate)+'" />'+
+        '</div>'+
+        '<select id="lPerfil">'+
+          '<option value="">Todos os perfis</option>'+
+          ['gestor','auditor','enfermeiro'].map(function(p){
+            return '<option value="'+p+'"'+(lf.perfil===p?' selected':'')+'>'+p.charAt(0).toUpperCase()+p.slice(1)+'</option>';
+          }).join('')+
+        '</select>'+
+        '<div class="spacer"></div>'+
+        '<input id="lBusca" type="text" class="log-busca" placeholder="Buscar usuário, ação ou referência..." value="'+esc(lf.q)+'" />'+
+        '<button class="btn ghost" id="lClear">'+ico('x',12)+' Limpar</button>';
+      box.appendChild(filt);
+
+      var COLS=[{key:'ts',label:'Data/Hora'},{key:'user',label:'Usuário'},{key:'perf',label:'Perfil'},{key:'acao',label:'Ação'},{key:'ref',label:'Referência'}];
+      var tbl=el('table');
+      var thead='<thead><tr>';
+      COLS.forEach(function(c){
+        var act=lf.sortCol===c.key;
+        thead+='<th class="th-sort'+(act?' sort-active':'')+'" data-col="'+c.key+'">'+esc(c.label)+' <span class="sort-ico">'+(act?(lf.sortDir==='asc'?'▲':'▼'):'⇅')+'</span></th>';
+      });
+      thead+='</tr></thead>'; tbl.innerHTML=thead;
+
+      var rows=MOCK.LOGS.filter(function(l){
+        if(l.tipo!=='usuario') return false;
+        if(lf.perfil && l.perfil!==lf.perfil) return false;
+        if(lf.de && l.ts.slice(0,10)<lf.de) return false;
+        if(lf.ate && l.ts.slice(0,10)>lf.ate) return false;
+        if(lf.q && (l.user+' '+l.acao+' '+l.ref).toLowerCase().indexOf(lf.q)<0) return false;
+        return true;
+      });
+      var sfn={ts:function(l){return l.ts;},user:function(l){return l.user;},perf:function(l){return l.perfil;},acao:function(l){return l.acao;},ref:function(l){return l.ref;}};
+      if(sfn[lf.sortCol]){var _sf=sfn[lf.sortCol],_sd=lf.sortDir==='asc'?1:-1;rows=rows.slice().sort(function(a,b){var av=_sf(a),bv=_sf(b);return av<bv?-_sd:av>bv?_sd:0;});}
+      var totalRows=rows.length;
+      var totalPages=Math.max(1,Math.ceil(totalRows/LOG_PER_PAGE));
+      if(State.logPagina>totalPages) State.logPagina=totalPages;
+      var pg=State.logPagina;
+      var pageRows=rows.slice((pg-1)*LOG_PER_PAGE, pg*LOG_PER_PAGE);
+      var tb=el('tbody');
+      if(!pageRows.length){
+        tb.appendChild(el('tr',{},'<td colspan="5"><div class="empty">'+icoLg('users')+'<div>Nenhum log de usuário encontrado.</div></div></td>'));
+      } else {
+        pageRows.forEach(function(l,i){
+          tb.appendChild(el('tr',{class:i%2===0?'log-row-a':'log-row-b'},
+            '<td style="white-space:nowrap;color:var(--muted);font-size:11.5px">'+esc(l.ts)+'</td>'+
+            '<td style="font-weight:500">'+esc(l.user)+'</td>'+
+            '<td>'+perfilBadge(l.perfil)+'</td>'+
+            '<td>'+esc(l.acao)+'</td>'+
+            '<td style="color:var(--g-700);font-size:12px">'+esc(l.ref)+'</td>'
+          ));
+        });
+      }
+      tbl.appendChild(tb); box.appendChild(tbl);
+      var foot=el('div',{class:'log-foot'});
+      var pagBtns='<div class="log-pagination">';
+      pagBtns+='<button class="log-pag-btn" id="lPagPrev"'+(pg<=1?' disabled':'')+'>‹</button>';
+      for(var pi=1;pi<=totalPages;pi++){
+        pagBtns+='<button class="log-pag-btn'+(pi===pg?' active':'')+'" data-pg="'+pi+'">'+pi+'</button>';
+      }
+      pagBtns+='<button class="log-pag-btn" id="lPagNext"'+(pg>=totalPages?' disabled':'')+'>›</button></div>';
+      foot.innerHTML=ico('list',12)+' <b>'+(pg*LOG_PER_PAGE-LOG_PER_PAGE+1)+'–'+Math.min(pg*LOG_PER_PAGE,totalRows)+'</b> de <b>'+totalRows+'</b>'+pagBtns;
+      box.appendChild(foot);
+
+      setTimeout(function(){
+        $$('.th-sort',tbl).forEach(function(th){
+          th.onclick=function(){var col=th.getAttribute('data-col');if(lf.sortCol===col){lf.sortDir=lf.sortDir==='asc'?'desc':'asc';}else{lf.sortCol=col;lf.sortDir='asc';}State.logPagina=1;render();};
+        });
+        var dEl=$('#lDe'); if(dEl) dEl.onchange=function(){lf.de=this.value;State.logPagina=1;render();};
+        var aEl=$('#lAte'); if(aEl) aEl.onchange=function(){lf.ate=this.value;State.logPagina=1;render();};
+        var lp=$('#lPerfil'); if(lp){ makeCustomSelect(lp); lp.onchange=function(){lf.perfil=this.value;State.logPagina=1;render();}; }
+        var _t=null;
+        var lb=$('#lBusca'); if(lb) lb.oninput=function(){var pos=this.selectionStart;lf.q=this.value.toLowerCase();State.logPagina=1;clearTimeout(_t);_t=setTimeout(function(){render();var inp=document.getElementById('lBusca');if(inp){inp.focus();inp.setSelectionRange(pos,pos);}},280);};
+        var cl=$('#lClear'); if(cl) cl.onclick=function(){State.logFiltros={q:'',perfil:'',de:'',ate:'',sortCol:'ts',sortDir:'desc'};State.logPagina=1;render();};
+        var prev=$('#lPagPrev'); if(prev) prev.onclick=function(){State.logPagina--;render();};
+        var next=$('#lPagNext'); if(next) next.onclick=function(){State.logPagina++;render();};
+        $$('.log-pagination [data-pg]').forEach(function(b){b.onclick=function(){State.logPagina=parseInt(b.getAttribute('data-pg'));render();};});
+      },0);
+
+    // ── ABA: Logs Sistema | IA ───────────────────────────────────────────────
+    } else {
+      var lf2=State.logFiltrosIA;
+      box.innerHTML='<div class="log-chart-row">'+donutSistema+'</div>';
+
+      var filt2=el('div',{class:'filters'});
+      filt2.innerHTML=
+        '<div class="log-period-wrap">'+ico('calendar',13)+
+          '<label class="log-period-lbl">De</label>'+
+          '<input type="date" id="lDe2" class="log-date" value="'+esc(lf2.de)+'" />'+
+          '<label class="log-period-lbl">Até</label>'+
+          '<input type="date" id="lAte2" class="log-date" value="'+esc(lf2.ate)+'" />'+
+        '</div>'+
+        '<select id="lTipo2">'+
+          '<option value="">Sistema e IA</option>'+
+          ['sistema','ia'].map(function(t){
+            return '<option value="'+t+'"'+(lf2.tipo===t?' selected':'')+'>'+esc(t==='ia'?'IA':'Sistema')+'</option>';
+          }).join('')+
+        '</select>'+
+        '<div class="spacer"></div>'+
+        '<input id="lBusca2" type="text" class="log-busca" placeholder="Buscar ação ou referência..." value="'+esc(lf2.q)+'" />'+
+        '<button class="btn ghost" id="lClear2">'+ico('x',12)+' Limpar</button>';
+      box.appendChild(filt2);
+
+      var COLS2=[{key:'ts',label:'Data/Hora'},{key:'user',label:'Origem'},{key:'tipo',label:'Tipo'},{key:'acao',label:'Ação'},{key:'ref',label:'Referência'}];
+      var tbl2=el('table');
+      var thead2='<thead><tr>';
+      COLS2.forEach(function(c){
+        var act=lf2.sortCol===c.key;
+        thead2+='<th class="th-sort'+(act?' sort-active':'')+'" data-col="'+c.key+'">'+esc(c.label)+' <span class="sort-ico">'+(act?(lf2.sortDir==='asc'?'▲':'▼'):'⇅')+'</span></th>';
+      });
+      thead2+='</tr></thead>'; tbl2.innerHTML=thead2;
+
+      var rows2=MOCK.LOGS.filter(function(l){
+        if(l.tipo==='usuario') return false;
+        if(lf2.tipo && l.tipo!==lf2.tipo) return false;
+        if(lf2.de && l.ts.slice(0,10)<lf2.de) return false;
+        if(lf2.ate && l.ts.slice(0,10)>lf2.ate) return false;
+        if(lf2.q && (l.user+' '+l.acao+' '+l.ref).toLowerCase().indexOf(lf2.q)<0) return false;
+        return true;
+      });
+      var sfn2={ts:function(l){return l.ts;},user:function(l){return l.user;},tipo:function(l){return l.tipo;},acao:function(l){return l.acao;},ref:function(l){return l.ref;}};
+      if(sfn2[lf2.sortCol]){var _sf2=sfn2[lf2.sortCol],_sd2=lf2.sortDir==='asc'?1:-1;rows2=rows2.slice().sort(function(a,b){var av=_sf2(a),bv=_sf2(b);return av<bv?-_sd2:av>bv?_sd2:0;});}
+      var total2=rows2.length;
+      var totalPages2=Math.max(1,Math.ceil(total2/LOG_PER_PAGE));
+      if(State.logPaginaIA>totalPages2) State.logPaginaIA=totalPages2;
+      var pg2=State.logPaginaIA;
+      var pageRows2=rows2.slice((pg2-1)*LOG_PER_PAGE, pg2*LOG_PER_PAGE);
+      var tb2=el('tbody');
+      if(!pageRows2.length){
+        tb2.appendChild(el('tr',{},'<td colspan="5"><div class="empty">'+icoLg('cpu')+'<div>Nenhum log de sistema/IA encontrado.</div></div></td>'));
+      } else {
+        pageRows2.forEach(function(l,i){
+          tb2.appendChild(el('tr',{class:i%2===0?'log-row-a':'log-row-b'},
+            '<td style="white-space:nowrap;color:var(--muted);font-size:11.5px">'+esc(l.ts)+'</td>'+
+            '<td style="font-weight:500">'+esc(l.user)+'</td>'+
+            '<td>'+tipoBadge(l.tipo)+'</td>'+
+            '<td>'+esc(l.acao)+'</td>'+
+            '<td style="color:var(--g-700);font-size:12px">'+esc(l.ref)+'</td>'
+          ));
+        });
+      }
+      tbl2.appendChild(tb2); box.appendChild(tbl2);
+      var foot2=el('div',{class:'log-foot'});
+      var pagBtns2='<div class="log-pagination">';
+      pagBtns2+='<button class="log-pag-btn" id="l2PagPrev"'+(pg2<=1?' disabled':'')+'>‹</button>';
+      for(var pi2=1;pi2<=totalPages2;pi2++){
+        pagBtns2+='<button class="log-pag-btn'+(pi2===pg2?' active':'')+'" data-pg2="'+pi2+'">'+pi2+'</button>';
+      }
+      pagBtns2+='<button class="log-pag-btn" id="l2PagNext"'+(pg2>=totalPages2?' disabled':'')+'>›</button></div>';
+      foot2.innerHTML=ico('list',12)+' <b>'+(pg2*LOG_PER_PAGE-LOG_PER_PAGE+1)+'–'+Math.min(pg2*LOG_PER_PAGE,total2)+'</b> de <b>'+total2+'</b>'+pagBtns2;
+      box.appendChild(foot2);
+
+      setTimeout(function(){
+        $$('.th-sort',tbl2).forEach(function(th){
+          th.onclick=function(){var col=th.getAttribute('data-col');if(lf2.sortCol===col){lf2.sortDir=lf2.sortDir==='asc'?'desc':'asc';}else{lf2.sortCol=col;lf2.sortDir='asc';}State.logPaginaIA=1;render();};
+        });
+        var d2=$('#lDe2'); if(d2) d2.onchange=function(){lf2.de=this.value;State.logPaginaIA=1;render();};
+        var a2=$('#lAte2'); if(a2) a2.onchange=function(){lf2.ate=this.value;State.logPaginaIA=1;render();};
+        var lt2=$('#lTipo2'); if(lt2){ makeCustomSelect(lt2); lt2.onchange=function(){lf2.tipo=this.value;State.logPaginaIA=1;render();}; }
+        var _t2=null;
+        var lb2=$('#lBusca2'); if(lb2) lb2.oninput=function(){var pos=this.selectionStart;lf2.q=this.value.toLowerCase();State.logPaginaIA=1;clearTimeout(_t2);_t2=setTimeout(function(){render();var inp=document.getElementById('lBusca2');if(inp){inp.focus();inp.setSelectionRange(pos,pos);}},280);};
+        var cl2=$('#lClear2'); if(cl2) cl2.onclick=function(){State.logFiltrosIA={q:'',tipo:'',de:'',ate:'',sortCol:'ts',sortDir:'desc'};State.logPaginaIA=1;render();};
+        var prev2=$('#l2PagPrev'); if(prev2) prev2.onclick=function(){State.logPaginaIA--;render();};
+        var next2=$('#l2PagNext'); if(next2) next2.onclick=function(){State.logPaginaIA++;render();};
+        $$('.log-pagination [data-pg2]').forEach(function(b){b.onclick=function(){State.logPaginaIA=parseInt(b.getAttribute('data-pg2'));render();};});
+      },0);
+    }
+
+    wrap.appendChild(box);
+    return wrap;
+  }
+
+  function viewPermissoes(){
+    var wrap=el('div');
+    wrap.appendChild(el('div',{class:'page-title'},'<div><h1>'+ico('shield',18)+' Permissões</h1><p>Perfis de acesso, permissões por papel e governança de dados.</p></div>'));
+    var g=el('div',{class:'panels'});
+    var a=el('div',{class:'panel'},'<h3>Perfis e permissões</h3>');
+    var t=el('table'); t.innerHTML='<thead><tr><th>Perfil</th><th>Permissões</th></tr></thead>';
+    var tb=el('tbody');
+    Object.keys(perfilDef).forEach(function(k){
+      tb.appendChild(el('tr',{},'<td><b>'+k+'</b></td><td>'+perfilDef[k].perms.map(function(p){return '<span class="badge muted" style="margin:2px">'+p+'</span>';}).join('')+'</td>'));
+    });
+    t.appendChild(tb); a.appendChild(t); g.appendChild(a);
+    var b=el('div',{class:'panel'},
+      '<h3>Governança / LGPD</h3>'+
+      '<p style="font-size:13px;color:var(--muted)">Dados sensíveis (CPF, cartão) são mascarados para perfis Enfermeiro e Auditor. Apenas o Gestor visualiza dados completos. Todas as ações são registradas em log.</p>'+
+      '<div class="ai-warn">Parecer gerado como apoio à auditoria. Decisão final exclusiva da operadora.</div>');
+    g.appendChild(b);
+    wrap.appendChild(g);
+    return wrap;
+  }
+
+  function viewConfig(){
+    var wrap=el('div');
+    wrap.appendChild(el('div',{class:'page-title'},'<div><h1>'+ico('settings',18)+' Configurações</h1><p>Classificação de risco e fluxos assistenciais.</p></div>'));
+
+    // ── Abas principais ──────────────────────────────────────────────
+    var CFG_TABS=[
+      {id:'risco',      label:'Classificação de Risco', ico:'shield-alert'},
+      {id:'permissoes', label:'Permissões',             ico:'shield'},
+    ];
+
+    var tabBar=el('div',{class:'cfg-tab-bar'});
+    CFG_TABS.forEach(function(tb){
+      tabBar.innerHTML+='<button class="cfg-tab" data-cfg-tab="'+tb.id+'">'+ico(tb.ico,13)+' '+tb.label+'</button>';
+    });
+    wrap.appendChild(tabBar);
+
+    var cfgContent=el('div',{class:'cfg-content'});
+    wrap.appendChild(cfgContent);
+
+    // ── Conteúdo: Classificação de Risco ─────────────────────────────
+    var FATORES=[
+      {key:'urgencia',         label:'Regime de urgência',              desc:'Guia com regime Urgência/Emergência'},
+      {key:'uti',              label:'Internação em UTI',               desc:'Guia inclui diária de UTI'},
+      {key:'opme',             label:'OPME presente',                   desc:'Material especial (órtese, prótese, etc.)'},
+      {key:'semAnexos',        label:'Sem documentação anexada',        desc:'Nenhum arquivo enviado pelo prestador'},
+      {key:'prazoVencido',     label:'Prazo de auditoria vencido',      desc:'Guia ultrapassou o prazo de análise'},
+      {key:'semDut',           label:'DUT não comprovada',              desc:'Procedimento exige DUT mas não foi anexada'},
+      {key:'aderenciaCrit',    label:'Aderência crítica (< 50%)',       desc:'IA indica aderência regulatória abaixo de 50%'},
+      {key:'aderenciaBaixa',   label:'Aderência baixa (50–69%)',        desc:'IA indica aderência entre 50% e 69%'},
+      {key:'altaComplexidade', label:'Fluxo alta complexidade',         desc:'Fluxo F2 (Alta Complexidade) ou F5 (Neuro/Buco/Cardio)'},
+      {key:'oncologia',        label:'Fluxo oncologia / imunobiológico',desc:'Fluxo F8 — medicamentos de alto custo'}
+    ];
+
+    function renderRisco(){
+      cfgContent.innerHTML='';
+      if(!can('config')){
+        cfgContent.appendChild(el('div',{class:'ai-warn',style:'margin-top:14px'},ico('lock')+' A configuração de risco é exclusiva do perfil Gestor.'));
+        return;
+      }
+      var cfg=State.riscoConfig;
+      var rp=el('div',{class:'panel risco-cfg-panel'});
+
+      var hd=el('div',{class:'risco-cfg-hd'});
+      hd.innerHTML=
+        '<div><h3 style="margin:0">'+ico('shield-alert',16)+' Classificação de Risco — Régua de Pontuação</h3>'+
+        '<p style="margin:4px 0 0;font-size:12.5px;color:var(--muted)">Cada fator presente na guia soma pontos. O total define o nível de risco.</p></div>'+
+        '<div class="risco-toggle-wrap">'+
+          '<label class="risco-toggle-lbl"><input type="checkbox" id="riscoAtivo"'+(cfg.ativo?' checked':'')+'/> Classificação automática ativa</label>'+
+          '<span id="modoTag" class="badge '+(cfg.ativo?'':'muted')+'">'+(cfg.ativo?'Automático':'Manual')+'</span>'+
+        '</div>';
+      rp.appendChild(hd);
+
+      // ── Sub-abas ──
+      var rstBar=el('div',{style:'display:flex;gap:0;border-bottom:1.5px solid var(--g-100);margin:10px 0 0'});
+      [['config',ico('sliders-horizontal',13)+' Configuração'],['manual',ico('book-open',13)+' Manual de uso']].forEach(function(pair){
+        var b=el('button',{'data-rst':pair[0],style:'padding:9px 18px;font-size:12.5px;font-weight:600;border:none;border-bottom:2px solid transparent;background:none;cursor:pointer;color:var(--muted);display:flex;align-items:center;gap:6px'},pair[1]);
+        rstBar.appendChild(b);
+      });
+      rp.appendChild(rstBar);
+      var rstContent=el('div');
+      rp.appendChild(rstContent);
+
+      function showRst(tab){
+        $$('[data-rst]',rstBar).forEach(function(b){
+          var on=b.getAttribute('data-rst')===tab;
+          b.style.cssText='padding:9px 18px;font-size:12.5px;font-weight:600;border:none;border-bottom:2px solid '+(on?'var(--g-600)':'transparent')+';background:none;cursor:pointer;color:'+(on?'var(--g-700)':'var(--muted)')+';display:flex;align-items:center;gap:6px';
+        });
+        rstContent.innerHTML='';
+
+        if(tab==='config'){
+          var secF=el('div',{class:'risco-section'});
+          secF.innerHTML='<h4>'+ico('list-checks',13)+' Fatores e pesos (pontos)</h4>';
+          var tFat=el('table',{class:'risco-table'});
+          tFat.innerHTML='<thead><tr><th>Fator</th><th>Descrição</th><th style="width:90px;text-align:center">Pontos</th></tr></thead>';
+          var tbFat=el('tbody');
+          FATORES.forEach(function(f){
+            var tr=el('tr');
+            tr.innerHTML='<td><b>'+esc(f.label)+'</b></td><td style="color:var(--muted);font-size:12px">'+esc(f.desc)+'</td>'+
+              '<td style="text-align:center"><input class="risco-pts" type="number" min="0" max="100" data-key="'+f.key+'" value="'+(cfg.pesos[f.key]||0)+'" /></td>';
+            tbFat.appendChild(tr);
+          });
+          tFat.appendChild(tbFat); secF.appendChild(tFat); rstContent.appendChild(secF);
+
+          var secL=el('div',{class:'risco-section'});
+          secL.innerHTML='<h4>'+ico('sliders-horizontal',13)+' Limiares por nível (pontuação máxima)</h4>'+
+            '<p style="font-size:12px;color:var(--muted);margin:0 0 10px">Pontuação <b>até</b> o limiar = nível correspondente. Acima do Alto = Crítico.</p>';
+          var limGrid=el('div',{class:'risco-lim-grid'});
+          [{key:'baixo',label:'Baixo',cls:'baixo',icon:'circle-check'},{key:'medio',label:'Médio',cls:'medio',icon:'circle-alert'},{key:'alto',label:'Alto',cls:'alto',icon:'triangle-alert'}].forEach(function(l){
+            var card=el('div',{class:'risco-lim-card'});
+            card.innerHTML='<div class="risco-lim-ico '+l.cls+'">'+ico(l.icon,16)+'</div>'+
+              '<div class="risco-lim-body"><div class="risco-lim-name">'+l.label+'</div><div style="font-size:11px;color:var(--muted)">0 até...</div>'+
+              '<input class="risco-lim" type="number" min="0" max="200" data-key="'+l.key+'" value="'+(cfg.limiares[l.key]||0)+'" /></div>';
+            limGrid.appendChild(card);
+          });
+          var cardCrit=el('div',{class:'risco-lim-card'});
+          cardCrit.innerHTML='<div class="risco-lim-ico critico">'+ico('skull',16)+'</div>'+
+            '<div class="risco-lim-body"><div class="risco-lim-name">Crítico</div><div style="font-size:11px;color:var(--muted)">Acima do limiar Alto</div><div style="font-size:16px;font-weight:800;color:var(--danger);padding:6px 0">∞</div></div>';
+          limGrid.appendChild(cardCrit);
+          secL.appendChild(limGrid); rstContent.appendChild(secL);
+
+          var secP=el('div',{class:'risco-section'});
+          secP.innerHTML='<h4>'+ico('table-2',13)+' Prévia — classificação das guias com os pesos atuais</h4>'+
+            '<p style="font-size:12px;color:var(--muted);margin:-4px 0 10px;display:flex;align-items:center;gap:5px">'+ico('flask-conical',12)+' <b>Exemplo visual</b> — simula como as guias seriam classificadas com os pesos atuais, antes de salvar.</p>';
+          var previa=el('div',{id:'riscoPrevia'});
+          function renderPrevia(){
+            var tmpCfg={ativo:true,pesos:{},limiares:{}};
+            FATORES.forEach(function(f){ tmpCfg.pesos[f.key]=+rp.querySelector('[data-key="'+f.key+'"]').value||0; });
+            ['baixo','medio','alto'].forEach(function(k){ tmpCfg.limiares[k]=+rp.querySelector('.risco-lim[data-key="'+k+'"]').value||0; });
+            var prev=State.riscoConfig; State.riscoConfig=tmpCfg;
+            var rows=State.guias.map(function(g){ return {g:g,score:calcRiscoScore(g),nivel:calcRisco(g)}; });
+            State.riscoConfig=prev;
+            var tP=el('table',{class:'risco-table'});
+            tP.innerHTML='<thead><tr><th>Guia</th><th>Tipo</th><th>Fatores ativos</th><th style="text-align:center">Pontuação</th><th>Nível calculado</th><th>Nível atual</th></tr></thead>';
+            var tbP=el('tbody');
+            rows.forEach(function(r){
+              var ativos=FATORES.filter(function(f){return (tmpCfg.pesos[f.key]||0)>0&&(
+                (f.key==='urgencia'&&r.g.regime==='Urgência')||(f.key==='uti'&&r.g.uti)||(f.key==='opme'&&r.g.opme)||
+                (f.key==='semAnexos'&&!r.g.anexos)||(f.key==='prazoVencido'&&r.g.prazoVencido)||(f.key==='semDut'&&!r.g.dut&&r.g.procedimentos.some(function(p2){return p2.dut;}))||
+                (f.key==='aderenciaCrit'&&guiaAderencia(r.g)<50)||(f.key==='aderenciaBaixa'&&guiaAderencia(r.g)>=50&&guiaAderencia(r.g)<70)||
+                (f.key==='altaComplexidade'&&(r.g.fluxo.id==='F2'||r.g.fluxo.id==='F5'))||(f.key==='oncologia'&&r.g.fluxo.id==='F8')
+              );}).map(function(f){return '<span class="badge muted" style="margin:1px 2px;font-size:10.5px">'+f.label+' (+'+tmpCfg.pesos[f.key]+')</span>';}).join('');
+              var tr=el('tr');
+              tr.innerHTML='<td><b>'+esc(r.g.numero)+'</b></td><td>'+esc(r.g.tipo)+'</td><td>'+(ativos||'<span style="color:var(--muted);font-size:11px">nenhum</span>')+'</td>'+
+                '<td style="text-align:center;font-weight:700;font-size:15px">'+r.score+'</td>'+
+                '<td>'+riskPill(r.nivel)+'</td><td>'+riskPill(r.g.risco)+'</td>';
+              tbP.appendChild(tr);
+            });
+            tP.appendChild(tbP); previa.innerHTML=''; previa.appendChild(tP);
+          }
+          secP.appendChild(previa); rstContent.appendChild(secP);
+
+          var foot=el('div',{class:'risco-foot'});
+          foot.innerHTML='<button class="btn ghost" id="riscoReset">'+ico('rotate-ccw',13)+' Restaurar padrões</button>'+
+            '<button class="btn-animated" id="riscoSalvar">'+ico('save',14)+' Salvar e aplicar</button>';
+          rstContent.appendChild(foot);
+
+          setTimeout(function(){
+            renderPrevia();
+            $$('.risco-pts,.risco-lim',rp).forEach(function(inp){ inp.oninput=function(){ renderPrevia(); }; });
+            $('#riscoAtivo').onchange=function(){
+              var on=this.checked, tag=$('#modoTag');
+              if(tag){ tag.textContent=on?'Automático':'Manual'; tag.className='badge '+(on?'':'muted'); }
+            };
+            $('#riscoReset').onclick=function(){
+              FATORES.forEach(function(f){ var i=rp.querySelector('[data-key="'+f.key+'"]'); if(i) i.value=DEFAULT_RISCO_CFG.pesos[f.key]; });
+              ['baixo','medio','alto'].forEach(function(k){ var i=rp.querySelector('.risco-lim[data-key="'+k+'"]'); if(i) i.value=DEFAULT_RISCO_CFG.limiares[k]; });
+              $('#riscoAtivo').checked=DEFAULT_RISCO_CFG.ativo;
+              var tag=$('#modoTag'); if(tag){ tag.textContent='Automático'; tag.className='badge'; }
+              renderPrevia(); toast('Padrões restaurados','ok');
+            };
+            $('#riscoSalvar').onclick=function(){
+              var novoCfg={ativo:$('#riscoAtivo').checked,pesos:{},limiares:{}};
+              FATORES.forEach(function(f){ novoCfg.pesos[f.key]=+rp.querySelector('[data-key="'+f.key+'"]').value||0; });
+              ['baixo','medio','alto'].forEach(function(k){ novoCfg.limiares[k]=+rp.querySelector('.risco-lim[data-key="'+k+'"]').value||0; });
+              if(novoCfg.limiares.baixo>=novoCfg.limiares.medio||novoCfg.limiares.medio>=novoCfg.limiares.alto){
+                toast('Limiares devem ser crescentes: Baixo < Médio < Alto','err'); return;
+              }
+              State.riscoConfig=novoCfg; localStorage.setItem('regula_risco_cfg',JSON.stringify(novoCfg));
+              aplicarRiscos(); toast('Régua de risco salva e aplicada a todas as guias','ok'); render();
+            };
+          },0);
+
+        } else {
+          // ── Manual de uso ──────────────────────────────────────────────────
+          var mWrap=el('div',{style:'padding:4px 0'});
+
+          // Seção 1: Fatores
+          var mF=el('div',{class:'risco-section'});
+          mF.innerHTML='<h4>'+ico('list-checks',13)+' Fatores e pesos — Como pontuar</h4>'+
+            '<p style="font-size:12.5px;color:var(--ink);line-height:1.6;margin:0 0 12px">Cada fator representa uma característica da guia que eleva a complexidade da auditoria. Atribua pontos proporcionais ao impacto regulatório de cada condição. Valores mais altos = maior prioridade para revisão.</p>'+
+            '<table class="risco-table">'+
+              '<thead><tr><th style="width:22%">Fator</th><th>Quando pontuar <b>alto</b></th><th>Quando pontuar <b>baixo / zero</b></th></tr></thead>'+
+              '<tbody>'+
+                '<tr><td><b>Regime de urgência</b></td><td>Guias U/E exigem análise imediata e têm menor documentação prévia. <span style="color:var(--g-600);font-weight:600">Recomendado: 8–12 pts.</span></td><td>Se urgências são raras na base ou já têm fluxo exclusivo.</td></tr>'+
+                '<tr><td><b>Internação em UTI</b></td><td>Eleva custo e risco assistencial drasticamente. <span style="color:var(--g-600);font-weight:600">Recomendado: 8–15 pts.</span></td><td>Zero se o perfil de guias é predominantemente ambulatorial.</td></tr>'+
+                '<tr><td><b>OPME presente</b></td><td>Alto risco de irregularidade e superfaturamento. <span style="color:var(--g-600);font-weight:600">Recomendado: 10–15 pts.</span></td><td>Reduzir se já existe fluxo dedicado de cotação OPME.</td></tr>'+
+                '<tr><td><b>Sem documentação</b></td><td>Ausência de anexos é forte indício de erro ou fraude. <span style="color:var(--g-600);font-weight:600">Recomendado: 10–15 pts.</span></td><td>Pode ser reduzido se o prazo de envio ainda está em aberto.</td></tr>'+
+                '<tr><td><b>Prazo vencido</b></td><td>Guia em atraso eleva risco operacional. <span style="color:var(--g-600);font-weight:600">Recomendado: 5–10 pts.</span></td><td>Baixo se a operadora tem SLA flexível ou controla prazos separadamente.</td></tr>'+
+                '<tr><td><b>DUT não comprovada</b></td><td>Procedimento com DUT obrigatória sem evidência é motivo direto de glosa. <span style="color:var(--g-600);font-weight:600">Recomendado: 10–20 pts.</span></td><td>Zero apenas se procedimentos da base raramente exigem DUT.</td></tr>'+
+                '<tr><td><b>Aderência crítica (&lt;50%)</b></td><td>IA indica não conformidade grave — encaminhar para revisão médica. <span style="color:var(--g-600);font-weight:600">Recomendado: 15–20 pts.</span></td><td>Não é indicado zerar: é o principal indicador da plataforma.</td></tr>'+
+                '<tr><td><b>Aderência baixa (50–69%)</b></td><td>Conformidade parcial — requer verificação de documentação. <span style="color:var(--g-600);font-weight:600">Recomendado: 8–12 pts.</span></td><td>Reduzir se a maioria das guias cai nessa faixa (evitar excesso de alertas).</td></tr>'+
+                '<tr><td><b>Alta complexidade</b></td><td>Fluxos F2/F5 envolvem procedimentos de alto custo. <span style="color:var(--g-600);font-weight:600">Recomendado: 5–10 pts.</span></td><td>Zero se esses fluxos já são auditados por equipe dedicada.</td></tr>'+
+                '<tr><td><b>Oncologia / imunobiológico</b></td><td>Alto custo e protocolo ANS rigoroso — toda guia F8 deve passar por auditoria médica. <span style="color:var(--g-600);font-weight:600">Recomendado: 8–15 pts.</span></td><td>Não é recomendado zerar este fator.</td></tr>'+
+              '</tbody>'+
+            '</table>';
+          mWrap.appendChild(mF);
+
+          // Seção 2: Limiares
+          var mL=el('div',{class:'risco-section'});
+          mL.innerHTML='<h4>'+ico('sliders-horizontal',13)+' Limiares — Como definir as faixas</h4>'+
+            '<p style="font-size:12.5px;color:var(--ink);line-height:1.6;margin:0 0 10px">Os limiares definem até qual pontuação uma guia é Baixo, Médio ou Alto. Acima do limiar Alto → automaticamente <b>Crítico</b>.</p>'+
+            '<div style="background:var(--g-50);border:1.5px solid var(--g-100);border-radius:8px;padding:12px 16px;margin-bottom:14px;font-size:12.5px;line-height:1.65;color:var(--ink)">'+
+              '<b>'+ico('triangle-alert',12)+' Regra obrigatória:</b> os limiares devem ser crescentes — <b>Baixo &lt; Médio &lt; Alto</b>. O sistema bloqueia o salvamento se essa ordem não for respeitada.'+
+            '</div>'+
+            '<table class="risco-table">'+
+              '<thead><tr><th>Nível</th><th>Orientação de faixa</th><th>Exemplo típico</th></tr></thead>'+
+              '<tbody>'+
+                '<tr><td><b style="color:#16a34a">Baixo</b></td><td>Guias com poucos ou nenhum fator de risco. Define o teto da zona de segurança — guias que não precisam de ação imediata.</td><td>Limiar = 10 pts</td></tr>'+
+                '<tr><td><b style="color:#a16207">Médio</b></td><td>1–2 fatores moderados. Exige triagem de enfermeira mas não necessariamente revisão médica.</td><td>Limiar = 20 pts</td></tr>'+
+                '<tr><td><b style="color:#ea580c">Alto</b></td><td>Múltiplos fatores ou fatores graves combinados (ex.: OPME + sem DUT). Exige revisão médica.</td><td>Limiar = 30 pts</td></tr>'+
+                '<tr><td><b style="color:#b91c1c">Crítico</b></td><td>Acima do limiar Alto. Prioridade máxima — auditoria especializada ou junta médica obrigatória.</td><td>Acima de 30 pts (automático)</td></tr>'+
+              '</tbody>'+
+            '</table>'+
+            '<p style="font-size:11.5px;color:var(--muted);margin-top:10px;line-height:1.6">'+ico('lightbulb',11)+' Dica: comece com os valores padrão, observe a distribuição na aba <b>Configuração → Prévia</b> e ajuste os limiares até que guias críticas representem entre 10% e 20% do total.</p>';
+          mWrap.appendChild(mL);
+
+          // Seção 3: Prévia
+          var mP=el('div',{class:'risco-section'});
+          mP.innerHTML='<h4>'+ico('table-2',13)+' Prévia — como interpretar</h4>'+
+            '<div style="background:#eff6ff;border:1.5px solid #bfdbfe;border-radius:8px;padding:12px 16px;margin-bottom:14px;font-size:12.5px;line-height:1.65;color:#1e3a5f">'+
+              ico('info',13)+' A <b>Prévia</b> é um <b>exemplo visual simulado</b>. Ela mostra como as guias cadastradas seriam classificadas <i>se os pesos e limiares definidos fossem salvos neste momento</i>. Nenhuma guia é alterada até você clicar em <b>"Salvar e aplicar"</b>.'+
+            '</div>'+
+            '<table class="risco-table">'+
+              '<thead><tr><th style="width:22%">Coluna</th><th>O que significa</th></tr></thead>'+
+              '<tbody>'+
+                '<tr><td><b>Fatores ativos</b></td><td>Fatores presentes nessa guia que contribuem com pontos — apenas fatores com peso &gt; 0 são listados.</td></tr>'+
+                '<tr><td><b>Pontuação</b></td><td>Soma dos pontos de todos os fatores ativos, calculada com os valores digitados no formulário de configuração.</td></tr>'+
+                '<tr><td><b>Nível calculado</b></td><td>Classificação resultante com os limiares atuais do formulário — o que seria aplicado ao salvar.</td></tr>'+
+                '<tr><td><b>Nível atual</b></td><td>Classificação real da guia no sistema, conforme o último salvamento de pesos.</td></tr>'+
+              '</tbody>'+
+            '</table>';
+          mWrap.appendChild(mP);
+          rstContent.appendChild(mWrap);
+        }
+      }
+
+      $$('[data-rst]',rstBar).forEach(function(b){
+        b.onclick=function(){ showRst(b.getAttribute('data-rst')); };
+      });
+      showRst('config');
+      cfgContent.appendChild(rp);
+    }
+
+    function renderPermissoes(){
+      cfgContent.innerHTML='';
+      var g=el('div',{class:'panels'});
+      var a=el('div',{class:'panel'},'<h3>Perfis e permissões</h3>');
+      var t=el('table'); t.innerHTML='<thead><tr><th>Perfil</th><th>Permissões</th></tr></thead>';
+      var tb=el('tbody');
+      Object.keys(perfilDef).forEach(function(k){
+        tb.appendChild(el('tr',{},'<td><b>'+k+'</b></td><td>'+perfilDef[k].perms.map(function(p){return '<span class="badge muted" style="margin:2px">'+p+'</span>';}).join('')+'</td>'));
+      });
+      t.appendChild(tb); a.appendChild(t); g.appendChild(a);
+      var b=el('div',{class:'panel'},
+        '<h3>Governança / LGPD</h3>'+
+        '<p style="font-size:13px;color:var(--muted)">Dados sensíveis (CPF, cartão) são mascarados para perfis Enfermeiro e Auditor. Apenas o Gestor visualiza dados completos. Todas as ações são registradas em log.</p>'+
+        '<div class="ai-warn">Parecer gerado como apoio à auditoria. Decisão final exclusiva da operadora.</div>');
+      g.appendChild(b);
+      cfgContent.appendChild(g);
+    }
+
+    // ── Ativar aba ───────────────────────────────────────────────────
+    function setTab(id){
+      $$('.cfg-tab',tabBar).forEach(function(b){ b.classList.toggle('active',b.getAttribute('data-cfg-tab')===id); });
+      if(id==='risco') renderRisco();
+      else if(id==='permissoes') renderPermissoes();
+    }
+
+    $$('.cfg-tab',tabBar).forEach(function(b){ b.onclick=function(){ setTab(b.getAttribute('data-cfg-tab')); }; });
+    setTab('risco');
+
+    return wrap;
+  }
+
+  /* === Modais === */
+  function modal(title, sub, bodyHTML, footHTML){
+    var bd=el('div',{class:'modal-backdrop'});
+    var m=el('div',{class:'modal'});
+    m.innerHTML=
+      '<div class="modal-header">'+
+        '<div class="modal-header-brand">'+
+          '<div class="modal-brand-mark">R<span style="color:var(--g-200)">+</span></div>'+
+          '<div style="min-width:0">'+
+            '<h2>'+title+'</h2>'+
+            (sub?'<div class="sub">'+sub+'</div>':'')+
+          '</div>'+
+        '</div>'+
+        '<button class="modal-close" title="Fechar">'+ico('x')+'</button>'+
+      '</div>'+
+      '<div class="modal-body">'+bodyHTML+'</div>'+
+      (footHTML?'<div class="modal-foot">'+footHTML+'</div>':'');
+    bd.appendChild(m); $('#modalRoot').appendChild(bd);
+    document.body.style.overflow='hidden';
+    function closeModal(){
+      bd.remove();
+      if(!document.querySelector('.modal-backdrop')) document.body.style.overflow='';
+    }
+    bd.querySelector('.modal-close').onclick=function(){ closeModal(); };
+    bd.onclick=function(e){ if(e.target===bd) closeModal(); };
+    lcIcons();
+    return m;
+  }
+
+  function openGuia(g, tab){
+    g._cache = AI.analisarGuiaComIA(g,{});
+    var ia=g._cache;
+    var tabs=['resumo','beneficiario','prestador','solicitacao','etapas','procedimentos','pacotes','matmed','diariastaxas','opme','anexos','historico','criticas','ia','operadora','logs'];
+    var labels={resumo:'Resumo',beneficiario:'Beneficiário',prestador:'Prestador',solicitacao:'Solicitação',etapas:'Etapas',procedimentos:'Procedimentos',pacotes:'Pacotes',matmed:'Mat/Med',diariastaxas:'Diárias/Taxas',opme:'OPME',anexos:'Anexos',historico:'Histórico',criticas:'Críticas',ia:'Parecer Técnico',operadora:'Parecer Operadora',logs:'Logs'};
+    var tabsHtml='<div class="tabs">'+tabs.map(function(t){return '<button class="tab" data-tab="'+t+'">'+labels[t]+'</button>'}).join('')+'</div><div id="tabContent"></div>';
+    var foot='<button class="btn ghost" id="reIA">'+ico('refresh-cw')+' Reprocessar</button>'+(can('parecer')?'<button class="btn-animated" id="abrirPar">'+ico('file-pen-line')+' Parecer da Operadora</button>':'');
+    var m = modal('Guia '+esc(g.numero)+' '+statusBadge(g.status), esc(g.beneficiario.nome)+' · '+esc(g.tipo)+' · Fluxo '+esc(g.fluxo.id), tabsHtml, foot);
+
+    var content = m.querySelector('#tabContent');
+    function setTab(t){
+      $$('.tab',m).forEach(function(x){x.classList.toggle('active',x.getAttribute('data-tab')===t)});
+      content.innerHTML='';
+      content.appendChild(renderGuiaTab(g,ia,t));
+      lcIcons();
+    }
+    $$('.tab',m).forEach(function(b){ b.onclick=function(){setTab(b.getAttribute('data-tab'))} });
+    setTab(tab||'resumo');
+
+    m.querySelector('#reIA').onclick=function(){ g._cache=AI.analisarGuiaComIA(g,{}); ia=g._cache; setTab('ia'); toast('Análise reprocessada','ok'); };
+    var pb=m.querySelector('#abrirPar'); if(pb) pb.onclick=function(){ openParecer(g) };
+  }
+
+  function renderGuiaTab(g, ia, t){
+    var d=el('div');
+    if(t==='resumo'){
+      d.innerHTML='<div class="g2"><div><dl class="kv">'+
+        '<dt>Número</dt><dd>'+esc(g.numero)+'</dd>'+
+        '<dt>Beneficiário</dt><dd>'+esc(g.beneficiario.nome)+' ('+g.beneficiario.idade+' anos)</dd>'+
+        '<dt>Plano / Contrato</dt><dd>'+esc(g.beneficiario.plano)+' · '+esc(g.beneficiario.contrato)+'</dd>'+
+        '<dt>Prestador solicitante</dt><dd>'+esc(g.prestadorSol.nome)+'</dd>'+
+        '<dt>Prestador executante</dt><dd>'+esc(g.prestadorExe.nome)+'</dd>'+
+        '<dt>Natureza / Regime</dt><dd>'+esc(g.natureza)+' · '+esc(g.regime)+'</dd>'+
+        '<dt>Tipo</dt><dd>'+esc(g.tipo)+'</dd>'+
+        '<dt>Data emissão</dt><dd>'+esc(g.dataEmissao)+'</dd>'+
+        '</dl></div><div><dl class="kv">'+
+        '<dt>Fluxo aplicado</dt><dd>'+esc(g.fluxo.nome)+'</dd>'+
+        '<dt>Status atual</dt><dd>'+statusBadge(g.status)+'</dd>'+
+        '<dt>Dias em auditoria</dt><dd>'+g.diasAuditoria+(g.prazoVencido?' <span class="badge danger">prazo vencido</span>':'')+'</dd>'+
+        '<dt>Aderência</dt><dd>'+aderenciaBar(ia.aderencia)+'</dd>'+
+        '<dt>Risco regulatório</dt><dd>'+riskPill(g.risco)+'</dd>'+
+        '<dt>Risco assistencial</dt><dd>'+riskPill(g.uti?'alto':'medio')+'</dd>'+
+        '<dt>Risco documental</dt><dd>'+riskPill(g.anexos?'baixo':'alto')+'</dd>'+
+        '<dt>Risco contratual</dt><dd>'+riskPill('baixo')+'</dd>'+
+        '</dl></div></div>'+
+        '<div class="ai-warn" style="margin-top:14px">'+ia.avisoLegal+'</div>';
+    } else if(t==='beneficiario'){
+      d.innerHTML='<dl class="kv"><dt>Nome</dt><dd>'+esc(g.beneficiario.nome)+'</dd><dt>CPF</dt><dd>'+mask(g.beneficiario.cpf)+'</dd><dt>Cartão</dt><dd>'+mask(g.beneficiario.cartao)+'</dd><dt>Idade</dt><dd>'+g.beneficiario.idade+'</dd><dt>Plano</dt><dd>'+esc(g.beneficiario.plano)+'</dd><dt>Contrato</dt><dd>'+esc(g.beneficiario.contrato)+'</dd></dl>';
+    } else if(t==='prestador'){
+      d.innerHTML='<div class="g2"><div class="panel"><h3>Solicitante</h3><dl class="kv"><dt>Nome</dt><dd>'+esc(g.prestadorSol.nome)+'</dd><dt>Tipo</dt><dd>'+esc(g.prestadorSol.tipo)+'</dd></dl></div><div class="panel"><h3>Executante</h3><dl class="kv"><dt>Nome</dt><dd>'+esc(g.prestadorExe.nome)+'</dd><dt>Tipo</dt><dd>'+esc(g.prestadorExe.tipo)+'</dd></dl></div></div>';
+    } else if(t==='solicitacao'){
+      d.innerHTML='<dl class="kv"><dt>Tipo</dt><dd>'+esc(g.tipo)+'</dd><dt>Natureza</dt><dd>'+esc(g.natureza)+'</dd><dt>Regime</dt><dd>'+esc(g.regime)+'</dd><dt>Origem</dt><dd><span class="badge muted">'+esc(g.origem)+'</span></dd><dt>Observações</dt><dd>'+esc(g.observacoes)+'</dd></dl>';
+    } else if(t==='etapas'){
+      var tl=el('div',{class:'timeline'});
+      g.etapas.forEach(function(e){
+        var cls = e.status==='concluida'?'done':(e.status==='em_execucao'?'cur':'');
+        var ia2=e.ia==='auto'?ico('bot')+' Automática assistida':(e.ia==='apoio'?ico('brain')+' Apoio':'— Não atua');
+        tl.appendChild(el('div',{class:'tl-item '+cls},'<h4>'+e.ordem+'. '+esc(e.nome)+' <span class="tl-ia">'+ia2+'</span></h4><div class="meta">Responsável: '+esc(e.responsavel)+' · Prazo: '+e.prazoHoras+'h · Status: <b>'+esc(e.status)+'</b>'+(e.inicio?' · Início: '+esc(e.inicio):'')+(e.fim?' · Fim: '+esc(e.fim):'')+'</div>'));
+      });
+      d.appendChild(tl);
+    } else if(t==='procedimentos'||t==='pacotes'||t==='matmed'||t==='diariastaxas'){
+      var arr = t==='procedimentos'?g.procedimentos:(t==='pacotes'?g.pacotes:(t==='matmed'?g.matmed:g.diariasTaxas));
+      if(!arr.length) d.innerHTML='<div class="empty"><div class="ico">'+icoLg('folder-open')+'</div>Sem itens vinculados. <br><span style="font-size:12px">Sem parametrização cadastrada.</span></div>';
+      else {
+        var tt=el('table'); tt.innerHTML='<thead><tr><th>Código</th><th>Descrição</th><th>Peso</th><th>Flags</th></tr></thead>';
+        var tb=el('tbody');
+        arr.forEach(function(p){
+          var fl=''; if(p.dut) fl+='<span class="badge warn">DUT</span> '; if(p.opme) fl+='<span class="badge warn">OPME</span> '; if(p.obrig) fl+='<span class="badge">Obrigatório</span>';
+          tb.appendChild(el('tr',{},'<td>'+esc(p.cod)+'</td><td>'+esc(p.desc)+'</td><td>'+p.peso+'</td><td>'+fl+'</td>'));
+        });
+        tt.appendChild(tb); d.appendChild(tt);
+      }
+    } else if(t==='opme'){
+      var opmes=g.matmed.filter(function(m){return m.opme});
+      if(!opmes.length) d.innerHTML='<div class="empty"><div class="ico">'+icoLg('activity')+'</div>Sem OPME nesta guia.</div>';
+      else { var tt2=el('table'); tt2.innerHTML='<thead><tr><th>Código</th><th>Descrição</th><th>Peso</th></tr></thead>'; var tb2=el('tbody'); opmes.forEach(function(p){tb2.appendChild(el('tr',{},'<td>'+p.cod+'</td><td>'+p.desc+'</td><td>'+p.peso+'</td>'))}); tt2.appendChild(tb2); d.appendChild(tt2); }
+    } else if(t==='anexos'){
+      d.appendChild(renderAnexos(g));
+    } else if(t==='historico'){
+      var _histKey='regula_hist_'+g.numero;
+      var _histSaved=localStorage.getItem(_histKey);
+      var _histDefault='Beneficiário possui '+(2+(g.beneficiario.idade%4))+' atendimentos anteriores nos últimos 24 meses. Última internação: 2025-11-20. Sem reincidências críticas identificadas.';
+      var _histVal=_histSaved||g.historico||_histDefault;
+      var _panel=el('div',{class:'panel'});
+      _panel.innerHTML='<div class="field-lbl-row" style="margin-bottom:8px"><h3 style="margin:0">Histórico e tratamentos anteriores</h3><span style="font-size:11px;color:var(--muted)">Editável · salvo automaticamente</span></div>';
+      var _ta=el('textarea',{id:'histTA',style:'width:100%;min-height:120px;resize:vertical;padding:10px;border:1px solid var(--line);border-radius:7px;font-size:13px;font-family:inherit;line-height:1.5'},null);
+      _ta.value=_histVal;
+      _ta.oninput=function(){ g.historico=this.value; localStorage.setItem(_histKey,this.value); };
+      _panel.appendChild(_ta);
+      d.appendChild(_panel);
+    } else if(t==='criticas'){
+      var u=el('ul',{class:'ai-list'});
+      if(!ia.alertas.length) u.innerHTML='<li>Nenhuma crítica relevante.</li>';
+      else ia.alertas.forEach(function(a){ u.appendChild(el('li',{},ico('triangle-alert')+' '+esc(a))) });
+      d.appendChild(u);
+    } else if(t==='ia'){
+      d.appendChild(renderParecerIA(ia));
+    } else if(t==='operadora'){
+      if(!g.parecerOperadora) d.innerHTML='<div class="empty"><div class="ico">'+icoLg('file-pen-line')+'</div>Nenhum parecer da operadora registrado.<br><br>'+(can('parecer')?'<button class="btn" id="emPar">Emitir parecer agora</button>':'')+'</div>';
+      else {
+        var p=g.parecerOperadora;
+        d.innerHTML='<div class="ai-box"><div class="hd"><div class="tt">Parecer da Operadora</div><span class="badge dark">'+esc(p.decisao)+'</span></div><dl class="kv"><dt>Motivo</dt><dd>'+esc(p.motivo||'—')+'</dd><dt>Justificativa</dt><dd>'+esc(p.justificativa||'—')+'</dd><dt>Observações impressas</dt><dd>'+esc(p.obsImp||'—')+'</dd><dt>Observações não impressas</dt><dd>'+esc(p.obsInt||'—')+'</dd><dt>Emitido por</dt><dd>'+esc(p.user)+' · '+esc(p.ts)+'</dd></dl></div>';
+      }
+      setTimeout(function(){ var b2=d.querySelector('#emPar'); if(b2) b2.onclick=function(){openParecer(g)}; },0);
+    } else if(t==='logs'){
+      var ul2=el('div');
+      MOCK.LOGS.filter(function(l){return l.ref.indexOf(g.numero)>=0}).forEach(function(l){
+        ul2.appendChild(el('div',{style:'padding:8px;border-bottom:1px solid var(--line);font-size:12.5px'},'<b>'+esc(l.ts)+'</b> · '+esc(l.user)+' ('+esc(l.perfil)+') — '+esc(l.acao)+' <span style="color:var(--muted)">— '+esc(l.ref)+'</span>'));
+      });
+      if(!ul2.children.length) ul2.innerHTML='<div class="empty"><div class="ico">'+icoLg('scroll')+'</div>Sem logs específicos desta guia.</div>';
+      d.appendChild(ul2);
+    }
+    return d;
+  }
+
+  /* === Gestão de Anexos === */
+  function logAcao(acao, ref){
+    var ts=new Date().toISOString().slice(0,16).replace('T',' ');
+    MOCK.LOGS.unshift({ts:ts,user:perfilDef[State.perfil].nome,perfil:State.perfil,acao:acao,ref:ref});
+  }
+  function anxIcon(tipo){
+    if(tipo==='img') return ico('image',20);
+    if(tipo==='pdf') return ico('file-text',20);
+    return ico('paperclip',20);
+  }
+  function catColor(cat){
+    var map={'Guia TISS':'info','Laudo médico':'','Exame complementar':'info','Relatório clínico':'muted','Histórico/Prontuário':'muted','Justificativa técnica':'warn','DUT/Evidência':'warn','OPME — orçamento':'warn','Termo de consentimento':'dark','Outros':'muted'};
+    return map[cat]||'muted';
+  }
+  function renderAnexos(g){
+    var wrap=el('div');
+    if(!g.anexosLista.length){ wrap.innerHTML='<div class="empty"><div class="ico">'+icoLg('paperclip')+'</div>Sem anexos enviados pelo prestador.</div>'; return wrap; }
+
+    // Resumo por categoria
+    var resumo={}; g.anexosLista.forEach(function(a){ resumo[a.categoria]=(resumo[a.categoria]||0)+1; });
+    var totalAnot=0; g.anexosLista.forEach(function(a){ totalAnot+=(a.anotacoes||[]).length; });
+    var chips=Object.keys(resumo).map(function(k){return '<span class="badge '+catColor(k)+'" style="margin:2px">'+esc(k)+' · '+resumo[k]+'</span>'}).join('');
+    var head=el('div',{class:'panel',style:'margin-bottom:10px'},
+      '<h3>Gestão de Anexos <span class="badge muted">'+g.anexosLista.length+' arquivos</span> <span class="badge info">'+totalAnot+' anotações</span></h3>'+
+      '<div style="margin-top:6px">'+chips+'</div>'+
+      '<div style="margin-top:8px;font-size:12px;color:var(--muted)">Visualize, categorize e anote cada documento. Todas as ações ficam registradas nos logs da guia.</div>');
+    wrap.appendChild(head);
+
+    // Filtro
+    var filtroBar=el('div',{style:'display:flex;gap:8px;align-items:center;margin-bottom:8px'});
+    var optsCat='<option value="">Todas as categorias</option>'+MOCK.CATEGORIAS_ANEXO.map(function(c){return '<option>'+esc(c)+'</option>'}).join('');
+    filtroBar.innerHTML='<input type="text" id="anxQ" placeholder="Buscar por nome..." style="flex:1;padding:8px;border:1px solid var(--line);border-radius:8px"/><select id="anxCat" style="padding:8px;border:1px solid var(--line);border-radius:8px">'+optsCat+'</select>';
+    wrap.appendChild(filtroBar);
+
+    var listWrap=el('div'); wrap.appendChild(listWrap);
+
+    function rebuild(){
+      listWrap.innerHTML='';
+      var q=(wrap.querySelector('#anxQ').value||'').toLowerCase();
+      var fc=wrap.querySelector('#anxCat').value;
+      var arr=g.anexosLista.filter(function(a){ return (!q||a.nome.toLowerCase().indexOf(q)>=0) && (!fc||a.categoria===fc); });
+      if(!arr.length){ listWrap.innerHTML='<div class="empty"><div class="ico">'+icoLg('search')+'</div>Nenhum anexo corresponde ao filtro.</div>'; lcIcons(); return; }
+      arr.forEach(function(a){
+        var nAnot=(a.anotacoes||[]).length;
+        var card=el('div',{style:'padding:10px;border:1px solid var(--line);border-radius:10px;margin-bottom:8px;background:#fff'});
+        card.innerHTML=
+          '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">'+
+            '<div style="font-size:22px;line-height:1">'+anxIcon(a.tipo)+'</div>'+
+            '<div style="flex:1;min-width:200px">'+
+              '<div style="font-weight:600">'+esc(a.nome)+'</div>'+
+              '<div style="font-size:12px;color:var(--muted)">'+esc(a.tamanho)+' · '+a.paginas+' pág. · enviado em '+esc(a.enviadoEm)+'</div>'+
+            '</div>'+
+            '<span class="badge '+catColor(a.categoria)+'">'+esc(a.categoria)+'</span>'+
+            '<span class="badge muted">'+a.tipo.toUpperCase()+'</span>'+
+            (nAnot?'<span class="badge info">'+ico('message-circle',12)+' '+nAnot+'</span>':'')+
+            '<div style="display:flex;gap:6px">'+
+              '<button class="btn sm" data-act="ver">'+ico('eye')+' Visualizar</button>'+
+              '<button class="btn sm ghost" data-act="cat">'+ico('tag')+' Categorizar</button>'+
+              '<button class="btn sm ghost" data-act="anot">'+ico('message-circle')+' Anotar</button>'+
+            '</div>'+
+          '</div>';
+        if(nAnot){
+          var last=a.anotacoes.slice(-2);
+          var notes=el('div',{style:'margin-top:8px;border-top:1px dashed var(--line);padding-top:6px'});
+          last.forEach(function(n){
+            notes.appendChild(el('div',{style:'font-size:12px;margin-top:4px'},'<b>'+esc(n.user)+'</b> <span style="color:var(--muted)">· '+esc(n.ts)+'</span><br>'+esc(n.texto)));
+          });
+          if(nAnot>2) notes.appendChild(el('div',{style:'font-size:11px;color:var(--muted);margin-top:4px'},'+ '+(nAnot-2)+' anotação(ões) anterior(es)'));
+          card.appendChild(notes);
+        }
+        card.querySelector('[data-act="ver"]').onclick=function(){ openAnexoViewer(g,a); };
+        card.querySelector('[data-act="cat"]').onclick=function(){ openAnexoCategoria(g,a,rebuild); };
+        card.querySelector('[data-act="anot"]').onclick=function(){ openAnexoAnotacao(g,a,rebuild); };
+        listWrap.appendChild(card);
+      });
+      lcIcons();
+    }
+    rebuild();
+    wrap.querySelector('#anxQ').oninput=rebuild;
+    wrap.querySelector('#anxCat').onchange=rebuild;
+    return wrap;
+  }
+
+  function openAnexoViewer(g, a){
+    var preview = a.tipo==='img'
+      ? '<div style="background:#f1f5f4;border:1px dashed var(--line);border-radius:10px;height:340px;display:flex;align-items:center;justify-content:center;color:var(--muted)"><div style="text-align:center"><div style="font-size:48px;line-height:1">'+ico('image',48)+'</div><div style="margin-top:12px">Pré-visualização simulada da imagem</div><div style="font-size:12px">'+esc(a.nome)+'</div></div></div>'
+      : '<div style="background:#fff;border:1px solid var(--line);border-radius:10px;padding:16px;height:340px;overflow:auto;font-family:Georgia,serif;font-size:13px;line-height:1.5"><div style="text-align:center;font-weight:700;margin-bottom:8px">'+esc(a.nome)+'</div><hr/><p><b>Beneficiário:</b> '+esc(g.beneficiario.nome)+'</p><p><b>Procedimento:</b> '+esc(g.tipo)+'</p><p><b>Conteúdo simulado — '+a.paginas+' páginas.</b> Este visualizador exibe uma representação do documento enviado. Em produção, o arquivo será carregado via endpoint <code>GET /api/solus/anexo.php?id='+esc(a.id)+'</code>.</p><p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p></div>';
+    var anotHTML = (a.anotacoes||[]).length
+      ? '<div style="max-height:220px;overflow:auto">'+a.anotacoes.map(function(n){return '<div style="padding:8px;border:1px solid var(--line);border-radius:8px;margin-bottom:6px;background:#fafdfb"><div style="font-size:12px;color:var(--muted)"><b>'+esc(n.user)+'</b> · '+esc(n.ts)+' · <span class="badge muted">'+esc(n.tag||'comentário')+'</span></div><div style="margin-top:4px">'+esc(n.texto)+'</div></div>'}).join('')+'</div>'
+      : '<div class="empty" style="padding:14px"><div class="ico">'+icoLg('message-circle')+'</div>Sem anotações.</div>';
+    var body='<div class="g2"><div>'+preview+'<div style="margin-top:8px;font-size:12px;color:var(--muted)">'+esc(a.tamanho)+' · '+a.paginas+' pág. · enviado em '+esc(a.enviadoEm)+'</div></div>'+
+      '<div><div class="panel" style="margin:0"><h3>Categoria <span class="badge '+catColor(a.categoria)+'">'+esc(a.categoria)+'</span></h3></div>'+
+      '<div class="panel" style="margin-top:8px"><h3>Anotações ('+(a.anotacoes||[]).length+')</h3>'+anotHTML+
+      '<div class="field" style="margin-top:8px"><label>Nova anotação rápida</label><textarea id="anxNew" placeholder="Comente sobre este documento..."></textarea></div>'+
+      '<div style="display:flex;gap:6px;align-items:center"><select id="anxTag" style="padding:6px;border:1px solid var(--line);border-radius:6px"><option>comentário</option><option>pendência</option><option>conformidade</option><option>solicitar reenvio</option></select><button class="btn sm" id="anxSalvar">'+ico('save')+' Salvar anotação</button></div>'+
+      '</div></div></div>';
+    var foot='<button class="btn ghost" id="anxFechar">Fechar</button>';
+    var m=modal('Visualizar anexo · '+esc(a.nome), 'Guia '+esc(g.numero)+' · categoria atual: '+esc(a.categoria), body, foot);
+    m.querySelector('#anxFechar').onclick=function(){ m.parentNode.remove(); };
+    m.querySelector('#anxSalvar').onclick=function(){
+      var txt=m.querySelector('#anxNew').value.trim(); if(!txt){ toast('Escreva uma anotação','warn'); return; }
+      var tag=m.querySelector('#anxTag').value;
+      var nota={user:perfilDef[State.perfil].nome,perfil:State.perfil,ts:new Date().toISOString().slice(0,16).replace('T',' '),texto:txt,tag:tag};
+      a.anotacoes=(a.anotacoes||[]).concat([nota]); persistAnexo(a);
+      logAcao('Anotação em anexo ('+tag+')', g.numero+' · '+a.nome+' — '+txt.slice(0,60));
+      toast('Anotação registrada nos logs','ok'); m.parentNode.remove(); openAnexoViewer(g,a);
+    };
+  }
+
+  function openAnexoCategoria(g, a, refresh){
+    var body='<div class="field"><label>Categoria do documento</label><select id="anxCatSel">'+MOCK.CATEGORIAS_ANEXO.map(function(c){return '<option'+(c===a.categoria?' selected':'')+'>'+esc(c)+'</option>'}).join('')+'</select></div>'+
+      '<div class="field"><label>Justificativa (opcional)</label><textarea id="anxCatJust" placeholder="Por que esta classificação?"></textarea></div>';
+    var foot='<button class="btn ghost" id="cc">Cancelar</button><button class="btn" id="cs">'+ico('save')+' Salvar categoria</button>';
+    var m=modal('Categorizar anexo', esc(a.nome), body, foot);
+    m.querySelector('#cc').onclick=function(){ m.parentNode.remove(); };
+    m.querySelector('#cs').onclick=function(){
+      var nova=m.querySelector('#anxCatSel').value; var just=m.querySelector('#anxCatJust').value.trim();
+      var antiga=a.categoria; if(nova===antiga && !just){ toast('Nenhuma alteração','warn'); return; }
+      a.categoria=nova; persistAnexo(a);
+      logAcao('Recategorização de anexo', g.numero+' · '+a.nome+' · '+antiga+' → '+nova+(just?' — '+just:''));
+      if(just){
+        a.anotacoes=(a.anotacoes||[]).concat([{user:perfilDef[State.perfil].nome,perfil:State.perfil,ts:new Date().toISOString().slice(0,16).replace('T',' '),texto:'[Recategorização] '+antiga+' → '+nova+'. '+just,tag:'categoria'}]);
+        persistAnexo(a);
+      }
+      toast('Categoria atualizada','ok'); m.parentNode.remove(); if(refresh) refresh();
+    };
+  }
+
+  function openAnexoAnotacao(g, a, refresh){
+    var lista=(a.anotacoes||[]).map(function(n){return '<div style="padding:8px;border:1px solid var(--line);border-radius:8px;margin-bottom:6px;background:#fafdfb"><div style="font-size:12px;color:var(--muted)"><b>'+esc(n.user)+'</b> · '+esc(n.ts)+' · <span class="badge muted">'+esc(n.tag||'comentário')+'</span></div><div style="margin-top:4px">'+esc(n.texto)+'</div></div>'}).join('')||'<div class="empty" style="padding:14px"><div class="ico">'+icoLg('message-circle')+'</div>Sem anotações.</div>';
+    var body='<div style="max-height:240px;overflow:auto;margin-bottom:8px">'+lista+'</div>'+
+      '<div class="field"><label>Nova anotação</label><textarea id="aN" placeholder="Escreva um comentário técnico, pendência ou observação..."></textarea></div>'+
+      '<div class="field"><label>Tipo</label><select id="aT"><option>comentário</option><option>pendência</option><option>conformidade</option><option>solicitar reenvio</option></select></div>';
+    var foot='<button class="btn ghost" id="ac">Fechar</button><button class="btn" id="as">'+ico('save')+' Adicionar anotação</button>';
+    var m=modal('Anotações do anexo', esc(a.nome)+' · '+esc(a.categoria), body, foot);
+    m.querySelector('#ac').onclick=function(){ m.parentNode.remove(); };
+    m.querySelector('#as').onclick=function(){
+      var txt=m.querySelector('#aN').value.trim(); if(!txt){ toast('Escreva uma anotação','warn'); return; }
+      var tag=m.querySelector('#aT').value;
+      a.anotacoes=(a.anotacoes||[]).concat([{user:perfilDef[State.perfil].nome,perfil:State.perfil,ts:new Date().toISOString().slice(0,16).replace('T',' '),texto:txt,tag:tag}]);
+      persistAnexo(a);
+      logAcao('Anotação em anexo ('+tag+')', g.numero+' · '+a.nome+' — '+txt.slice(0,60));
+      toast('Anotação registrada nos logs','ok'); m.parentNode.remove(); openAnexoAnotacao(g,a,refresh);
+      if(refresh) refresh();
+    };
+  }
+
+
+  function renderParecerIA(ia){
+    var d=el('div');
+    var box=el('div',{class:'ai-box'});
+    box.innerHTML='<div class="hd"><div class="tt">'+ico('sparkles')+' Parecer Técnico <span class="badge muted">Confiança '+Math.round(ia.confianca)+'%</span></div>'+aderenciaBar(ia.aderencia)+'</div>'+
+      '<p style="margin:6px 0 0">'+esc(ia.parecerGeral)+'</p>'+
+      '<div class="ai-warn">'+ia.avisoLegal+'</div>';
+    d.appendChild(box);
+
+    function section(title, arr, icoName){
+      if(!arr || !arr.length) return null;
+      var s=el('div',{class:'ai-section'}); s.innerHTML='<h5>'+ico(icoName)+' '+title+'</h5>';
+      var u=el('ul',{class:'ai-list'}); arr.forEach(function(x){ u.appendChild(el('li',{},esc(x))) }); s.appendChild(u); return s;
+    }
+    var grid=el('div',{class:'g2'});
+    var c1=el('div'); var c2=el('div');
+    [section('Critérios cumpridos',ia.criteriosCumpridos,'check-circle-2'),
+     section('Critérios não cumpridos',ia.criteriosNaoCumpridos,'x-circle'),
+     section('Critérios não avaliados',ia.criteriosNaoAvaliados,'minus-circle')].forEach(function(s){ if(s) c1.appendChild(s); });
+    [section('Pendências documentais',ia.pendencias,'clipboard-list'),
+     section('Alertas de inconsistência',ia.alertas,'triangle-alert'),
+     section('Tópicos relevantes para o auditor',ia.topicosAuditor,'target'),
+     section('Sugestões de questionamentos',ia.sugestoesArgumentos,'message-square')].forEach(function(s){ if(s) c2.appendChild(s); });
+    grid.appendChild(c1); grid.appendChild(c2); d.appendChild(grid);
+
+    var foot=el('div',{class:'ai-box',style:'margin-top:10px'});
+    foot.innerHTML='<div class="hd"><div class="tt">Próxima ação sugerida</div><span class="badge dark">'+esc(ia.proximaAcao)+'</span></div>'+
+      '<div class="ai-section"><h5>Regras aplicadas</h5><div>'+ia.regrasAplicadas.map(function(r){return '<span class="badge" style="margin:2px">'+esc(r)+'</span>'}).join('')+'</div></div>'+
+      (ia.regrasNaoAvaliadas.length?'<div class="ai-section"><h5>Regras não avaliadas (sem parametrização)</h5><ul class="ai-list">'+ia.regrasNaoAvaliadas.map(function(r){return '<li>'+esc(r)+'</li>'}).join('')+'</ul></div>':'')+
+      '<div class="ai-section"><h5>Justificativa do cálculo</h5><code style="font-size:12px">'+esc(ia.justificativaCalculo)+'</code></div>';
+    d.appendChild(foot);
+    return d;
+  }
+
+  function openParecer(g){
+    if(!can('parecer')){ toast('Seu perfil não pode emitir parecer','warn'); return; }
+    var ia = g._cache || AI.analisarGuiaComIA(g,{});
+    var body='<div class="field"><label>Decisão</label><select id="pDec"><option value="Aprovação">Aprovação</option><option value="Aprovação com ressalva">Aprovação com ressalva</option><option value="Reprovação">Reprovação</option><option value="Solicitar complemento">Solicitar complemento</option><option value="Encaminhar para junta médica">Encaminhar para junta médica</option></select></div>'+
+      '<div class="field"><label>Motivo padronizado</label><select id="pMot"></select></div>'+
+      '<div class="field"><div class="field-lbl-row"><label>Justificativa técnica</label><button class="btn sm ghost" id="pJustIA" type="button">'+ico('sparkles')+' Gerar análise técnica</button></div><textarea id="pJust" placeholder="Descreva a justificativa técnica..."></textarea></div>'+
+      '<div class="g2"><div class="field"><label>Observações impressas (vão para o prestador)</label><textarea id="pImp"></textarea></div><div class="field"><label>Observações não impressas (internas)</label><textarea id="pInt"></textarea></div></div>'+
+      '<div class="ai-box"><div class="hd"><div class="tt">'+ico('lightbulb')+' Sugestão técnica</div></div><p style="margin:6px 0">'+esc(ia.parecerGeral)+'</p><button class="btn sm ghost" id="usarIA">Usar sugestão</button></div>';
+    var foot='<button class="btn ghost" id="pCancel">Cancelar</button><button class="btn" id="pSalvar">'+ico('save')+' Salvar parecer</button>';
+    var m = modal('Parecer da Operadora · '+esc(g.numero), 'A decisão final é exclusiva da operadora. A análise técnica atua apenas como apoio.', body, foot);
+
+    function fillMot(){
+      var dec=m.querySelector('#pDec').value;
+      var list = dec.indexOf('Reprov')>=0?MOCK.MOTIVOS_REPR:(dec.indexOf('complemento')>=0?MOCK.MOTIVOS_COMP:MOCK.MOTIVOS_RESS);
+      m.querySelector('#pMot').innerHTML = list.map(function(x){return '<option>'+esc(x)+'</option>'}).join('');
+    }
+    fillMot(); m.querySelector('#pDec').onchange=fillMot;
+    m.querySelector('#usarIA').onclick=function(){ m.querySelector('#pJust').value = ia.parecerGeral+'\n\nSugestões: '+ia.sugestoesArgumentos.join(' / '); toast('Sugestão aplicada','ok'); };
+    m.querySelector('#pJustIA').onclick=function(){
+      var btn=this;
+      btn.innerHTML=ico('loader')+' Gerando…'; btn.disabled=true;
+      setTimeout(function(){
+        function _limpa(s){ return s.replace(/A IA recomenda como próxima ação:/gi,'Conduta técnica sugerida:').replace(/\s*\(sugestão IA\)/gi,'').replace(/\bA IA\b/gi,'A análise').replace(/\bIA\b/g,'análise técnica'); }
+        var linhas=[];
+        linhas.push('Guia '+g.numero+' — '+g.tipo+' ('+g.regime+') — Beneficiário: '+g.beneficiario.nome+'.');
+        linhas.push(_limpa(ia.parecerGeral));
+        if(ia.criteriosCumpridos.length) linhas.push('Critérios cumpridos: '+ia.criteriosCumpridos.join('; ')+'.');
+        if(ia.criteriosNaoCumpridos.length) linhas.push('Critérios não cumpridos: '+ia.criteriosNaoCumpridos.join('; ')+'.');
+        if(ia.pendencias.length) linhas.push('Pendências: '+ia.pendencias.join('; ')+'.');
+        if(ia.alertas.length) linhas.push('Alertas: '+ia.alertas.join('; ')+'.');
+        linhas.push('Conduta recomendada: '+_limpa(ia.proximaAcao)+'.');
+        if(ia.sugestoesArgumentos.length) linhas.push('Pontos de atenção: '+ia.sugestoesArgumentos.join(' / ')+'.');
+        linhas.push('Aderência regulatória apurada: '+ia.aderencia+'% ('+ia.classificacao.label+').');
+        m.querySelector('#pJust').value=linhas.join('\n\n');
+        btn.innerHTML=ico('sparkles')+' Gerar análise técnica'; btn.disabled=false;
+        lcIcons();
+        toast('Justificativa gerada. Revise antes de salvar.','ok');
+      },500);
+    };
+    m.querySelector('#pCancel').onclick=function(){ m.parentNode.remove(); };
+    m.querySelector('#pSalvar').onclick=function(){
+      var dec=m.querySelector('#pDec').value;
+      var par={decisao:dec, motivo:m.querySelector('#pMot').value, justificativa:m.querySelector('#pJust').value, obsImp:m.querySelector('#pImp').value, obsInt:m.querySelector('#pInt').value, user:perfilDef[State.perfil].nome, ts:new Date().toISOString().slice(0,16).replace('T',' ')};
+      g.parecerOperadora=par;
+      // Atualiza status
+      if(dec==='Aprovação'||dec==='Aprovação com ressalva') g.status='Liberada';
+      else if(dec==='Reprovação') g.status='Negada';
+      else if(dec==='Solicitar complemento') g.status='Aguardando complemento';
+      else if(dec==='Encaminhar para junta médica') g.status='Em junta médica';
+      // Persiste
+      var sv=JSON.parse(localStorage.getItem('regula_pareceres')||'{}');
+      sv[g.numero]=par; localStorage.setItem('regula_pareceres',JSON.stringify(sv));
+      MOCK.LOGS.unshift({ts:par.ts,user:par.user,perfil:State.perfil,acao:'Parecer da Operadora emitido',ref:g.numero+' → '+dec});
+      toast('Parecer salvo · '+g.status,'ok');
+      m.parentNode.remove(); render();
+    };
+  }
+
+  /* === Relógio dinâmico === */
+  var DIAS_SEMANA=['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado'];
+  function atualizarRelogio(){
+    var el=$('#topbarClock'); if(!el) return;
+    var d=new Date();
+    var dia=DIAS_SEMANA[d.getDay()];
+    var dd=String(d.getDate()).padStart(2,'0');
+    var mm=String(d.getMonth()+1).padStart(2,'0');
+    var yyyy=d.getFullYear();
+    var hh=String(d.getHours()).padStart(2,'0');
+    var mi=String(d.getMinutes()).padStart(2,'0');
+    var ss=String(d.getSeconds()).padStart(2,'0');
+    el.innerHTML=dia+'<br>'+dd+'/'+mm+'/'+yyyy+' '+hh+':'+mi+':'+ss;
+  }
+  atualizarRelogio();
+  setInterval(atualizarRelogio,1000);
+
+  /* === Breadcrumb === */
+  var ROUTE_LABELS={dashboard:'Dashboard',guias:'Guias',kanban:'Kanban',param:'Parametrização',logs:'Logs',config:'Configurações'};
+  function atualizarBreadcrumb(){
+    var el=$('#topbarRoute'); if(!el) return;
+    el.textContent=ROUTE_LABELS[State.route]||State.route;
+  }
+
+  /* === Init === */
+  aplicarRiscos();
+  renderUserChip(); bindNav(); render(); atualizarBreadcrumb();
+})();

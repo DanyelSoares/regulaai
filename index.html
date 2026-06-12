@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>RegulaAI Saúde — Auditoria Assistencial</title>
+<link rel="stylesheet" href="assets/css/style.css" />
+</head>
+<body>
+<div id="app">
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="brand-mark">R<span>AI</span></div>
+      <div class="brand-text">
+        <div class="brand-title">RegulaAI</div>
+        <div class="brand-sub">Saúde · Auditoria</div>
+      </div>
+    </div>
+    <nav class="nav">
+      <a data-route="dashboard" class="nav-item active" title="Dashboard"><span class="nav-ico"><i data-lucide="layout-dashboard" width="16" height="16"></i></span><span class="nav-label"> Dashboard</span></a>
+      <a data-route="guias" class="nav-item" title="Guias"><span class="nav-ico"><i data-lucide="clipboard-list" width="16" height="16"></i></span><span class="nav-label"> Guias</span></a>
+      <a data-route="kanban" class="nav-item" title="Kanban"><span class="nav-ico"><i data-lucide="columns-3" width="16" height="16"></i></span><span class="nav-label"> Kanban</span></a>
+      <a data-route="param" class="nav-item" title="Parametrização"><span class="nav-ico"><i data-lucide="sliders-horizontal" width="16" height="16"></i></span><span class="nav-label"> Parametrização</span></a>
+      <a data-route="config" class="nav-item" title="Configurações"><span class="nav-ico"><i data-lucide="settings" width="16" height="16"></i></span><span class="nav-label"> Configurações</span></a>
+      <a data-route="logs" class="nav-item" title="Logs"><span class="nav-ico"><i data-lucide="scroll-text" width="16" height="16"></i></span><span class="nav-label"> Logs</span></a>
+    </nav>
+    <div class="sidebar-loader-wrap">
+      <div class="loader">
+        <svg width="100" height="100" viewBox="0 0 100 100">
+          <defs>
+            <mask id="clipping">
+              <polygon points="0,0 100,0 100,100 0,100" fill="black"></polygon>
+              <polygon points="25,25 75,25 50,75" fill="white"></polygon>
+              <polygon points="50,25 75,75 25,75" fill="white"></polygon>
+              <polygon points="35,35 65,35 50,65" fill="white"></polygon>
+              <polygon points="35,35 65,35 50,65" fill="white"></polygon>
+              <polygon points="35,35 65,35 50,65" fill="white"></polygon>
+              <polygon points="35,35 65,35 50,65" fill="white"></polygon>
+            </mask>
+          </defs>
+        </svg>
+        <div class="box"></div>
+        <div class="loader-brand">smile<span class="loader-brand-sub">SAÚDE</span></div>
+      </div>
+    </div>
+    <button class="sidebar-toggle" id="sidebarToggle" title="Recolher menu">
+      <i data-lucide="panel-left-close" width="18" height="18"></i>
+    </button>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div class="topbar-brand">
+        <div class="topbar-brand-text">
+          <div class="topbar-title">
+            <i data-lucide="shield-check" width="15" height="15"></i>
+            RegulaAI Saúde &mdash; Auditoria Assistencial
+          </div>
+          <div class="topbar-breadcrumb" id="topbarBreadcrumb">
+            <i data-lucide="home" width="11" height="11"></i>
+            <span>Início</span>
+            <span class="tbc-sep">&rsaquo;</span>
+            <span class="tbc-current" id="topbarRoute">Dashboard</span>
+          </div>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <input id="globalSearch" type="text" style="display:none" />
+<div class="topbar-user">
+          <div id="userAvatar" style="display:none"></div>
+<div class="topbar-user-info">
+            <div class="topbar-user-name" id="userName">—</div>
+            <div class="topbar-user-role" id="userRole">—</div>
+          </div>
+        </div>
+        <div class="topbar-clock" id="topbarClock"></div>
+      </div>
+    </header>
+    <section id="view" class="view"></section>
+  </main>
+</div>
+
+
+<!-- FAB trocar perfil -->
+<div class="fab-wrap" id="fabWrap">
+  <div class="fab-menu" id="fabMenu">
+    <div class="fab-menu-label">Simular perfil</div>
+    <div class="fab-menu-sep"></div>
+    <div class="fab-grp">
+      <div class="fab-grp-hd"><i data-lucide="stethoscope" width="12" height="12"></i> Enfermeiro</div>
+      <button data-profile="enfermeiro" data-enf-id="E1"><i data-lucide="user" width="12" height="12"></i> Renata Lopes</button>
+      <button data-profile="enfermeiro" data-enf-id="E2"><i data-lucide="user" width="12" height="12"></i> Carla Mendonça</button>
+    </div>
+    <div class="fab-menu-sep"></div>
+    <button data-profile="auditor" data-enf-id=""><i data-lucide="search" width="12" height="12"></i> Auditor — Dr. Marcos</button>
+    <div class="fab-menu-sep"></div>
+    <button data-profile="gestor" data-enf-id=""><i data-lucide="bar-chart-2" width="12" height="12"></i> Gestor — Patrícia</button>
+  </div>
+  <button class="fab" id="fabBtn" title="Trocar perfil"><i data-lucide="users" width="18" height="18"></i></button>
+</div>
+
+<div id="pageLoader" class="page-loader">
+  <div class="loader" style="cursor:default">
+    <svg width="100" height="100" viewBox="0 0 100 100">
+      <defs>
+        <mask id="clippingPL">
+          <polygon points="0,0 100,0 100,100 0,100" fill="black"></polygon>
+          <polygon points="25,25 75,25 50,75" fill="white"></polygon>
+          <polygon points="50,25 75,75 25,75" fill="white"></polygon>
+          <polygon points="35,35 65,35 50,65" fill="white"></polygon>
+          <polygon points="35,35 65,35 50,65" fill="white"></polygon>
+          <polygon points="35,35 65,35 50,65" fill="white"></polygon>
+          <polygon points="35,35 65,35 50,65" fill="white"></polygon>
+        </mask>
+      </defs>
+    </svg>
+    <div class="box" style="-webkit-mask:url(#clippingPL);mask:url(#clippingPL)"></div>
+    <div class="loader-brand">smile<span class="loader-brand-sub">SAÚDE</span></div>
+  </div>
+</div>
+
+<div id="modalRoot"></div>
+<div id="toastRoot" class="toast-root"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/lucide@latest/dist/umd/lucide.min.js"></script>
+<script src="assets/js/mock-data.js"></script>
+<script src="assets/js/solus-adapter.js"></script>
+<script src="assets/js/ai-engine.js"></script>
+<script src="assets/js/app.js"></script>
+</body>
+</html>
