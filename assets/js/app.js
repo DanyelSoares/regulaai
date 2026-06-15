@@ -3069,26 +3069,28 @@
   }
 
   function _buildPermMatrix(){
+    // p = acesso total (editar/executar) | v = somente leitura | ausente = sem acesso
     var PERM_LIST=[
-      {label:'Visualizar guias e dashboard',           desc:'Leitura de guias, indicadores e painel geral',                              p:['gestor','auditor','enfermeiro']},
-      {label:'Triagem e complemento de documentação',  desc:'Solicitar documentos, realizar triagem inicial e registrar pendências',     p:['gestor','auditor','enfermeiro']},
-      {label:'Emitir parecer técnico',                 desc:'Registrar pareceres de análise clínica e regulatória em guias',             p:['gestor','auditor']},
-      {label:'Aprovar guias',                          desc:'Emitir autorização de procedimentos que atendem aos critérios técnicos',    p:['gestor','auditor']},
-      {label:'Reprovar guias',                         desc:'Negar procedimentos por não conformidade técnica ou regulatória',           p:['gestor','auditor']},
-      {label:'Encaminhar para junta médica',           desc:'Solicitar avaliação multidisciplinar por junta médica',                    p:['gestor','auditor']},
-      {label:'Migrar entre perfis / visão geral',      desc:'Alternar entre perfis e visualizar as demandas de todos os usuários',      p:['gestor']},
-      {label:'Acessar Configurações do sistema',       desc:'Editar parâmetros de risco, SLA e regras de classificação',               p:['gestor']},
-      {label:'Parametrizar fluxos, DUT e vinculações', desc:'Configurar etapas, regras DUT, procedimentos e instruções para a IA',     p:['gestor']},
-      {label:'Visualizar logs completos',              desc:'Histórico integral de todas as ações realizadas no sistema',               p:['gestor']},
-      {label:'Dados sensíveis sem mascaramento',       desc:'CPF, cartão e informações pessoais exibidos sem ocultação de dígitos',    p:['gestor']},
+      {label:'Visualizar guias e dashboard',           desc:'Leitura de guias, indicadores e painel geral',                             p:['gestor','auditor','enfermeiro'], v:[]},
+      {label:'Triagem e complemento de documentação',  desc:'Solicitar documentos, triagem inicial e registrar pendências',            p:['gestor','auditor','enfermeiro'], v:[]},
+      {label:'Emitir parecer técnico',                 desc:'Registrar pareceres de análise clínica e regulatória em guias',           p:['gestor','auditor'],              v:[]},
+      {label:'Aprovar guias',                          desc:'Emitir autorização de procedimentos que atendem aos critérios técnicos',  p:['gestor','auditor'],              v:[]},
+      {label:'Reprovar guias',                         desc:'Negar procedimentos por não conformidade técnica ou regulatória',         p:['gestor','auditor'],              v:[]},
+      {label:'Encaminhar para junta médica',           desc:'Solicitar avaliação multidisciplinar por junta médica',                  p:['gestor','auditor'],              v:[]},
+      {label:'Migrar entre perfis / visão geral',      desc:'Alternar entre perfis e visualizar as demandas de todos os usuários',    p:['gestor'],                        v:[]},
+      {label:'Acessar Configurações do sistema',       desc:'Gestor edita; Auditor e Enfermeiro podem consultar, sem alterar valores', p:['gestor'],                        v:['auditor','enfermeiro']},
+      {label:'Parametrizar fluxos, DUT e vinculações', desc:'Gestor configura; Auditor e Enfermeiro visualizam os parâmetros ativos', p:['gestor'],                        v:['auditor','enfermeiro']},
+      {label:'Visualizar logs completos',              desc:'Gestor acessa todo o histórico; Auditor consulta os próprios registros',  p:['gestor'],                        v:['auditor']},
+      {label:'Dados sensíveis sem mascaramento',       desc:'CPF, cartão e informações pessoais exibidos sem ocultação de dígitos',   p:['gestor'],                        v:[]},
     ];
     var profiles=['gestor','auditor','enfermeiro'];
     var profileColors={gestor:'#054f27',auditor:'#066b34',enfermeiro:'#0a8a43'};
     var t=el('table',{style:'width:100%;border-collapse:collapse'});
-    var thRow='<thead><tr><th style="text-align:left;padding:0 12px 12px 0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Permissão</th>';
+    var thRow='<thead><tr><th style="text-align:left;padding:0 12px 16px 0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Permissão</th>';
     profiles.forEach(function(p){
-      thRow+='<th style="text-align:center;padding:0 0 12px;width:100px"><span style="display:inline-block;background:'+profileColors[p]+';color:#fff;border-radius:20px;padding:4px 14px;font-size:11.5px;font-weight:700;letter-spacing:.2px">'+p.charAt(0).toUpperCase()+p.slice(1)+'</span></th>';
+      thRow+='<th style="text-align:center;padding:0 0 16px;width:100px"><span style="display:inline-block;background:'+profileColors[p]+';color:#fff;border-radius:20px;padding:4px 14px;font-size:11.5px;font-weight:700;letter-spacing:.2px">'+p.charAt(0).toUpperCase()+p.slice(1)+'</span></th>';
     });
+    // Legenda
     thRow+='</tr></thead>';
     t.innerHTML=thRow;
     var tb=el('tbody');
@@ -3099,15 +3101,35 @@
         '<div style="font-size:11.5px;color:var(--muted);margin-top:2px;line-height:1.4">'+esc(perm.desc)+'</div>'+
         '</td>';
       var permCells=profiles.map(function(p){
-        var has=perm.p.indexOf(p)>=0;
-        return '<td style="text-align:center;vertical-align:middle;padding:10px 0">'+
-          (has?'<span style="color:var(--g-600);display:inline-flex;justify-content:center">'+ico('check-circle',16)+'</span>':
-               '<span style="color:var(--g-200);display:inline-flex;justify-content:center">'+ico('minus',14)+'</span>')+
-          '</td>';
+        var isEdit=perm.p.indexOf(p)>=0;
+        var isView=!isEdit&&perm.v&&perm.v.indexOf(p)>=0;
+        var cell;
+        if(isEdit){
+          cell='<span style="color:var(--g-600);display:inline-flex;justify-content:center">'+ico('check-circle',16)+'</span>';
+        } else if(isView){
+          cell='<span style="display:inline-flex;flex-direction:column;align-items:center;gap:2px;color:#64748b">'+
+            ico('eye',14)+
+            '<span style="font-size:9px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;line-height:1">Leitura</span>'+
+          '</span>';
+        } else {
+          cell='<span style="color:var(--g-200);display:inline-flex;justify-content:center">'+ico('minus',14)+'</span>';
+        }
+        return '<td style="text-align:center;vertical-align:middle;padding:10px 0">'+cell+'</td>';
       }).join('');
       tr.innerHTML=labelCell+permCells;
       tb.appendChild(tr);
     });
+    // Legenda dos níveis
+    var legRow=el('tr',{style:'border-top:1.5px solid var(--g-100)'});
+    legRow.innerHTML='<td colspan="4" style="padding:12px 0 2px">'+
+      '<div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap">'+
+        '<span style="font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px">Legenda:</span>'+
+        '<span style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--ink-2)">'+ico('check-circle',13)+' <span style="color:var(--g-600);font-weight:600">Acesso total</span></span>'+
+        '<span style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--ink-2)">'+ico('eye',13)+' <span style="color:#64748b;font-weight:600">Somente leitura</span></span>'+
+        '<span style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--ink-2)">'+ico('minus',13)+' <span style="color:var(--muted)">Sem acesso</span></span>'+
+      '</div>'+
+    '</td>';
+    tb.appendChild(legRow);
     t.appendChild(tb);
     return t;
   }
