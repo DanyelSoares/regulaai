@@ -3160,7 +3160,9 @@
     // ── ABA: Logs de Usuário ─────────────────────────────────────────────────
     if(tab==='usuarios'){
       var lf=State.logFiltros;
-      box.innerHTML='<div class="log-chart-row">'+donutUsuarios+'</div>';
+      var _chartRow=el('div',{class:'log-chart-row'});
+      _chartRow.innerHTML=donutUsuarios;
+      wrap.appendChild(_chartRow);
 
       var filt=el('div',{class:'filters'});
       filt.innerHTML=
@@ -3179,7 +3181,7 @@
         '<div class="spacer"></div>'+
         '<input id="lBusca" type="text" class="log-busca" placeholder="Buscar usuário, ação ou referência..." value="'+esc(lf.q)+'" />'+
         '<button class="btn ghost" id="lClear">'+ico('x',12)+' Limpar</button>';
-      box.appendChild(filt);
+      wrap.appendChild(filt);
 
       var COLS=[{key:'ts',label:'Data/Hora'},{key:'user',label:'Usuário'},{key:'perf',label:'Perfil'},{key:'acao',label:'Ação'},{key:'ref',label:'Referência'}];
       var tbl=el('table');
@@ -3248,7 +3250,9 @@
     // ── ABA: Logs Sistema | IA ───────────────────────────────────────────────
     } else {
       var lf2=State.logFiltrosIA;
-      box.innerHTML='<div class="log-chart-row">'+donutSistema+'</div>';
+      var _chartRow2=el('div',{class:'log-chart-row'});
+      _chartRow2.innerHTML=donutSistema;
+      wrap.appendChild(_chartRow2);
 
       var filt2=el('div',{class:'filters'});
       filt2.innerHTML=
@@ -3267,7 +3271,7 @@
         '<div class="spacer"></div>'+
         '<input id="lBusca2" type="text" class="log-busca" placeholder="Buscar ação ou referência..." value="'+esc(lf2.q)+'" />'+
         '<button class="btn ghost" id="lClear2">'+ico('x',12)+' Limpar</button>';
-      box.appendChild(filt2);
+      wrap.appendChild(filt2);
 
       var COLS2=[{key:'ts',label:'Data/Hora'},{key:'user',label:'Origem'},{key:'tipo',label:'Tipo'},{key:'acao',label:'Ação'},{key:'ref',label:'Referência'}];
       var tbl2=el('table');
@@ -3401,7 +3405,9 @@
     '</td>';
     tb.appendChild(legRow);
     t.appendChild(tb);
-    return t;
+    var _pmWrap=el('div',{class:'table-wrap'});
+    _pmWrap.appendChild(t);
+    return _pmWrap;
   }
 
   function viewPermissoes(){
@@ -3497,7 +3503,7 @@
               '<td style="text-align:center"><input class="risco-pts" type="number" min="0" max="100" data-key="'+f.key+'" value="'+(cfg.pesos[f.key]||0)+'" /></td>';
             tbFat.appendChild(tr);
           });
-          tFat.appendChild(tbFat); secF.appendChild(tFat); rstContent.appendChild(secF);
+          tFat.appendChild(tbFat); var _tfWrap=el('div',{class:'table-wrap'}); _tfWrap.appendChild(tFat); secF.appendChild(_tfWrap); rstContent.appendChild(secF);
 
           var secL=el('div',{class:'risco-section'});
           secL.innerHTML='<h4>'+ico('sliders-horizontal',13)+' Limiares por nível (pontuação máxima)</h4>'+
@@ -3543,7 +3549,7 @@
                 '<td>'+riskPill(r.nivel)+'</td><td>'+riskPill(r.g.risco)+'</td>';
               tbP.appendChild(tr);
             });
-            tP.appendChild(tbP); previa.innerHTML=''; previa.appendChild(tP);
+            tP.appendChild(tbP); var _tpWrap=el('div',{class:'table-wrap'}); _tpWrap.appendChild(tP); previa.innerHTML=''; previa.appendChild(_tpWrap);
           }
           secP.appendChild(previa); rstContent.appendChild(secP);
 
@@ -3702,7 +3708,9 @@
         inputs[f.id]=inp;
       });
       tbl.appendChild(tbody);
-      sec.appendChild(tbl);
+      var _cfgTblWrap=el('div',{class:'table-wrap'});
+      _cfgTblWrap.appendChild(tbl);
+      sec.appendChild(_cfgTblWrap);
 
       var btnRow=el('div',{style:'margin-top:18px;display:flex;gap:12px;align-items:center'});
       var btnSave=el('button',{class:'btn btn-primary'});

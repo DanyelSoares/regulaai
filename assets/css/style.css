@@ -896,6 +896,9 @@ tbody tr:hover{background:#f7fbf8;cursor:pointer}
   /* Layout: sidebar sai da grade */
   #app{grid-template-columns:1fr!important;transition:none}
 
+  /* Main: sem scroll horizontal — apenas table-wrap rola */
+  .main{overflow-x:hidden;max-width:100vw}
+
   /* Sidebar → bottom nav bar fixo */
   .sidebar{
     position:fixed;bottom:0;left:0;right:0;top:auto!important;
@@ -904,7 +907,7 @@ tbody tr:hover{background:#f7fbf8;cursor:pointer}
     padding:0!important;
     border-top:1px solid rgba(255,255,255,.12);
     border-right:none;
-    z-index:50;
+    z-index:100;
     overflow:hidden;
     transition:none;
   }
@@ -942,9 +945,24 @@ tbody tr:hover{background:#f7fbf8;cursor:pointer}
   .topbar{padding:0 12px;min-height:50px}
   .topbar-clock{display:none}
   .topbar-breadcrumb{display:none}
-  .topbar-title{font-size:13px;gap:5px}
+  .topbar-title{display:none}
   .topbar-user-info{display:none}
   #userAvatar{width:28px!important;height:28px!important;font-size:11px!important}
+
+  /* Marca R AI no topbar mobile */
+  .topbar-mob-brand{
+    display:flex;align-items:center;justify-content:center;
+    flex-shrink:0;width:34px;height:34px;
+    border-radius:9px;
+    background:linear-gradient(145deg,var(--g-400) 0%,var(--g-700) 100%);
+    color:#fff;font-size:13px;font-weight:800;letter-spacing:-.5px;
+    margin-right:8px;
+    box-shadow:0 2px 8px rgba(0,100,40,.25);
+  }
+  .topbar-mob-brand span{
+    font-size:7px;font-weight:900;vertical-align:super;
+    letter-spacing:0;margin-left:1px;
+  }
 
   /* Conteúdo: página */
   .page-title{flex-direction:column;align-items:flex-start;gap:8px}
@@ -997,6 +1015,9 @@ tbody tr:hover{background:#f7fbf8;cursor:pointer}
   .kanban{grid-auto-columns:min(88vw,300px)}
   .page-loader .loader{--size:0.9}
 }
+
+/* Topbar brand mark — hidden on desktop, shown on mobile */
+.topbar-mob-brand{display:none}
 
 /* Guia subrow (Status/Origem/Aderência/Risco/Ações abaixo da linha principal) */
 .guia-mainrow td{border-bottom:0;padding-bottom:16px}
