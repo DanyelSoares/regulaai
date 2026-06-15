@@ -4015,7 +4015,12 @@
       tip.style.setProperty('--arr',arrLeft+'%');
     }
 
+    function fabIsOpen(){
+      var fw=document.getElementById('fabWrap'), up=document.getElementById('fabUserPick');
+      return (fw&&fw.classList.contains('fab-open'))||(up&&up.style.display==='block');
+    }
     document.addEventListener('mouseover',function(e){
+      if(fabIsOpen()){_vis=false;tip.classList.remove('gtip--vis');return;}
       var txt=findTip(e.target);
       if(txt){tip.textContent=txt;_vis=true;tip.classList.add('gtip--vis');}
       else{_vis=false;tip.classList.remove('gtip--vis');}
