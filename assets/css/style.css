@@ -999,8 +999,8 @@ tbody tr:hover{background:#f7fbf8;cursor:pointer}
 }
 
 /* Guia subrow (Status/Origem/Aderência/Risco/Ações abaixo da linha principal) */
-.guia-mainrow td{border-bottom:0;padding-bottom:10px}
-.guia-subrow td{padding-top:6px;padding-bottom:12px;background:#fafdfb}
+.guia-mainrow td{border-bottom:0;padding-bottom:16px}
+.guia-subrow td{padding-top:10px;padding-bottom:16px;background:#fafdfb}
 .guia-subrow:hover td{background:#f3f8f5}
 .gm-item{display:flex;align-items:center;gap:8px;margin-bottom:3px}
 .gm-item:last-child{margin-bottom:0}

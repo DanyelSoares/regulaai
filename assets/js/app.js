@@ -1425,8 +1425,8 @@
     var pagina=State.guiasPagina;
     var pageRows=rows.slice((pagina-1)*PAGE_SIZE, pagina*PAGE_SIZE);
 
-    function bindDbl(cell, key, val){
-      cell.title='Duplo clique para filtrar por este valor';
+    function bindDbl(cell, key, val, label){
+      cell.title=label||'Duplo clique para filtrar por este valor';
       cell.ondblclick=function(e){
         e.stopPropagation();
         State.filtros[key]=State.filtros[key]===val?'':val;
@@ -1447,13 +1447,13 @@
       tr.innerHTML=
         // GUIA
         '<td><b>'+esc(g.numero)+'</b>'+(g.prazoVencido?' <span class="badge danger">prazo</span>':'')+
-          '<div style="margin-top:5px;cursor:pointer" data-ident="status-cell" data-tip="Duplo clique para filtrar por este status">'+statusBadge(g.status)+'</div>'+
+          '<div style="margin-top:5px;cursor:pointer" data-ident="status-cell" data-tip="Status">'+statusBadge(g.status)+'</div>'+
           '<div style="margin-top:9px">'+(_gespec?'<span class="badge muted'+(State.filtros.especialidade===_gespec?' cell-filtered':'')+'" style="font-size:10px;cursor:pointer" title="Especialidade">'+ico('stethoscope',10)+' '+esc(_gespec)+'</span>':'<span style="font-size:10px;color:transparent">—</span>')+'</div>'+
         '</td>'+
         // BENEFICIÁRIO
         '<td class="cell-dbl'+(State.filtros.benef===g.beneficiario.nome?' cell-filtered':'')+'">'+
           '<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;max-width:200px">'+esc(g.beneficiario.nome)+'</span>'+
-          '<div style="color:var(--muted);font-size:11px;margin-top:5px;'+L2H+'">'+mask(g.beneficiario.cpf)+'</div>'+
+          '<div style="color:var(--muted);font-size:11px;margin-top:5px;'+L2H+'" data-tip="CPF">'+mask(g.beneficiario.cpf)+'</div>'+
           '<div style="margin-top:9px"><span class="badge muted'+(State.filtros.congenere===g.congenere?' cell-filtered':'')+'" style="font-size:10px" title="Congênere" data-tip="Duplo clique: filtrar por congênere">'+ico('map-pin',10)+' '+esc(g.congenere||'—')+'</span></div>'+
         '</td>'+
         // PRESTADOR
@@ -1480,14 +1480,14 @@
           '<div style="margin-top:5px;'+L2H+'"></div>'+
           '<div style="margin-top:9px">'+riskPill(g.risco)+'</div>'+
         '</td>';
-      bindDbl(tr.cells[1],'benef',g.beneficiario.nome);
+      bindDbl(tr.cells[1],'benef',g.beneficiario.nome,'Beneficiário');
       // duplo clique no badge de congênere dentro da célula do beneficiário
       var _congBadge=tr.cells[1].querySelector('[title="Congênere"]');
       if(_congBadge) _congBadge.addEventListener('dblclick',function(e){e.stopPropagation();State.filtros.congenere=State.filtros.congenere===g.congenere?'':g.congenere;State.guiasPagina=1;if(State.filtros.congenere)toast('Filtrando: '+g.congenere,'ok');render();});
-      bindDbl(tr.cells[2],'prest',g.prestadorSol.nome);
+      bindDbl(tr.cells[2],'prest',g.prestadorSol.nome,'Prestador');
       var _origBadge=tr.cells[2].querySelector('[title="Origem"]');
       if(_origBadge) _origBadge.addEventListener('dblclick',function(e){e.stopPropagation();State.filtros.origem=State.filtros.origem===g.origem?'':g.origem;State.guiasPagina=1;if(State.filtros.origem)toast('Filtrando: '+g.origem,'ok');render();});
-      bindDbl(tr.cells[3],'tipo',g.tipo);
+      bindDbl(tr.cells[3],'tipo',g.tipo,'Tipo');
       var _statusEl=tr.cells[0].querySelector('[data-ident="status-cell"]');
       if(_statusEl) _statusEl.addEventListener('dblclick',function(e){e.stopPropagation();State.filtros.status=State.filtros.status===g.status?'':g.status;State.guiasPagina=1;if(State.filtros.status)toast('Filtrando: '+g.status,'ok');render();});
       var _especEl=tr.cells[0].querySelector('[title="Especialidade"]');
