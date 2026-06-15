@@ -2290,6 +2290,153 @@
             toast('Parametrização salva','ok');
           };
           saveBar.appendChild(saveBtn);
+
+          // Export/Import toolbar — Procedimentos, Pacotes, Mat/Med
+          var _vincToolbar=null;
+          if(vkey==='proc'||vkey==='pac'||vkey==='matmed'){
+            var _tabLabels={proc:'Procedimentos',pac:'Pacotes',matmed:'MatMed'};
+            var _fileNames={proc:'procedimentos',pac:'pacotes',matmed:'matmed'};
+            var _hasOpme=vkey==='matmed';
+            var _vfInput=el('input',{type:'file',accept:'.csv,.xls,.xlsx',style:'display:none'});
+            var _btnExp=el('button',{class:'btn ghost',style:'display:flex;align-items:center;gap:6px;font-size:12.5px',title:'Exportar lista com instruções IA cadastradas'},
+              ico('download',14)+' Exportar planilha');
+            var _btnImp=el('button',{class:'btn ghost',style:'display:flex;align-items:center;gap:6px;font-size:12.5px',title:'Importar instruções IA de uma planilha preenchida'},
+              ico('upload',14)+' Importar instruções IA');
+            _vincToolbar=el('div',{style:'display:flex;align-items:center;gap:8px;padding:10px 12px 0;flex-wrap:wrap'});
+            _vincToolbar.appendChild(_btnExp);
+            _vincToolbar.appendChild(_btnImp);
+            _vincToolbar.appendChild(_vfInput);
+
+            // Export
+            (function(vk,d,hasOpme,fname,tlabel){
+              _btnExp.onclick=function(){
+                var css2='table{border-collapse:collapse;font-family:Calibri,sans-serif;font-size:11pt}'+
+                  'th{background:#0a8a43;color:#fff;padding:8px 12px;border:1px solid #066b34;font-weight:700;text-align:left}'+
+                  'td{padding:7px 12px;border:1px solid #c8e6d4;vertical-align:top}'+
+                  'tr:nth-child(even) td{background:#f2faf6}';
+                var header='<tr><th>Código</th><th>Descrição</th>'+(hasOpme?'<th>OPME</th>':'')+'<th>Instrução IA</th></tr>';
+                var rowsHtml=header;
+                d.forEach(function(r){
+                  var cod=String(r.cod);
+                  var instr=(State.vincConfig[vk+'|'+cod]&&State.vincConfig[vk+'|'+cod].instr)||'';
+                  rowsHtml+='<tr><td>'+esc(cod)+'</td><td>'+esc(r.desc||'')+'</td>'+(hasOpme?'<td>'+esc(r.opme?'Sim':'Não')+'</td>':'')+'<td>'+esc(instr)+'</td></tr>';
+                });
+                var html2='<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">'+
+                  '<head><meta charset="UTF-8"><style>'+css2+'</style></head>'+
+                  '<body><table x:Name="'+tlabel+'">'+rowsHtml+'</table></body></html>';
+                var blob2=new Blob(['﻿'+html2],{type:'application/vnd.ms-excel;charset=utf-8'});
+                var a2=document.createElement('a');
+                a2.href=URL.createObjectURL(blob2);
+                a2.download=fname+'.xls';
+                document.body.appendChild(a2); a2.click();
+                setTimeout(function(){ document.body.removeChild(a2); URL.revokeObjectURL(a2.href); },200);
+              };
+            })(vkey,data,_hasOpme,_fileNames[vkey],_tabLabels[vkey]);
+
+            // Import
+            _btnImp.onclick=function(){ _vfInput.value=''; _vfInput.click(); };
+
+            (function(vk,d,hasOpme){
+              _vfInput.onchange=function(){
+                var file=_vfInput.files[0];
+                if(!file) return;
+                var reader=new FileReader();
+                reader.onload=function(ev){
+                  var text=ev.target.result;
+                  var rows=[];
+                  var sniff=text.replace(/^﻿/,'').trimLeft().toLowerCase();
+                  if(sniff.indexOf('<html')===0||sniff.indexOf('<!doc')===0||sniff.indexOf('<table')===0){
+                    var parser=new DOMParser();
+                    var doc=parser.parseFromString(text,'text/html');
+                    var tbl=doc.querySelector('table');
+                    if(!tbl){ toast('Nenhuma tabela encontrada no arquivo','danger'); return; }
+                    tbl.querySelectorAll('tr').forEach(function(tr){
+                      var cells=[];
+                      tr.querySelectorAll('td,th').forEach(function(td){ cells.push(td.textContent.trim()); });
+                      if(cells.some(function(c){return c;})) rows.push(cells);
+                    });
+                  } else {
+                    text.split(/\r?\n/).filter(function(l){return l.trim();}).forEach(function(line){
+                      var cols=[],cur='',inQ=false;
+                      for(var i=0;i<line.length;i++){
+                        var ch=line[i];
+                        if(ch==='"'){inQ=!inQ;}
+                        else if((ch===','||ch===';')&&!inQ){cols.push(cur.trim());cur='';}
+                        else cur+=ch;
+                      }
+                      cols.push(cur.trim());
+                      rows.push(cols);
+                    });
+                  }
+                  if(!rows.length){ toast('Arquivo vazio ou inválido','danger'); return; }
+                  // Detect header and instrução IA column index
+                  var startRow=0;
+                  var instrCol=hasOpme?3:2;
+                  var firstCell=(rows[0][0]||'').toLowerCase().replace(/[^a-záéíóúãõç]/g,'');
+                  if(firstCell==='codigo'||firstCell==='código'||firstCell==='cod'){
+                    startRow=1;
+                    for(var ci=0;ci<rows[0].length;ci++){
+                      var h=(rows[0][ci]||'').toLowerCase();
+                      if(h.indexOf('instr')>=0||h.indexOf('ia')>=0){ instrCol=ci; break; }
+                    }
+                  }
+                  // Build lookup map from existing data
+                  var codMap={};
+                  d.forEach(function(r){ codMap[String(r.cod).toLowerCase()]=String(r.cod); });
+                  var parsed=rows.slice(startRow).filter(function(r){return r[0]&&r[0].length>0;}).map(function(r){
+                    var cod=(r[0]||'').trim();
+                    var instr=(r[instrCol]||'').trim();
+                    var realCod=codMap[cod.toLowerCase()];
+                    return {cod:cod,realCod:realCod,instr:instr,found:!!realCod};
+                  });
+                  if(!parsed.length){ toast('Nenhum item encontrado no arquivo','danger'); return; }
+                  var withInstr=parsed.filter(function(r){return r.found&&r.instr;});
+                  var notFound=parsed.filter(function(r){return !r.found;}).length;
+                  // Preview modal
+                  var prevRows=parsed.slice(0,8);
+                  var tHtml='<table style="width:100%;border-collapse:collapse;font-size:11.5px">'+
+                    '<thead><tr style="background:var(--g-700);color:#fff">'+
+                    '<th style="padding:6px 10px;text-align:left">Código</th>'+
+                    '<th style="padding:6px 10px;text-align:left">Situação</th>'+
+                    '<th style="padding:6px 10px;text-align:left">Instrução IA</th>'+
+                    '</tr></thead><tbody>'+
+                    prevRows.map(function(r,i){
+                      return '<tr style="background:'+(r.found?i%2===0?'#f6fdf8':'#fff':'#fff7ed')+'">'+
+                        '<td style="padding:5px 10px;border:1px solid var(--g-100);font-weight:600;color:'+(r.found?'inherit':'#ea580c')+'">'+esc(r.cod)+'</td>'+
+                        '<td style="padding:5px 10px;border:1px solid var(--g-100)">'+(r.found?'<span style="color:var(--g-600)">'+ico('check',11)+' Encontrado</span>':'<span style="color:#ea580c">'+ico('x',11)+' Não encontrado</span>')+'</td>'+
+                        '<td style="padding:5px 10px;border:1px solid var(--g-100);color:var(--muted)">'+esc(r.instr?(r.instr.length>50?r.instr.slice(0,50)+'…':r.instr):'—')+'</td>'+
+                        '</tr>';
+                    }).join('')+
+                    '</tbody></table>'+(parsed.length>8?'<div style="font-size:11px;color:var(--muted);margin-top:6px;text-align:right">+ '+(parsed.length-8)+' linhas não exibidas</div>':'');
+                  var resumo='<div style="display:flex;gap:16px;margin-bottom:12px;font-size:12.5px;flex-wrap:wrap">'+
+                    '<span>'+ico('file-text',13)+' <b>'+parsed.length+'</b> linhas lidas</span>'+
+                    '<span style="color:var(--g-600)">'+ico('check-circle',13)+' <b>'+withInstr.length+'</b> com instrução a importar</span>'+
+                    (notFound?'<span style="color:#ea580c">'+ico('alert-circle',13)+' <b>'+notFound+'</b> código(s) não encontrado(s) — ignorados</span>':'')+'</div>'+
+                    (!withInstr.length?'<div style="background:#fff7ed;border:1.5px solid #fcd34d;border-radius:8px;padding:10px 14px;font-size:12.5px;color:#92400e;margin-bottom:10px;display:flex;align-items:center;gap:8px">'+
+                      ico('alert-triangle',14)+' <span>Nenhuma instrução válida encontrada. Verifique se a coluna "Instrução IA" está preenchida e os códigos correspondem.</span></div>':'');
+                  var footHtml='<button class="btn ghost" id="vincImpCancel">'+ico('x',13)+' Fechar</button>'+
+                    (withInstr.length?'<button class="btn" id="vincImpConfirm">'+ico('upload',13)+' Importar '+withInstr.length+' instrução(ões)</button>':'');
+                  var m=modal(ico('upload')+' Importar Instruções IA','Prévia: '+esc(file.name),resumo+tHtml,footHtml);
+                  m.querySelector('#vincImpCancel').onclick=function(){ m.closest('.modal-backdrop').remove(); };
+                  var confirmBtn=m.querySelector('#vincImpConfirm');
+                  if(confirmBtn) confirmBtn.onclick=function(){
+                    withInstr.forEach(function(r){
+                      var k=vk+'|'+r.realCod;
+                      if(!State.vincConfig[k]) State.vincConfig[k]={};
+                      State.vincConfig[k].instr=r.instr;
+                    });
+                    localStorage.setItem('regula_vinc_cfg',JSON.stringify(State.vincConfig));
+                    m.closest('.modal-backdrop').remove();
+                    toast(withInstr.length+' instrução(ões) importada(s) com sucesso','ok');
+                    showVinc(vk);
+                  };
+                  lcIcons();
+                };
+                reader.readAsText(file,'UTF-8');
+              };
+            })(vkey,data,_hasOpme);
+          }
+
           var srchVinc=el('input',{class:'param-search',type:'text',placeholder:'Filtrar por código ou descrição...'});
           srchVinc.oninput=function(){
             var q=srchVinc.value.trim().toLowerCase();
@@ -2300,6 +2447,7 @@
           };
           var srchWrap=el('div',{style:'padding:10px 12px 0'});
           srchWrap.appendChild(srchVinc);
+          if(_vincToolbar) vincPanel.appendChild(_vincToolbar);
           vincPanel.appendChild(srchWrap);
           vincPanel.appendChild(box);
           vincPanel.appendChild(saveBar);
