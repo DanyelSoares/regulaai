@@ -1197,12 +1197,12 @@
         '<select id="fRegimeAte">'+opts(['Ambulatorial','Internação'],State.filtros.regimeAte,'Regime de atendimento')+'</select>'+
         '<div class="spacer"></div>'+
         '<div id="fPeriodoWrap"></div>';
-      box.appendChild(filt);
+      wrap.appendChild(filt);
     } else {
       // ── Filtro aprofundado ────────────────────────────────────
       var filtAdv=el('div',{class:'filters'});
       filtAdv.innerHTML='<div class="spacer"></div><div id="faPeriodoWrap"></div>';
-      box.appendChild(filtAdv);
+      wrap.appendChild(filtAdv);
 
       var fa=State.filtrosAvancados;
       var advWrap=el('div',{style:'padding:14px 18px 10px;border-bottom:1px solid var(--g-100)'});
@@ -1281,12 +1281,12 @@
       var countLabel=el('span',{style:'margin-left:auto;font-size:12.5px;color:var(--g-600);font-weight:600'});
       advBtns.appendChild(btnApl); advBtns.appendChild(btnLimpAdv); advBtns.appendChild(countLabel);
       advWrap.appendChild(advBtns);
-      box.appendChild(advWrap);
+      wrap.appendChild(advWrap);
 
       // Wiring (after DOM is appended via setTimeout)
       setTimeout(function(){
         chkList.forEach(function(c){
-          var inp=box.querySelector('[data-fakey="'+c.key+'"]');
+          var inp=advWrap.querySelector('[data-fakey="'+c.key+'"]');
           if(inp) inp.onchange=function(){ State.filtrosAvancados[c.key]=this.checked; };
         });
         ddList.forEach(function(d){
