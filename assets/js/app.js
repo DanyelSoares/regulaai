@@ -19,6 +19,18 @@
     limiares: { baixo: 20, medio: 45, alto: 70 }
   };
 
+  var FLUXO_SLA_DEFAULTS = {
+    'F1': {prazo: 2 },
+    'F2': {prazo: 7 },
+    'F3': {prazo: 5 },
+    'F4': {prazo: 5 },
+    'F5': {prazo: 7 },
+    'F6': {prazo: 10},
+    'F7': {prazo: 3 },
+    'F8': {prazo: 7 },
+    'F9': {prazo: 5 }
+  };
+
   var State = {
     route:'dashboard',
     perfil: localStorage.getItem('regula_perfil') || 'auditor',
@@ -48,7 +60,8 @@
     guiasPagina: 1,
     filtros: { q:'', status:'', fluxo:'', origem:'', risco:'', benef:'', prest:'', tipo:'', congenere:'', solicitante:'', opme:'', uti:'', regimeAte:'', especialidade:'', dataDeEmissao:'', dataAteEmissao:'', sortCol:'', sortDir:'' },
     kanbanPeriodo: { de:'', ate:'' },
-    kanbanFiltros: { colunas:[], uti:'', regime:'', tipo:'' }
+    kanbanFiltros: { colunas:[], uti:'', regime:'', tipo:'' },
+    fluxoSLAConfig: JSON.parse(localStorage.getItem('regula_fluxo_sla')||'null') || {}
   };
 
   // Recupera pareceres salvos
@@ -604,6 +617,7 @@
     if(State.perfil==='gestor') renderVisaoBar(wrap);
 
     function count(fn){ return guias.filter(fn).length; }
+    var refreshDuracao=null;
     var tempoMedio=guias.length?( guias.reduce(function(a,g){return a+g.diasAuditoria},0)/guias.length).toFixed(1):'—';
     var kpis=[
       {t:'Total de guias',          v:guias.length,                                              cls:'',       fn:function(g){return true;}},
@@ -825,9 +839,12 @@
           fill.classList.add('bar-selected');
           row.classList.add('bar-active');
           bars.classList.add('has-selection');
-          updateDonut(guias.filter(function(g){return g.status===s}),s);
+          var _fg=guias.filter(function(g){return g.status===s;});
+          updateDonut(_fg,s);
+          if(refreshDuracao) refreshDuracao(_fg,s);
         } else {
           updateDonut(guias,null);
+          if(refreshDuracao) refreshDuracao(guias,null);
         }
       };
       bars.appendChild(row);
@@ -924,8 +941,8 @@
     });
     pb.addEventListener('mouseleave',function(){ donutTip.classList.remove('visible'); });
 
-    // Ranking fluxos
-    var pc=el('div',{class:'panel',style:'margin-top:14px'},'<h3>Ranking de fluxos mais utilizados <span class="badge muted">duplo clique para filtrar</span></h3>');
+    // ── Ranking fluxos ────────────────────────────────────────────────────────
+    var pc=el('div',{class:'panel'},'<h3>Fluxos mais utilizados <span class="badge muted">duplo clique para filtrar</span></h3>');
     var fluxoCount={}; guias.forEach(function(g){fluxoCount[g.fluxo.nome]=(fluxoCount[g.fluxo.nome]||0)+1});
     var fluxoById={}; MOCK.FLUXOS.forEach(function(f){fluxoById[f.nome]=f.id});
     var br=el('div',{class:'bars'});
@@ -949,14 +966,95 @@
           fill.classList.add('bar-selected');
           row.classList.add('bar-active');
           br.classList.add('has-selection');
-          updateDonut(guias.filter(function(g){return g.fluxo.nome===k}),k.length>25?k.slice(0,23)+'…':k);
+          var _fgk=guias.filter(function(g){return g.fluxo.nome===k;});
+          var _klbl=k.length>25?k.slice(0,23)+'…':k;
+          updateDonut(_fgk,_klbl);
+          if(refreshDuracao) refreshDuracao(_fgk,_klbl);
         } else {
           updateDonut(guias,null);
+          if(refreshDuracao) refreshDuracao(guias,null);
         }
       };
       br.appendChild(row);
     });
-    pc.appendChild(br); wrap.appendChild(pc);
+    pc.appendChild(br);
+
+    // ── Duração dos fluxos ────────────────────────────────────────────────────
+    var fluxoSLACfg=State.fluxoSLAConfig||{};
+    function getFluxoSLA(fid){ var c=fluxoSLACfg[fid]; return (c&&c.prazo>0)?c.prazo:((FLUXO_SLA_DEFAULTS[fid]&&FLUXO_SLA_DEFAULTS[fid].prazo)||5); }
+
+    var pd=el('div',{class:'panel'});
+    var pdH3=el('h3');
+    pd.appendChild(pdH3);
+    var dBars=el('div',{class:'bars dur-bars'});
+    pd.appendChild(dBars);
+    var legRow=el('div',{class:'dur-legend'});
+    legRow.innerHTML='<div class="dur-sla-ref">'+ico('flag',10)+' Linha vermelha = SLA por fluxo, configurável em <b>Configurações → Fluxos</b>. Barras além dela indicam risco de prazo.</div>';
+    pd.appendChild(legRow);
+
+    function buildDurBars(gsToUse, filterLabel){
+      var fDias={};
+      gsToUse.forEach(function(g){
+        var fid=g.fluxo.id;
+        if(!fDias[fid]) fDias[fid]={nome:g.fluxo.nome,dias:[]};
+        fDias[fid].dias.push(g.diasAuditoria);
+      });
+      var fStats=[];
+      Object.keys(fDias).forEach(function(fid){
+        var fd=fDias[fid]; var dias=fd.dias; var sla=getFluxoSLA(fid);
+        var sum=dias.reduce(function(acc2,x){return acc2+x;},0);
+        var avg2=sum/dias.length;
+        fStats.push({
+          id:fid, nome:fd.nome, avg:avg2, sla:sla,
+          max:Math.max.apply(null,dias), min:Math.min.apply(null,dias),
+          count:dias.length,
+          acimaSLA:dias.filter(function(d){return d>sla;}).length
+        });
+      });
+      fStats.sort(function(a,b){return b.avg-a.avg;});
+      var mxAvg=fStats.length?fStats[0].avg:5;
+      var mxSLA=fStats.reduce(function(m,fs){return Math.max(m,fs.sla);},5);
+      var rfMax=Math.max(mxAvg,mxSLA)*1.35;
+
+      pdH3.innerHTML='Duração dos fluxos '+ico('clock',13)+' <span class="badge muted">dias em auditoria</span>'+(filterLabel?' <span class="badge warn" style="font-size:10px;margin-left:4px">'+esc(filterLabel)+'</span>':'');
+      dBars.innerHTML='';
+      if(!fStats.length){
+        dBars.innerHTML='<div style="padding:18px 0;text-align:center;color:var(--muted);font-size:13px">Sem guias no filtro selecionado.</div>';
+        lcIcons(); return;
+      }
+      fStats.forEach(function(fs){
+        var barPct=Math.round((fs.avg/rfMax)*100);
+        var slaPct2=Math.round((fs.sla/rfMax)*100);
+        var gradFrom,gradTo;
+        if(fs.avg<=fs.sla*0.6){gradFrom='#86efac';gradTo='var(--g-500)';}
+        else if(fs.avg<=fs.sla){gradFrom='#fde68a';gradTo='#d4a017';}
+        else if(fs.avg<=fs.sla*1.4){gradFrom='#fcd34d';gradTo='#d97706';}
+        else{gradFrom='#fca5a5';gradTo='var(--danger)';}
+        var stIco=fs.avg<=fs.sla?ico('check-circle-2',11):ico('alert-triangle',11);
+        var stClr=fs.avg<=fs.sla?'var(--g-600)':'var(--danger)';
+        var sn=fs.nome.length>28?fs.nome.slice(0,26)+'…':fs.nome;
+        var tip=fs.nome+' — '+fs.count+' guia(s) · média '+fs.avg.toFixed(1)+' d · máx '+fs.max+' d · SLA: '+fs.sla+' d · '+fs.acimaSLA+' acima do SLA';
+        var row=el('div',{class:'bar-row dur-row',title:tip});
+        row.innerHTML=
+          '<div class="dur-name" title="'+esc(fs.nome)+'">'+esc(sn)+'</div>'+
+          '<div class="dur-track">'+
+            '<div class="dur-fill" style="width:'+barPct+'%;background:linear-gradient(90deg,'+gradFrom+','+gradTo+')"></div>'+
+            '<div class="dur-sla-line" style="left:'+slaPct2+'%" title="SLA: '+fs.sla+' dias"></div>'+
+          '</div>'+
+          '<div class="dur-meta" style="color:'+stClr+'">'+fs.avg.toFixed(1)+'d '+stIco+'</div>';
+        dBars.appendChild(row);
+      });
+      lcIcons();
+    }
+
+    buildDurBars(guias,null);
+    refreshDuracao=buildDurBars;
+
+    // ── Layout linha inferior (ranking + duração) ─────────────────────────────
+    var bottomRow=el('div',{class:'g2',style:'margin-top:14px'});
+    bottomRow.appendChild(pc);
+    bottomRow.appendChild(pd);
+    wrap.appendChild(bottomRow);
 
     wrap.appendChild(el('div',{style:'margin-top:8px;font-size:12px;color:var(--muted)'},ico('lightbulb')+' Dica: dê duplo clique em uma barra de status ou fluxo para abrir a relação filtrada de guias.'));
 
@@ -1213,6 +1311,8 @@
 
     // Chips de filtros rápidos
     var quickChips=[
+      {key:'status',label:'Status'},
+      {key:'especialidade',label:'Especialidade'},
       {key:'benef',label:'Beneficiário'},
       {key:'prest',label:'Prestador'},
       {key:'tipo',label:'Tipo'},
@@ -1265,7 +1365,7 @@
       tr.innerHTML=
         // GUIA
         '<td><b>'+esc(g.numero)+'</b>'+(g.prazoVencido?' <span class="badge danger">prazo</span>':'')+
-          '<div style="margin-top:5px" title="Status" style="cursor:pointer">'+statusBadge(g.status)+'</div>'+
+          '<div style="margin-top:5px;cursor:pointer" title="Status">'+statusBadge(g.status)+'</div>'+
           '<div style="margin-top:9px">'+(_gespec?'<span class="badge muted'+(State.filtros.especialidade===_gespec?' cell-filtered':'')+'" style="font-size:10px;cursor:pointer" title="Especialidade">'+ico('stethoscope',10)+' '+esc(_gespec)+'</span>':'<span style="font-size:10px;color:transparent">—</span>')+'</div>'+
         '</td>'+
         // BENEFICIÁRIO
@@ -1278,7 +1378,7 @@
         '<td class="cell-dbl'+(State.filtros.prest===g.prestadorSol.nome?' cell-filtered':'')+'">'+
           '<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;max-width:200px">'+esc(g.prestadorSol.nome)+'</span>'+
           '<div style="margin-top:5px;'+L2H+'"><span class="badge muted'+(State.filtros.origem===g.origem&&State.filtros.origem?' cell-filtered':'')+'" style="font-size:10px" title="Origem">'+esc(g.origem)+'</span></div>'+
-          '<div style="margin-top:9px;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px" title="Solicitante">'+(g.solicitante&&g.solicitante!=='—'?esc(g.solicitante):'<span style="color:transparent">—</span>')+'</div>'+
+          '<div style="margin-top:9px;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;cursor:pointer" class="'+(State.filtros.solicitante===g.solicitante&&State.filtros.solicitante?'cell-filtered':'')+'" title="Solicitante">'+(g.solicitante&&g.solicitante!=='—'?esc(g.solicitante):'<span style="color:transparent">—</span>')+'</div>'+
         '</td>'+
         // TIPO
         '<td class="cell-dbl'+(State.filtros.tipo===g.tipo?' cell-filtered':'')+'">'+
@@ -1306,6 +1406,12 @@
       var _origBadge=tr.cells[2].querySelector('[title="Origem"]');
       if(_origBadge) _origBadge.addEventListener('dblclick',function(e){e.stopPropagation();State.filtros.origem=State.filtros.origem===g.origem?'':g.origem;State.guiasPagina=1;if(State.filtros.origem)toast('Filtrando: '+g.origem,'ok');render();});
       bindDbl(tr.cells[3],'tipo',g.tipo);
+      var _statusEl=tr.cells[0].querySelector('[title="Status"]');
+      if(_statusEl) _statusEl.addEventListener('dblclick',function(e){e.stopPropagation();State.filtros.status=State.filtros.status===g.status?'':g.status;State.guiasPagina=1;if(State.filtros.status)toast('Filtrando: '+g.status,'ok');render();});
+      var _especEl=tr.cells[0].querySelector('[title="Especialidade"]');
+      if(_especEl&&_gespec) _especEl.addEventListener('dblclick',function(e){e.stopPropagation();State.filtros.especialidade=State.filtros.especialidade===_gespec?'':_gespec;State.guiasPagina=1;if(State.filtros.especialidade)toast('Filtrando: '+_gespec,'ok');render();});
+      var _solEl=tr.cells[2].querySelector('[title="Solicitante"]');
+      if(_solEl&&g.solicitante&&g.solicitante!=='—') _solEl.addEventListener('dblclick',function(e){e.stopPropagation();State.filtros.solicitante=State.filtros.solicitante===g.solicitante?'':g.solicitante;State.guiasPagina=1;if(State.filtros.solicitante)toast('Filtrando: '+g.solicitante,'ok');render();});
       var trSub=el('tr',{class:'guia-subrow'});
       trSub.innerHTML=
         '<td></td>'+
@@ -2563,8 +2669,9 @@
       return '<span class="badge '+(map[p]||'muted')+'">'+esc(p)+'</span>';
     }
     function tipoBadge(t){
-      var map={ia:'purple',sistema:'info'};
-      return '<span class="badge '+(map[t]||'muted')+'">'+esc(t==='ia'?'IA':'Sistema')+'</span>';
+      var map={ia:'purple',sistema:'info',correcao_ia:'warn'};
+      var lbl={ia:'IA',sistema:'Sistema',correcao_ia:'Correção IA'};
+      return '<span class="badge '+(map[t]||'muted')+'">'+esc(lbl[t]||t)+'</span>';
     }
 
     // ── gráfico rosca ────────────────────────────────────────────────────────
@@ -2601,9 +2708,9 @@
     }
 
     // ── contagens para o gráfico ─────────────────────────────────────────────
-    var cnts={gestor:0,auditor:0,enfermeiro:0,sistema:0,ia:0};
+    var cnts={gestor:0,auditor:0,enfermeiro:0,sistema:0,ia:0,correcao_ia:0};
     MOCK.LOGS.forEach(function(l){
-      var k=l.tipo==='ia'?'ia':l.tipo==='sistema'?'sistema':l.perfil;
+      var k=l.tipo==='correcao_ia'?'correcao_ia':l.tipo==='ia'?'ia':l.tipo==='sistema'?'sistema':l.perfil;
       if(cnts.hasOwnProperty(k)) cnts[k]++;
     });
     var donutUsuarios=makeDonut([
@@ -2612,8 +2719,9 @@
       {label:'Enfermeiro', v:cnts.enfermeiro, c:'#0d9488'}
     ]);
     var donutSistema=makeDonut([
-      {label:'Sistema',v:cnts.sistema,c:'#2563eb'},
-      {label:'IA',     v:cnts.ia,     c:'#7c3aed'}
+      {label:'Sistema',    v:cnts.sistema,     c:'#2563eb'},
+      {label:'IA',         v:cnts.ia,          c:'#7c3aed'},
+      {label:'Correção IA',v:cnts.correcao_ia, c:'#d97706'}
     ]);
 
     // ── layout principal ─────────────────────────────────────────────────────
@@ -2740,9 +2848,9 @@
           '<input type="date" id="lAte2" class="log-date" value="'+esc(lf2.ate)+'" />'+
         '</div>'+
         '<select id="lTipo2">'+
-          '<option value="">Sistema e IA</option>'+
-          ['sistema','ia'].map(function(t){
-            return '<option value="'+t+'"'+(lf2.tipo===t?' selected':'')+'>'+esc(t==='ia'?'IA':'Sistema')+'</option>';
+          '<option value="">Todos</option>'+
+          [['sistema','Sistema'],['ia','IA'],['correcao_ia','Correções IA']].map(function(p){
+            return '<option value="'+p[0]+'"'+(lf2.tipo===p[0]?' selected':'')+'>'+esc(p[1])+'</option>';
           }).join('')+
         '</select>'+
         '<div class="spacer"></div>'+
@@ -2847,6 +2955,7 @@
     var CFG_TABS=[
       {id:'risco',      label:'Classificação de Risco', ico:'shield-alert'},
       {id:'permissoes', label:'Permissões',             ico:'shield'},
+      {id:'fluxos',     label:'Fluxos',                 ico:'git-branch'},
     ];
 
     var tabBar=el('div',{class:'cfg-tab-bar'});
@@ -3090,11 +3199,84 @@
       cfgContent.appendChild(g);
     }
 
+    // ── Conteúdo: Fluxos ─────────────────────────────────────────────
+    function renderFluxos(){
+      cfgContent.innerHTML='';
+      var sec=el('div',{class:'cfg-section'});
+
+      var hd=el('div',{class:'cfg-section-hd'});
+      hd.innerHTML='<h3>'+ico('git-branch',15)+' Prazos por Fluxo</h3>'+
+        '<p style="font-size:13px;color:var(--muted);margin:4px 0 0">Prazo máximo de auditoria (SLA) por fluxo, consultado no Solus. Edite para atualizar o valor utilizado nos relatórios e gráficos.</p>';
+      sec.appendChild(hd);
+
+      var note=el('div',{class:'ia-confirm-note',style:'margin:12px 0 16px'});
+      note.innerHTML=ico('info',13)+' <span>O prazo é único por fluxo e <b>consultado no Solus</b>. Atualize o campo abaixo sempre que o valor no Solus for alterado.</span>';
+      sec.appendChild(note);
+
+      var tbl=el('table',{class:'cfg-table'});
+      var thead=el('thead');
+      thead.innerHTML='<tr>'+
+        '<th>Fluxo</th>'+
+        '<th>Regime</th>'+
+        '<th style="width:150px;text-align:center">Prazo (dias)</th>'+
+      '</tr>';
+      tbl.appendChild(thead);
+
+      var tbody=el('tbody');
+      var inputs={};
+      MOCK.FLUXOS.forEach(function(f){
+        var defs=FLUXO_SLA_DEFAULTS[f.id]||{prazo:5};
+        var saved=State.fluxoSLAConfig[f.id];
+        var prazoAtual=(saved&&saved.prazo>0)?saved.prazo:defs.prazo;
+        var tr=el('tr');
+        var tdFluxo=el('td');
+        tdFluxo.innerHTML='<span class="badge muted" style="font-size:10px;margin-right:6px">'+esc(f.id)+'</span>'+esc(f.nome);
+        var tdRegime=el('td');
+        tdRegime.innerHTML='<span class="badge muted" style="font-size:10px">'+esc(f.regime)+'</span>';
+        var tdPrazo=el('td',{style:'text-align:center'});
+        var inp=document.createElement('input');
+        inp.type='number'; inp.min='1'; inp.max='60'; inp.value=prazoAtual;
+        inp.className='cfg-input-num'; inp.setAttribute('data-fid',f.id);
+        tdPrazo.appendChild(inp);
+        tr.appendChild(tdFluxo); tr.appendChild(tdRegime); tr.appendChild(tdPrazo);
+        tbody.appendChild(tr);
+        inputs[f.id]=inp;
+      });
+      tbl.appendChild(tbody);
+      sec.appendChild(tbl);
+
+      var btnRow=el('div',{style:'margin-top:18px;display:flex;gap:12px;align-items:center'});
+      var btnSave=el('button',{class:'btn btn-primary'});
+      btnSave.innerHTML=ico('save',14)+' Salvar prazos';
+      var savedMsg=el('span',{style:'font-size:12px;color:var(--g-600);opacity:0;transition:opacity .4s;display:flex;align-items:center;gap:4px'});
+      savedMsg.innerHTML=ico('check-circle-2',13)+' Salvo com sucesso';
+      btnRow.appendChild(btnSave); btnRow.appendChild(savedMsg);
+      sec.appendChild(btnRow);
+
+      btnSave.onclick=function(){
+        MOCK.FLUXOS.forEach(function(f){
+          var v=parseInt(inputs[f.id].value,10);
+          if(!v||v<1) v=1; if(v>60) v=60;
+          inputs[f.id].value=v;
+          if(!State.fluxoSLAConfig[f.id]) State.fluxoSLAConfig[f.id]={};
+          State.fluxoSLAConfig[f.id].prazo=v;
+        });
+        try{ localStorage.setItem('regula_fluxo_sla',JSON.stringify(State.fluxoSLAConfig)); }catch(e){}
+        savedMsg.style.opacity='1';
+        setTimeout(function(){ savedMsg.style.opacity='0'; },2500);
+        toast('Prazos por fluxo salvos','ok');
+      };
+
+      cfgContent.appendChild(sec);
+      lcIcons();
+    }
+
     // ── Ativar aba ───────────────────────────────────────────────────
     function setTab(id){
       $$('.cfg-tab',tabBar).forEach(function(b){ b.classList.toggle('active',b.getAttribute('data-cfg-tab')===id); });
       if(id==='risco') renderRisco();
       else if(id==='permissoes') renderPermissoes();
+      else if(id==='fluxos') renderFluxos();
     }
 
     $$('.cfg-tab',tabBar).forEach(function(b){ b.onclick=function(){ setTab(b.getAttribute('data-cfg-tab')); }; });
@@ -3175,7 +3357,19 @@
     $$('.tab',m).forEach(function(b){ b.onclick=function(){setTab(b.getAttribute('data-tab'))} });
     setTab(tab||'resumo');
 
-    m.querySelector('#reIA').onclick=function(){ g._cache=AI.analisarGuiaComIA(g,{}); ia=g._cache; setTab('ia'); toast('Análise reprocessada','ok'); };
+    m.querySelector('#reIA').onclick=function(){
+      var _pl=document.getElementById('pageLoader');
+      if(_pl) _pl.classList.add('pl--transp');
+      document.body.classList.add('pl--blurring');
+      showPageLoader();
+      setTimeout(function(){
+        g._cache=AI.analisarGuiaComIA(g,{}); ia=g._cache; setTab('ia');
+        hidePageLoader();
+        document.body.classList.remove('pl--blurring');
+        setTimeout(function(){ if(_pl) _pl.classList.remove('pl--transp'); },600);
+        toast('Análise reprocessada','ok');
+      },80);
+    };
     var pb=m.querySelector('#abrirPar'); if(pb) pb.onclick=function(){ openParecer(g) };
   }
 
@@ -3282,7 +3476,7 @@
       else ia.alertas.forEach(function(a){ u.appendChild(el('li',{},ico('triangle-alert')+' '+esc(a))) });
       d.appendChild(u);
     } else if(t==='ia'){
-      d.appendChild(renderParecerIA(ia));
+      d.appendChild(renderParecerIA(ia,g));
     } else if(t==='operadora'){
       if(!g.parecerOperadora) d.innerHTML='<div class="empty"><div class="ico">'+icoLg('file-pen-line')+'</div>Nenhum parecer da operadora registrado.<br><br>'+(can('parecer')?'<button class="btn" id="emPar">Emitir parecer agora</button>':'')+'</div>';
       else {
@@ -3449,28 +3643,112 @@
   }
 
 
-  function renderParecerIA(ia){
+  function renderParecerIA(ia, g){
+    // ── feedback persistido por guia ─────────────────────
+    var fbKey='regula_ia_fb_'+(g?g.numero:'x');
+    var confirmacoes={};
+    try{confirmacoes=JSON.parse(localStorage.getItem(fbKey)||'{}');}catch(e){}
+    function saveConf(){try{localStorage.setItem(fbKey,JSON.stringify(confirmacoes));}catch(e){}}
+
+    // ── aderência ajustada pelas correções do analista ───
+    function calcAdp(){
+      var base=ia.aderencia;
+      var cum=ia.criteriosCumpridos||[];
+      var n=cum.length, rej=0;
+      var cC=confirmacoes.criteriosCumpridos||[];
+      for(var i=0;i<n;i++){if(cC[i]===false)rej++;}
+      var adj=n?base*(n-rej)/n:base;
+      var als=ia.alertas||[];
+      var aC=confirmacoes.alertas||[];
+      for(var j=0;j<als.length;j++){if(aC[j]===false)adj=Math.min(100,adj+1.5);}
+      return Math.max(0,Math.round(adj));
+    }
+
     var d=el('div');
+
+    // ── caixa de cabeçalho ────────────────────────────────
     var box=el('div',{class:'ai-box'});
-    box.innerHTML='<div class="hd"><div class="tt">'+ico('sparkles')+' Parecer Técnico <span class="badge muted">Confiança '+Math.round(ia.confianca)+'%</span></div>'+aderenciaBar(ia.aderencia)+'</div>'+
-      '<p style="margin:6px 0 0">'+esc(ia.parecerGeral)+'</p>'+
-      '<div class="ai-warn">'+ia.avisoLegal+'</div>';
+    var hd=el('div',{class:'hd'});
+    var tt=el('div',{class:'tt'});
+    tt.innerHTML=ico('sparkles')+' Parecer Técnico <span class="badge muted">Confiança '+Math.round(ia.confianca)+'%</span>';
+    hd.appendChild(tt);
+    var adpWrap=el('div',{class:'ia-adp-wrap'});
+    adpWrap.innerHTML=aderenciaBar(calcAdp());
+    hd.appendChild(adpWrap);
+    box.appendChild(hd);
+    var pEl=el('p',{style:'margin:6px 0 0'});
+    pEl.textContent=ia.parecerGeral;
+    box.appendChild(pEl);
+    var warnEl=el('div',{class:'ai-warn'});
+    warnEl.innerHTML=ia.avisoLegal;
+    box.appendChild(warnEl);
     d.appendChild(box);
 
-    function section(title, arr, icoName){
-      if(!arr || !arr.length) return null;
-      var s=el('div',{class:'ai-section'}); s.innerHTML='<h5>'+ico(icoName)+' '+title+'</h5>';
-      var u=el('ul',{class:'ai-list'}); arr.forEach(function(x){ u.appendChild(el('li',{},esc(x))) }); s.appendChild(u); return s;
+    function updateAdp(){
+      adpWrap.innerHTML=aderenciaBar(calcAdp());
     }
-    var grid=el('div',{class:'g2'});
+
+    // ── nota informativa ──────────────────────────────────
+    var noteEl=el('div',{class:'ia-confirm-note'});
+    noteEl.innerHTML=ico('info',13)+' <span>Cada item abaixo foi identificado pela IA. <b>Desmarque</b> aqueles que não foram cumpridos ou que a IA avaliou incorretamente — as correções são registradas nos logs e contribuem para o aprendizado contínuo do sistema.</span>';
+    d.appendChild(noteEl);
+
+    // ── checkbox por item ─────────────────────────────────
+    function makeItem(text, secKey, idx, secLabel){
+      var li=el('li',{class:'ia-item'});
+      var conf=confirmacoes[secKey]||[];
+      var checked=conf[idx]!==false;
+      if(!checked) li.classList.add('ia-item--rejected');
+      var lbl=document.createElement('label');
+      lbl.className='ia-chk';
+      lbl.title='Confirmado pela IA. Desmarque caso o item não tenha sido cumprido ou a análise esteja incorreta.';
+      var inp=document.createElement('input');
+      inp.type='checkbox'; inp.className='ia-chk__input'; inp.checked=checked;
+      var bx=document.createElement('span');
+      bx.className='ia-chk__box';
+      bx.innerHTML='<svg class="ia-chk__check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+      lbl.appendChild(inp); lbl.appendChild(bx);
+      inp.onchange=(function(sk,ix,sl,tx){
+        return function(){
+          if(!confirmacoes[sk]) confirmacoes[sk]=[];
+          confirmacoes[sk][ix]=this.checked;
+          var liEl=this.parentNode.parentNode;
+          if(this.checked) liEl.classList.remove('ia-item--rejected');
+          else liEl.classList.add('ia-item--rejected');
+          saveConf(); updateAdp();
+          var ts2=new Date().toISOString().slice(0,16).replace('T',' ');
+          var uName=perfilDef[State.perfil]?perfilDef[State.perfil].nome:State.perfil;
+          var shortTx=tx.length>55?tx.slice(0,55)+'…':tx;
+          var logRef='Guia '+(g?g.numero:'')+(sl?' · '+sl:'')+' · '+shortTx;
+          MOCK.LOGS.unshift({ts:ts2,user:uName,perfil:State.perfil,tipo:'correcao_ia',
+            acao:this.checked?'Correção IA revertida — item reconfirmado':'Item do Parecer Técnico IA contestado',
+            ref:logRef});
+        };
+      })(secKey,idx,secLabel,text);
+      li.appendChild(lbl);
+      li.appendChild(document.createTextNode(text));
+      return li;
+    }
+
+    // ── seção com checkboxes ──────────────────────────────
+    function section(title, arr, icoName, secKey){
+      if(!arr||!arr.length) return null;
+      var s=el('div',{class:'ai-section'});
+      s.innerHTML='<h5>'+ico(icoName)+' '+title+'</h5>';
+      var u=el('ul',{class:'ai-list ia-list-chk'});
+      arr.forEach(function(x,i){ u.appendChild(makeItem(x,secKey,i,title)); });
+      s.appendChild(u); return s;
+    }
+
+    var grid=el('div',{class:'g2',style:'gap:20px'});
     var c1=el('div'); var c2=el('div');
-    [section('Critérios cumpridos',ia.criteriosCumpridos,'check-circle-2'),
-     section('Critérios não cumpridos',ia.criteriosNaoCumpridos,'x-circle'),
-     section('Critérios não avaliados',ia.criteriosNaoAvaliados,'minus-circle')].forEach(function(s){ if(s) c1.appendChild(s); });
-    [section('Pendências documentais',ia.pendencias,'clipboard-list'),
-     section('Alertas de inconsistência',ia.alertas,'triangle-alert'),
-     section('Tópicos relevantes para o auditor',ia.topicosAuditor,'target'),
-     section('Sugestões de questionamentos',ia.sugestoesArgumentos,'message-square')].forEach(function(s){ if(s) c2.appendChild(s); });
+    [section('Critérios cumpridos',   ia.criteriosCumpridos,   'check-circle-2','criteriosCumpridos'),
+     section('Critérios não cumpridos',ia.criteriosNaoCumpridos,'x-circle',      'criteriosNaoCumpridos'),
+     section('Critérios não avaliados',ia.criteriosNaoAvaliados,'minus-circle',  'criteriosNaoAvaliados')].forEach(function(s){if(s)c1.appendChild(s);});
+    [section('Pendências documentais',   ia.pendencias,          'clipboard-list', 'pendencias'),
+     section('Alertas de inconsistência',ia.alertas,             'triangle-alert', 'alertas'),
+     section('Tópicos relevantes para o auditor',ia.topicosAuditor,'target',       'topicosAuditor'),
+     section('Sugestões de questionamentos',ia.sugestoesArgumentos,'message-square','sugestoesArgumentos')].forEach(function(s){if(s)c2.appendChild(s);});
     grid.appendChild(c1); grid.appendChild(c2); d.appendChild(grid);
 
     var foot=el('div',{class:'ai-box',style:'margin-top:10px'});
@@ -3503,6 +3781,10 @@
     m.querySelector('#pJustIA').onclick=function(){
       var btn=this;
       btn.innerHTML=ico('loader')+' Gerando…'; btn.disabled=true;
+      var _pl2=document.getElementById('pageLoader');
+      if(_pl2) _pl2.classList.add('pl--transp');
+      document.body.classList.add('pl--blurring');
+      showPageLoader();
       setTimeout(function(){
         function _limpa(s){ return s.replace(/A IA recomenda como próxima ação:/gi,'Conduta técnica sugerida:').replace(/\s*\(sugestão IA\)/gi,'').replace(/\bA IA\b/gi,'A análise').replace(/\bIA\b/g,'análise técnica'); }
         var linhas=[];
@@ -3518,6 +3800,9 @@
         m.querySelector('#pJust').value=linhas.join('\n\n');
         btn.innerHTML=ico('sparkles')+' Gerar análise técnica'; btn.disabled=false;
         lcIcons();
+        hidePageLoader();
+        document.body.classList.remove('pl--blurring');
+        setTimeout(function(){ if(_pl2) _pl2.classList.remove('pl--transp'); },600);
         toast('Justificativa gerada. Revise antes de salvar.','ok');
       },500);
     };
