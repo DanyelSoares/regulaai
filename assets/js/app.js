@@ -233,6 +233,17 @@
   function icoLg(name){ return '<i data-lucide="'+name+'" width="40" height="40"></i>'; }
   function lcIcons(){ if(typeof lucide!=='undefined') lucide.createIcons(); }
 
+  var _statusTips={
+    'Em análise':             'Guia em análise técnica pelo auditor médico.',
+    'Em junta médica':        'Aguardando avaliação pela junta médica multidisciplinar.',
+    'Aguardando complemento': 'Prestador notificado para enviar documentação complementar. Análise suspensa.',
+    'Aguardando documentação':'Documentação exigida pelo protocolo ainda não foi enviada pelo prestador.',
+    'Em correção pelo prestador':'Prestador realizando as correções solicitadas pelo auditor.',
+    'Analisada':              'Análise técnica concluída. Aguardando decisão final da operadora.',
+    'Liberada':               'Autorização emitida. Procedimento aprovado pela operadora.',
+    'Negada':                 'Solicitação negada por não conformidade com critérios técnicos ou regulatórios.',
+    'Sem parametrização':     'Fluxo de auditoria não definido para este tipo de procedimento.'
+  };
   function statusBadge(s){
     var cls='muted';
     if(s==='Liberada') cls='';
@@ -240,7 +251,8 @@
     else if(s==='Em junta médica') cls='info';
     else if(s==='Aguardando complemento'||s==='Aguardando documentação'||s==='Em correção pelo prestador') cls='warn';
     else if(s==='Sem parametrização') cls='dark';
-    return '<span class="badge '+cls+'">'+esc(s)+'</span>';
+    var tip=_statusTips[s]||('Status atual da guia: '+s);
+    return '<span class="badge '+cls+'" data-tip="'+esc(tip)+'">'+esc(s)+'</span>';
   }
   function riskPill(r){ return '<span class="risk '+r+'">'+r.charAt(0).toUpperCase()+r.slice(1)+'</span>'; }
   function aderenciaBar(p){
@@ -543,9 +555,24 @@
       });
     }
 
-    // FAB trocar perfil
-    $('#fabBtn').onclick=function(e){ e.stopPropagation(); $('#fabMenu').classList.toggle('open'); lcIcons(); };
-    document.addEventListener('click',function(){ var m=$('#fabMenu'); if(m) m.classList.remove('open'); });
+    // FAB trocar perfil (radial orbit menu)
+    function fabClose(){
+      var fw=$('#fabWrap'); if(!fw) return;
+      fw.classList.remove('fab-open');
+      var ic=$('#fabBtn [data-lucide]');
+      if(ic){ ic.setAttribute('data-lucide','users'); lcIcons(); }
+    }
+    $('#fabBtn').onclick=function(e){
+      e.stopPropagation();
+      var fw=$('#fabWrap');
+      var isOpen=fw.classList.toggle('fab-open');
+      var ic=this.querySelector('[data-lucide]');
+      if(ic){ ic.setAttribute('data-lucide',isOpen?'x':'users'); lcIcons(); }
+    };
+    document.addEventListener('click',function(e){
+      var fw=$('#fabWrap');
+      if(fw&&fw.classList.contains('fab-open')&&!fw.contains(e.target)) fabClose();
+    });
     $$('#fabMenu button').forEach(function(b){
       b.onclick=function(e){
         e.stopPropagation();
@@ -560,7 +587,7 @@
         }
         State.perfil=p; State.visaoPerfil=''; State.visaoEnfermeiros=[];
         localStorage.setItem('regula_perfil',State.perfil);
-        $('#fabMenu').classList.remove('open');
+        fabClose();
         renderUserChip(); render();
         toast('Perfil: '+(p==='enfermeiro'?perfilDef.enfermeiro.nome:perfilDef[p].nome),'ok');
       };
@@ -1365,20 +1392,20 @@
       tr.innerHTML=
         // GUIA
         '<td><b>'+esc(g.numero)+'</b>'+(g.prazoVencido?' <span class="badge danger">prazo</span>':'')+
-          '<div style="margin-top:5px;cursor:pointer" title="Status">'+statusBadge(g.status)+'</div>'+
+          '<div style="margin-top:5px;cursor:pointer" data-ident="status-cell" data-tip="Duplo clique para filtrar por este status">'+statusBadge(g.status)+'</div>'+
           '<div style="margin-top:9px">'+(_gespec?'<span class="badge muted'+(State.filtros.especialidade===_gespec?' cell-filtered':'')+'" style="font-size:10px;cursor:pointer" title="Especialidade">'+ico('stethoscope',10)+' '+esc(_gespec)+'</span>':'<span style="font-size:10px;color:transparent">—</span>')+'</div>'+
         '</td>'+
         // BENEFICIÁRIO
         '<td class="cell-dbl'+(State.filtros.benef===g.beneficiario.nome?' cell-filtered':'')+'">'+
           '<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;max-width:200px">'+esc(g.beneficiario.nome)+'</span>'+
           '<div style="color:var(--muted);font-size:11px;margin-top:5px;'+L2H+'">'+mask(g.beneficiario.cpf)+'</div>'+
-          '<div style="margin-top:9px"><span class="badge muted'+(State.filtros.congenere===g.congenere?' cell-filtered':'')+'" style="font-size:10px" title="Congênere">'+ico('map-pin',10)+' '+esc(g.congenere||'—')+'</span></div>'+
+          '<div style="margin-top:9px"><span class="badge muted'+(State.filtros.congenere===g.congenere?' cell-filtered':'')+'" style="font-size:10px" title="Congênere" data-tip="Duplo clique: filtrar por congênere">'+ico('map-pin',10)+' '+esc(g.congenere||'—')+'</span></div>'+
         '</td>'+
         // PRESTADOR
         '<td class="cell-dbl'+(State.filtros.prest===g.prestadorSol.nome?' cell-filtered':'')+'">'+
           '<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;max-width:200px">'+esc(g.prestadorSol.nome)+'</span>'+
-          '<div style="margin-top:5px;'+L2H+'"><span class="badge muted'+(State.filtros.origem===g.origem&&State.filtros.origem?' cell-filtered':'')+'" style="font-size:10px" title="Origem">'+esc(g.origem)+'</span></div>'+
-          '<div style="margin-top:9px;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;cursor:pointer" class="'+(State.filtros.solicitante===g.solicitante&&State.filtros.solicitante?'cell-filtered':'')+'" title="Solicitante">'+(g.solicitante&&g.solicitante!=='—'?esc(g.solicitante):'<span style="color:transparent">—</span>')+'</div>'+
+          '<div style="margin-top:5px;'+L2H+'"><span class="badge muted'+(State.filtros.origem===g.origem&&State.filtros.origem?' cell-filtered':'')+'" style="font-size:10px" title="Origem" data-tip="Duplo clique: filtrar por origem">'+esc(g.origem)+'</span></div>'+
+          '<div style="margin-top:9px;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;cursor:pointer" class="'+(State.filtros.solicitante===g.solicitante&&State.filtros.solicitante?'cell-filtered':'')+'" title="Solicitante" data-tip="Duplo clique: filtrar por solicitante">'+(g.solicitante&&g.solicitante!=='—'?esc(g.solicitante):'<span style="color:transparent">—</span>')+'</div>'+
         '</td>'+
         // TIPO
         '<td class="cell-dbl'+(State.filtros.tipo===g.tipo?' cell-filtered':'')+'">'+
@@ -1406,7 +1433,7 @@
       var _origBadge=tr.cells[2].querySelector('[title="Origem"]');
       if(_origBadge) _origBadge.addEventListener('dblclick',function(e){e.stopPropagation();State.filtros.origem=State.filtros.origem===g.origem?'':g.origem;State.guiasPagina=1;if(State.filtros.origem)toast('Filtrando: '+g.origem,'ok');render();});
       bindDbl(tr.cells[3],'tipo',g.tipo);
-      var _statusEl=tr.cells[0].querySelector('[title="Status"]');
+      var _statusEl=tr.cells[0].querySelector('[data-ident="status-cell"]');
       if(_statusEl) _statusEl.addEventListener('dblclick',function(e){e.stopPropagation();State.filtros.status=State.filtros.status===g.status?'':g.status;State.guiasPagina=1;if(State.filtros.status)toast('Filtrando: '+g.status,'ok');render();});
       var _especEl=tr.cells[0].querySelector('[title="Especialidade"]');
       if(_especEl&&_gespec) _especEl.addEventListener('dblclick',function(e){e.stopPropagation();State.filtros.especialidade=State.filtros.especialidade===_gespec?'':_gespec;State.guiasPagina=1;if(State.filtros.especialidade)toast('Filtrando: '+_gespec,'ok');render();});
