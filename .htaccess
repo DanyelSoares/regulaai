@@ -1,0 +1,82 @@
+# RegulaAI Saude -- Configuracao Apache
+# Compativel com Apache 2.2+ / PHP 5.4
+
+# ──────────────────────────────────────────
+# Codificacao padrao
+# ──────────────────────────────────────────
+AddDefaultCharset UTF-8
+
+# ──────────────────────────────────────────
+# Tipos MIME
+# ──────────────────────────────────────────
+AddType application/javascript .js
+AddType text/css               .css
+AddType image/svg+xml          .svg
+AddType application/json       .json
+AddType text/html              .html
+
+# ──────────────────────────────────────────
+# Compressao GZIP
+# ──────────────────────────────────────────
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/plain text/css \
+        application/javascript application/json image/svg+xml
+</IfModule>
+
+# ──────────────────────────────────────────
+# Cache de assets estaticos
+# ──────────────────────────────────────────
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType text/css              "access plus 1 month"
+    ExpiresByType application/javascript "access plus 1 month"
+    ExpiresByType image/png             "access plus 1 month"
+    ExpiresByType image/svg+xml        "access plus 1 month"
+    ExpiresByType text/html            "access plus 0 seconds"
+    ExpiresByType application/json     "access plus 0 seconds"
+</IfModule>
+
+# ──────────────────────────────────────────
+# Cabecalhos de seguranca
+# ──────────────────────────────────────────
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options        "SAMEORIGIN"
+    Header always set X-XSS-Protection       "1; mode=block"
+    Header always set Referrer-Policy        "same-origin"
+</IfModule>
+
+# ──────────────────────────────────────────
+# Desabilitar listagem de diretorios
+# ──────────────────────────────────────────
+Options -Indexes
+
+# ──────────────────────────────────────────
+# Bloquear arquivos sensiveis
+# ──────────────────────────────────────────
+<FilesMatch "(\.bat|watch\.js|MEMORY\.md|netlify\.toml|\.gitignore|package\.json|package-lock\.json)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+<FilesMatch "^\.">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# ──────────────────────────────────────────
+# PHP 5.4 -- configuracoes de seguranca
+# ──────────────────────────────────────────
+<IfModule mod_php5.c>
+    php_flag display_errors         Off
+    php_flag log_errors             On
+    php_value error_log             logs/php_errors.log
+    php_flag expose_php             Off
+    php_flag session.use_only_cookies On
+    php_flag session.cookie_httponly  On
+</IfModule>
+
+# ──────────────────────────────────────────
+# Pagina de erro (SPA: redireciona 404 para index)
+# ──────────────────────────────────────────
+ErrorDocument 404 /index.html

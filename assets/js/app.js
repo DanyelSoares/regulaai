@@ -46,7 +46,9 @@
     },
     guias: MOCK.buildGuias(),
     guiasPagina: 1,
-    filtros: { q:'', status:'', fluxo:'', origem:'', risco:'', benef:'', prest:'', tipo:'', congenere:'', solicitante:'', opme:'', uti:'', regimeAte:'', especialidade:'', dataDeEmissao:'', dataAteEmissao:'', sortCol:'', sortDir:'' }
+    filtros: { q:'', status:'', fluxo:'', origem:'', risco:'', benef:'', prest:'', tipo:'', congenere:'', solicitante:'', opme:'', uti:'', regimeAte:'', especialidade:'', dataDeEmissao:'', dataAteEmissao:'', sortCol:'', sortDir:'' },
+    kanbanPeriodo: { de:'', ate:'' },
+    kanbanFiltros: { colunas:[], uti:'', regime:'', tipo:'' }
   };
 
   // Recupera pareceres salvos
@@ -137,11 +139,11 @@
     mainBar.innerHTML=
       ico('eye',13)+' <span style="font-size:12px;font-weight:600;color:var(--g-700)">Simular visão:</span>'+
       '<button class="visao-btn'+(State.visaoPerfil===''?' active':'')+'" data-v="">'+
-        ico('layout-dashboard',12)+' Todos ('+totalTodos+')</button>'+
+        ico('users',12)+' Todos ('+totalTodos+')</button>'+
       '<button class="visao-btn'+(enfAtivo?' active':'')+'" data-v="enfermeiro">'+
         ico('stethoscope',12)+' Enfermeiros'+(enfAtivo?' '+ico('chevron-up',11):' '+ico('chevron-down',11))+'</button>'+
       '<button class="visao-btn'+(State.visaoPerfil==='auditor'?' active':'')+'" data-v="auditor">'+
-        ico('search',12)+' Auditor</button>';
+        ico('user-check',12)+' Auditor</button>';
 
     $$('.visao-btn',mainBar).forEach(function(b){
       b.onclick=function(){
@@ -229,8 +231,15 @@
   }
   function riskPill(r){ return '<span class="risk '+r+'">'+r.charAt(0).toUpperCase()+r.slice(1)+'</span>'; }
   function aderenciaBar(p){
-    var cls = p>=90?'alta':(p>=70?'mod':(p>=50?'baixa':'crit'));
-    return '<div class="ader '+cls+'"><div class="t"><div class="f" style="width:'+p+'%"></div></div><div class="v">'+p+'%</div></div>';
+    var cls   = p>=90?'alta':(p>=70?'mod':(p>=50?'baixa':'crit'));
+    var label = p>=90?'Alta':(p>=70?'Moderada':(p>=50?'Baixa':'Crítica'));
+    var tip   = 'Aderência à DUT — '+label+' ('+p+'%). '
+              + 'Indica o grau de conformidade da guia com os critérios técnicos '
+              + 'exigidos pela ANS. Escala: Alta 90–100% · Moderada 70–89% · Baixa 50–69% · Crítica abaixo de 50%.';
+    return '<div class="ader '+cls+'" data-tip="'+tip+'" style="cursor:help">'
+         + '<div class="t"><div class="f" style="width:'+p+'%"></div></div>'
+         + '<div class="v">'+p+'%</div>'
+         + '</div>';
   }
   function guiaAderencia(g){ if(!g._cache) g._cache = AI.analisarGuiaComIA(g,{}); return g._cache.aderencia; }
 
@@ -304,7 +313,7 @@
     }
 
     function updateTrigger(){
-      trigEl.innerHTML=ico('calendar',13)+' '+(_de?br(_de)+(_ate?' – '+br(_ate):'…'):'<span style="color:var(--muted)">Período</span>');
+      trigEl.innerHTML=ico('calendar-range',13)+' '+(_de?br(_de)+(_ate?' – '+br(_ate):'…'):'<span style="color:var(--muted)">Período</span>');
       trigEl.className='drp-trigger'+(_de||_ate?' active':'');
       lcIcons();
     }
@@ -488,6 +497,7 @@
     $('#globalSearch').oninput=function(){ State.filtros.q=this.value.toLowerCase(); if(State.route==='guias'||State.route==='dashboard') render(); };
 
     document.getElementById('sidebarToggle').onclick=function(){
+      if(window.innerWidth<=640) return;
       _sidebarCollapsed=!_sidebarCollapsed;
       localStorage.setItem('regula_sidebar',_sidebarCollapsed?'1':'0');
       applySidebarState();
@@ -1255,8 +1265,8 @@
       tr.innerHTML=
         // GUIA
         '<td><b>'+esc(g.numero)+'</b>'+(g.prazoVencido?' <span class="badge danger">prazo</span>':'')+
-          '<div style="margin-top:5px">'+statusBadge(g.status)+'</div>'+
-          '<div style="margin-top:9px">'+(_gespec?'<span class="badge muted" style="font-size:10px">'+ico('stethoscope',10)+' '+esc(_gespec)+'</span>':'<span style="font-size:10px;color:transparent">—</span>')+'</div>'+
+          '<div style="margin-top:5px" title="Status" style="cursor:pointer">'+statusBadge(g.status)+'</div>'+
+          '<div style="margin-top:9px">'+(_gespec?'<span class="badge muted'+(State.filtros.especialidade===_gespec?' cell-filtered':'')+'" style="font-size:10px;cursor:pointer" title="Especialidade">'+ico('stethoscope',10)+' '+esc(_gespec)+'</span>':'<span style="font-size:10px;color:transparent">—</span>')+'</div>'+
         '</td>'+
         // BENEFICIÁRIO
         '<td class="cell-dbl'+(State.filtros.benef===g.beneficiario.nome?' cell-filtered':'')+'">'+
@@ -1642,21 +1652,163 @@
       'Sem parametrização':     {ico:'alert-triangle',  cor:'#9b6020'},
     };
 
-    var guias=guiasVisiveis();
+    // Aplica filtro de período do Kanban (independente do filtro da view Guias)
+    var kp=State.kanbanPeriodo;
+    var kf=State.kanbanFiltros;
+    var guias=guiasVisiveis().filter(function(g){
+      if(kp.de&&g.dataEmissao<kp.de) return false;
+      if(kp.ate&&g.dataEmissao>kp.ate) return false;
+      if(kf.uti==='sim'&&!g.uti) return false;
+      if(kf.uti==='nao'&&g.uti) return false;
+      if(kf.regime&&g.regime!==kf.regime) return false;
+      if(kf.tipo&&g.tipo!==kf.tipo) return false;
+      return true;
+    });
     var total=guias.length;
-    var hdrActions='<div style="display:flex;gap:8px;align-items:center">'+
-      '<span style="font-size:12px;color:var(--muted)">'+total+' guia(s) visíveis</span>'+
-    '</div>';
-    wrap.appendChild(el('div',{class:'page-title'},'<div><h1>'+ico('columns-3',18)+' Kanban de Guias</h1><p>Acompanhamento visual por status — clique em qualquer card para detalhar.</p></div>'+hdrActions));
+
+    wrap.appendChild(el('div',{class:'page-title'},
+      '<div><h1>'+ico('columns-3',18)+' Kanban de Guias</h1><p>Acompanhamento visual por status — clique em qualquer card para detalhar.</p></div>'+
+      '<div style="display:flex;gap:8px;align-items:center"><span style="font-size:12px;color:var(--muted)">'+total+' guia(s) visíveis</span></div>'
+    ));
+
+    // Barra de filtro de período
+    var bar=el('div',{class:'k-period-bar'});
+    var periodLabel=el('span',{class:'k-period-label'});
+    periodLabel.innerHTML=ico('calendar-range',13)+' Período de emissão';
+    bar.appendChild(periodLabel);
+
+    var periodWrap=el('div',{id:'kbPeriodoWrap',style:'display:flex;align-items:center'});
+    bar.appendChild(periodWrap);
+
+    if(kp.de||kp.ate){
+      var btnLimpar=el('button',{class:'btn ghost',style:'font-size:12px;padding:4px 10px;height:auto;display:flex;align-items:center;gap:4px'});
+      btnLimpar.innerHTML=ico('x',12)+' Limpar';
+      btnLimpar.onclick=function(){ State.kanbanPeriodo={de:'',ate:''}; render(); };
+      bar.appendChild(btnLimpar);
+    }
+
+    wrap.appendChild(bar);
+
+    makeDateRangePicker(
+      periodWrap,
+      kp.de, kp.ate,
+      function(de,ate){ State.kanbanPeriodo={de:de,ate:ate}; render(); }
+    );
+
+    // ── Barra de filtros adicionais — dropdowns ───────────────────────
+    var KB_SHORT={
+      'Em análise':'Análise','Aguardando complemento':'Ag. complemento',
+      'Aguardando documentação':'Ag. documentação','Em junta médica':'Junta médica',
+      'Cotação de OPME':'Cotação OPME','Analisada':'Analisada',
+      'Em correção pelo prestador':'Correção','Liberada':'Liberada',
+      'Negada':'Negada','Encerrada':'Encerrada','Sem parametrização':'Sem param.'
+    };
+    var hasKF=kf.colunas.length||kf.uti||kf.regime||kf.tipo;
+
+    function closeFltDrops(){
+      var ds=document.querySelectorAll('.k-flt-drop');
+      for(var i=0;i<ds.length;i++) ds[i].style.display='none';
+    }
+    function toggleFltDrop(drop,e){
+      e.stopPropagation();
+      var wasOpen=drop.style.display!=='none';
+      closeFltDrops();
+      if(!wasOpen) drop.style.display='block';
+    }
+    function fltItem(label,isSelected,onclick){
+      var item=el('div',{class:'k-flt-item'+(isSelected?' sel':'')});
+      var chk=el('span',{class:'k-flt-chk'});
+      if(isSelected) chk.innerHTML=ico('check',10);
+      item.appendChild(chk);
+      var txt=document.createTextNode(' '+label);
+      item.appendChild(txt);
+      item.onclick=onclick;
+      return item;
+    }
+    function makeFltWrap(icoName,baseLabel,isActive,buildDrop){
+      var wrap=el('div',{class:'k-flt-wrap'});
+      var btn=el('button',{class:'k-flt-btn'+(isActive?' active':'')});
+      btn.innerHTML=ico(icoName,12)+' '+baseLabel+' '+ico('chevron-down',10);
+      var drop=el('div',{class:'k-flt-drop',style:'display:none'});
+      buildDrop(drop);
+      btn.onclick=function(e){ toggleFltDrop(drop,e); };
+      wrap.appendChild(btn);
+      wrap.appendChild(drop);
+      return wrap;
+    }
+
+    var fbar=el('div',{class:'k-filter-bar'});
+    var fbarLbl=el('span',{class:'k-flt-label'});
+    fbarLbl.innerHTML=ico('sliders-horizontal',12)+' Filtros';
+    fbar.appendChild(fbarLbl);
+
+    // Colunas
+    var colLabel='Colunas'+(kf.colunas.length?' ('+kf.colunas.length+')':'');
+    fbar.appendChild(makeFltWrap('eye',colLabel,kf.colunas.length>0,function(drop){
+      drop.appendChild(fltItem('Todas as colunas',kf.colunas.length===0,function(){
+        State.kanbanFiltros.colunas=[]; render();
+      }));
+      drop.appendChild(el('div',{class:'k-flt-sep'}));
+      KB_ORDER.forEach(function(s){
+        var isChk=kf.colunas.indexOf(s)!==-1;
+        drop.appendChild(fltItem(KB_SHORT[s]||s,isChk,(function(status){
+          return function(){
+            var idx=State.kanbanFiltros.colunas.indexOf(status);
+            if(idx!==-1) State.kanbanFiltros.colunas.splice(idx,1);
+            else State.kanbanFiltros.colunas.push(status);
+            render();
+          };
+        })(s)));
+      });
+    }));
+
+    // UTI
+    var utiLabel=kf.uti==='sim'?'UTI':(kf.uti==='nao'?'Não UTI':'UTI');
+    fbar.appendChild(makeFltWrap('bed',utiLabel,kf.uti!=='',function(drop){
+      [['','Todos'],['sim','UTI'],['nao','Não UTI']].forEach(function(opt){
+        drop.appendChild(fltItem(opt[1],kf.uti===opt[0],(function(v){
+          return function(){ State.kanbanFiltros.uti=v; render(); };
+        })(opt[0])));
+      });
+    }));
+
+    // Regime
+    var regLabel=kf.regime||'Regime';
+    fbar.appendChild(makeFltWrap('clock',regLabel,kf.regime!=='',function(drop){
+      [['','Todos'],['Urgência','Urgência'],['Eletivo','Eletivo']].forEach(function(opt){
+        drop.appendChild(fltItem(opt[1],kf.regime===opt[0],(function(v){
+          return function(){ State.kanbanFiltros.regime=v; render(); };
+        })(opt[0])));
+      });
+    }));
+
+    // Tipo
+    var tipoLabel=kf.tipo||'Tipo';
+    fbar.appendChild(makeFltWrap('tag',tipoLabel,kf.tipo!=='',function(drop){
+      [['','Todos'],['Internação','Internação'],['Ambulatorial','Ambulatorial']].forEach(function(opt){
+        drop.appendChild(fltItem(opt[1],kf.tipo===opt[0],(function(v){
+          return function(){ State.kanbanFiltros.tipo=v; render(); };
+        })(opt[0])));
+      });
+    }));
+
+    if(hasKF){
+      var btnClearKF=el('button',{class:'btn ghost',style:'font-size:12px;padding:4px 10px;height:auto;display:flex;align-items:center;gap:4px;margin-left:4px'});
+      btnClearKF.innerHTML=ico('x',12)+' Limpar';
+      btnClearKF.onclick=function(){ State.kanbanFiltros={colunas:[],uti:'',regime:'',tipo:''}; render(); };
+      fbar.appendChild(btnClearKF);
+    }
+
+    wrap.appendChild(fbar);
 
     var kb=el('div',{class:'kanban'});
 
     KB_ORDER.forEach(function(s){
+      if(kf.colunas.length&&kf.colunas.indexOf(s)===-1) return;
       var cfg=KB_CFG[s]||{ico:'circle',cor:'#6b7280'};
       var lst=guias.filter(function(g){return g.status===s});
 
       var col=el('div',{class:'k-col'});
-      col.style.cssText='--kcor:'+cfg.cor;
 
       col.innerHTML=
         '<div class="k-col-hd">'+
@@ -1676,7 +1828,6 @@
       }
       lst.forEach(function(g){
         var ad=guiaAderencia(g);
-        var riscoCor={baixo:'#10b981',medio:'#f59e0b',alto:'#f97316',critico:'#ef4444'}[g.risco]||'#6b7280';
         var et=etapaAtualDe(g);
         var etapaLabel=et?esc(et.nome):'—';
         var badges=(g.opme?'<span class="badge warn" style="font-size:10px">OPME</span>':'')+
@@ -1684,7 +1835,6 @@
                    (g.regime==='Urgência'?'<span class="badge danger" style="font-size:10px">URG</span>':'');
 
         var c=el('div',{class:'k-card'});
-        c.style.cssText='--risco-cor:'+riscoCor;
         c.innerHTML=
           '<div class="k-card-top">'+
             '<span class="k-num">'+esc(g.numero)+'</span>'+
@@ -2784,7 +2934,7 @@
             limGrid.appendChild(card);
           });
           var cardCrit=el('div',{class:'risco-lim-card'});
-          cardCrit.innerHTML='<div class="risco-lim-ico critico">'+ico('skull',16)+'</div>'+
+          cardCrit.innerHTML='<div class="risco-lim-ico critico">'+ico('octagon-alert',16)+'</div>'+
             '<div class="risco-lim-body"><div class="risco-lim-name">Crítico</div><div style="font-size:11px;color:var(--muted)">Acima do limiar Alto</div><div style="font-size:16px;font-weight:800;color:var(--danger);padding:6px 0">∞</div></div>';
           limGrid.appendChild(cardCrit);
           secL.appendChild(limGrid); rstContent.appendChild(secL);
@@ -2960,7 +3110,7 @@
     m.innerHTML=
       '<div class="modal-header">'+
         '<div class="modal-header-brand">'+
-          '<div class="modal-brand-mark">R<span style="color:var(--g-200)">+</span></div>'+
+          '<div class="modal-brand-mark">R<span>AI</span></div>'+
           '<div style="min-width:0">'+
             '<h2>'+title+'</h2>'+
             (sub?'<div class="sub">'+sub+'</div>':'')+
@@ -2985,9 +3135,33 @@
   function openGuia(g, tab){
     g._cache = AI.analisarGuiaComIA(g,{});
     var ia=g._cache;
-    var tabs=['resumo','beneficiario','prestador','solicitacao','etapas','procedimentos','pacotes','matmed','diariastaxas','opme','anexos','historico','criticas','ia','operadora','logs'];
-    var labels={resumo:'Resumo',beneficiario:'Beneficiário',prestador:'Prestador',solicitacao:'Solicitação',etapas:'Etapas',procedimentos:'Procedimentos',pacotes:'Pacotes',matmed:'Mat/Med',diariastaxas:'Diárias/Taxas',opme:'OPME',anexos:'Anexos',historico:'Histórico',criticas:'Críticas',ia:'Parecer Técnico',operadora:'Parecer Operadora',logs:'Logs'};
-    var tabsHtml='<div class="tabs">'+tabs.map(function(t){return '<button class="tab" data-tab="'+t+'">'+labels[t]+'</button>'}).join('')+'</div><div id="tabContent"></div>';
+    var TABS_DEF=[
+      {id:'resumo',        label:'Resumo',           ico:'layout-dashboard', grp:0},
+      {id:'beneficiario',  label:'Beneficiário',      ico:'user',             grp:0},
+      {id:'prestador',     label:'Prestador',         ico:'building-2',       grp:0},
+      {id:'solicitacao',   label:'Solicitação',       ico:'file-text',        grp:0},
+      {id:'etapas',        label:'Etapas',            ico:'git-branch',       grp:1},
+      {id:'procedimentos', label:'Procedimentos',     ico:'stethoscope',      grp:1},
+      {id:'pacotes',       label:'Pacotes',           ico:'package',          grp:1},
+      {id:'matmed',        label:'Mat/Med',           ico:'pill',             grp:1},
+      {id:'diariastaxas',  label:'Diárias/Taxas',     ico:'calendar-days',    grp:1},
+      {id:'opme',          label:'OPME',              ico:'wrench',           grp:1},
+      {id:'anexos',        label:'Anexos',            ico:'paperclip',        grp:1},
+      {id:'criticas',      label:'Críticas',          ico:'triangle-alert',   grp:2},
+      {id:'ia',            label:'Parecer Técnico',   ico:'bot',              grp:2},
+      {id:'operadora',     label:'Parecer Operadora', ico:'file-check-2',     grp:2},
+      {id:'historico',     label:'Histórico',         ico:'history',          grp:2},
+      {id:'logs',          label:'Logs',              ico:'scroll-text',      grp:2},
+    ];
+    var tabs=TABS_DEF.map(function(t){return t.id});
+    var tabsHtml='<div class="tabs">';
+    var lastGrp=-1;
+    TABS_DEF.forEach(function(t){
+      if(t.grp!==lastGrp&&lastGrp!==-1) tabsHtml+='<span class="tab-sep"></span>';
+      lastGrp=t.grp;
+      tabsHtml+='<button class="tab" data-tab="'+t.id+'">'+t.label+'</button>';
+    });
+    tabsHtml+='</div><div id="tabContent"></div>';
     var foot='<button class="btn ghost" id="reIA">'+ico('refresh-cw')+' Reprocessar</button>'+(can('parecer')?'<button class="btn-animated" id="abrirPar">'+ico('file-pen-line')+' Parecer da Operadora</button>':'');
     var m = modal('Guia '+esc(g.numero)+' '+statusBadge(g.status), esc(g.beneficiario.nome)+' · '+esc(g.tipo)+' · Fluxo '+esc(g.fluxo.id), tabsHtml, foot);
 
@@ -3008,25 +3182,56 @@
   function renderGuiaTab(g, ia, t){
     var d=el('div');
     if(t==='resumo'){
-      d.innerHTML='<div class="g2"><div><dl class="kv">'+
-        '<dt>Número</dt><dd>'+esc(g.numero)+'</dd>'+
-        '<dt>Beneficiário</dt><dd>'+esc(g.beneficiario.nome)+' ('+g.beneficiario.idade+' anos)</dd>'+
-        '<dt>Plano / Contrato</dt><dd>'+esc(g.beneficiario.plano)+' · '+esc(g.beneficiario.contrato)+'</dd>'+
-        '<dt>Prestador solicitante</dt><dd>'+esc(g.prestadorSol.nome)+'</dd>'+
-        '<dt>Prestador executante</dt><dd>'+esc(g.prestadorExe.nome)+'</dd>'+
-        '<dt>Natureza / Regime</dt><dd>'+esc(g.natureza)+' · '+esc(g.regime)+'</dd>'+
-        '<dt>Tipo</dt><dd>'+esc(g.tipo)+'</dd>'+
-        '<dt>Data emissão</dt><dd>'+esc(g.dataEmissao)+'</dd>'+
-        '</dl></div><div><dl class="kv">'+
-        '<dt>Fluxo aplicado</dt><dd>'+esc(g.fluxo.nome)+'</dd>'+
-        '<dt>Status atual</dt><dd>'+statusBadge(g.status)+'</dd>'+
-        '<dt>Dias em auditoria</dt><dd>'+g.diasAuditoria+(g.prazoVencido?' <span class="badge danger">prazo vencido</span>':'')+'</dd>'+
-        '<dt>Aderência</dt><dd>'+aderenciaBar(ia.aderencia)+'</dd>'+
-        '<dt>Risco regulatório</dt><dd>'+riskPill(g.risco)+'</dd>'+
-        '<dt>Risco assistencial</dt><dd>'+riskPill(g.uti?'alto':'medio')+'</dd>'+
-        '<dt>Risco documental</dt><dd>'+riskPill(g.anexos?'baixo':'alto')+'</dd>'+
-        '<dt>Risco contratual</dt><dd>'+riskPill('baixo')+'</dd>'+
-        '</dl></div></div>'+
+      var adp=ia.aderencia;
+      var adCls=adp>=90?'alta':(adp>=70?'mod':(adp>=50?'baixa':'crit'));
+      var RISKS=[
+        {label:'Regulatório',  val:g.risco,                ico:'shield-alert'},
+        {label:'Assistencial', val:g.uti?'alto':'medio',   ico:'heart-pulse'},
+        {label:'Documental',   val:g.anexos?'baixo':'alto',ico:'file-warning'},
+        {label:'Contratual',   val:'baixo',                ico:'file-check'},
+      ];
+      d.innerHTML=
+        '<div class="guia-metrics">'+
+          '<div class="guia-metric">'+
+            '<span class="guia-metric-lbl">'+ico('activity',11)+' Status</span>'+
+            '<span class="guia-metric-val">'+statusBadge(g.status)+'</span>'+
+          '</div>'+
+          '<div class="guia-metric">'+
+            '<span class="guia-metric-lbl">'+ico('clock',11)+' Dias em auditoria</span>'+
+            '<span class="guia-metric-val guia-metric-num'+(g.prazoVencido?' vencido':'')+'">'+g.diasAuditoria+(g.prazoVencido?' <span class="badge danger" style="font-size:10px">vencido</span>':'')+'</span>'+
+          '</div>'+
+          '<div class="guia-metric">'+
+            '<span class="guia-metric-lbl">'+ico('bar-chart-2',11)+' Aderência à DUT</span>'+
+            '<span class="guia-metric-val guia-metric-num adp-'+adCls+'">'+adp+'%</span>'+
+          '</div>'+
+          '<div class="guia-metric">'+
+            '<span class="guia-metric-lbl">'+ico('git-branch',11)+' Fluxo</span>'+
+            '<span class="guia-metric-val" style="font-size:12px">'+esc(g.fluxo.nome)+'</span>'+
+          '</div>'+
+        '</div>'+
+        '<div class="g2" style="gap:12px">'+
+          '<dl class="kv">'+
+            '<dt>Número</dt><dd>'+esc(g.numero)+'</dd>'+
+            '<dt>Beneficiário</dt><dd>'+esc(g.beneficiario.nome)+' ('+g.beneficiario.idade+' anos)</dd>'+
+            '<dt>Plano / Contrato</dt><dd>'+esc(g.beneficiario.plano)+' · '+esc(g.beneficiario.contrato)+'</dd>'+
+            '<dt>Prestador solicitante</dt><dd>'+esc(g.prestadorSol.nome)+'</dd>'+
+            '<dt>Prestador executante</dt><dd>'+esc(g.prestadorExe.nome)+'</dd>'+
+            '<dt>Natureza / Regime</dt><dd>'+esc(g.natureza)+' · '+esc(g.regime)+'</dd>'+
+            '<dt>Tipo</dt><dd>'+esc(g.tipo)+'</dd>'+
+            '<dt>Data emissão</dt><dd>'+esc(g.dataEmissao)+'</dd>'+
+          '</dl>'+
+          '<div class="guia-risk-grid">'+
+            RISKS.map(function(r){
+              return '<div class="guia-risk-card risk-'+r.val+'">'+
+                '<span class="guia-risk-ico">'+ico(r.ico,15)+'</span>'+
+                '<div class="guia-risk-body">'+
+                  '<div class="guia-risk-name">'+r.label+'</div>'+
+                  riskPill(r.val)+
+                '</div>'+
+              '</div>';
+            }).join('')+
+          '</div>'+
+        '</div>'+
         '<div class="ai-warn" style="margin-top:14px">'+ia.avisoLegal+'</div>';
     } else if(t==='beneficiario'){
       d.innerHTML='<dl class="kv"><dt>Nome</dt><dd>'+esc(g.beneficiario.nome)+'</dd><dt>CPF</dt><dd>'+mask(g.beneficiario.cpf)+'</dd><dt>Cartão</dt><dd>'+mask(g.beneficiario.cartao)+'</dd><dt>Idade</dt><dd>'+g.beneficiario.idade+'</dd><dt>Plano</dt><dd>'+esc(g.beneficiario.plano)+'</dd><dt>Contrato</dt><dd>'+esc(g.beneficiario.contrato)+'</dd></dl>';
@@ -3038,8 +3243,7 @@
       var tl=el('div',{class:'timeline'});
       g.etapas.forEach(function(e){
         var cls = e.status==='concluida'?'done':(e.status==='em_execucao'?'cur':'');
-        var ia2=e.ia==='auto'?ico('bot')+' Automática assistida':(e.ia==='apoio'?ico('brain')+' Apoio':'— Não atua');
-        tl.appendChild(el('div',{class:'tl-item '+cls},'<h4>'+e.ordem+'. '+esc(e.nome)+' <span class="tl-ia">'+ia2+'</span></h4><div class="meta">Responsável: '+esc(e.responsavel)+' · Prazo: '+e.prazoHoras+'h · Status: <b>'+esc(e.status)+'</b>'+(e.inicio?' · Início: '+esc(e.inicio):'')+(e.fim?' · Fim: '+esc(e.fim):'')+'</div>'));
+        tl.appendChild(el('div',{class:'tl-item '+cls},'<h4>'+e.ordem+'. '+esc(e.nome)+'</h4><div class="meta">Responsável: '+esc(e.responsavel)+' · Prazo: '+e.prazoHoras+'h · Status: <b>'+esc(e.status)+'</b>'+(e.inicio?' · Início: '+esc(e.inicio):'')+(e.fim?' · Fim: '+esc(e.fim):'')+'</div>'));
       });
       d.appendChild(tl);
     } else if(t==='procedimentos'||t==='pacotes'||t==='matmed'||t==='diariastaxas'){
@@ -3359,6 +3563,49 @@
     var el=$('#topbarRoute'); if(!el) return;
     el.textContent=ROUTE_LABELS[State.route]||State.route;
   }
+
+  /* === Tooltip global (data-tip) === */
+  (function(){
+    var box = document.createElement('div');
+    box.style.cssText = 'position:fixed;z-index:9999;display:none;max-width:260px;'
+      + 'background:#1a2e1f;color:#fff;font-size:11px;font-weight:500;line-height:1.55;'
+      + 'padding:8px 12px;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.3);'
+      + 'pointer-events:none;white-space:normal;word-break:break-word';
+    document.body.appendChild(box);
+
+    function findTip(el){
+      while(el && el !== document.body){
+        if(el.getAttribute && el.getAttribute('data-tip')) return el;
+        el = el.parentNode;
+      }
+      return null;
+    }
+    document.addEventListener('mouseover', function(e){
+      var t = findTip(e.target);
+      if(t){ box.textContent = t.getAttribute('data-tip'); box.style.display = 'block'; }
+      else  { box.style.display = 'none'; }
+    });
+    document.addEventListener('mousemove', function(e){
+      if(box.style.display === 'block'){
+        box.style.left = (e.clientX + 14) + 'px';
+        box.style.top  = (e.clientY - 50) + 'px';
+      }
+    });
+    document.addEventListener('mouseout', function(e){
+      if(!findTip(e.relatedTarget)) box.style.display = 'none';
+    });
+  })();
+
+  // Fecha dropdowns do kanban ao clicar fora
+  document.addEventListener('click', function(e){
+    var t=e.target;
+    while(t&&t!==document.body){
+      if(t.classList&&t.classList.contains('k-flt-wrap')) return;
+      t=t.parentNode;
+    }
+    var ds=document.querySelectorAll('.k-flt-drop');
+    for(var i=0;i<ds.length;i++) ds[i].style.display='none';
+  });
 
   /* === Init === */
   aplicarRiscos();

@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"/>
+<title>Kanban — Refinamento de cor</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI',system-ui,sans-serif;background:#eef2ef;padding:32px 24px;color:#1a2e1f}
+
+  h2{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:#6b7280;margin-bottom:16px;padding-bottom:8px;border-bottom:1.5px solid #d1d5db}
+
+  .direcao{margin-bottom:56px}
+  .direcao-label{
+    display:inline-flex;align-items:center;gap:10px;
+    font-size:13px;font-weight:700;color:#fff;
+    background:#1a2e1f;border-radius:20px;
+    padding:6px 16px;margin-bottom:12px;letter-spacing:.3px
+  }
+  .direcao-desc{font-size:12px;color:#6b7280;margin-bottom:18px;margin-left:2px;line-height:1.6}
+
+  .board{display:flex;gap:12px;overflow-x:auto;padding-bottom:8px;align-items:start}
+
+  /* Coluna — verde-marca (Direção A) */
+  .k-col{
+    width:250px;flex-shrink:0;
+    background:#fff;
+    border:1.5px solid #d1fae5;
+    border-top:4px solid #0a8a43;
+    border-radius:12px;overflow:hidden
+  }
+  .k-col-hd{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:10px 12px 9px;
+    background:#f0faf5;
+    border-bottom:1px solid #d1fae5
+  }
+  .k-col-title{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#374151}
+  .k-col-icon{font-size:12px;margin-right:6px;opacity:.6;color:#0a8a43}
+  .k-count{
+    min-width:20px;height:20px;padding:0 6px;
+    background:#0a8a43;color:#fff;
+    border-radius:10px;font-size:11px;font-weight:700;
+    display:flex;align-items:center;justify-content:center
+  }
+  .k-col-body{display:flex;flex-direction:column;gap:8px;padding:10px;min-height:60px}
+  .k-empty{text-align:center;color:#9ca3af;font-size:11.5px;padding:24px 0;opacity:.6}
+
+  /* ──────────────────────────────── */
+  /*  VARIANTE 1: borda única sólida  */
+  /* ──────────────────────────────── */
+  .v1 .k-card{
+    background:#fff;
+    border:1.5px solid #e5e7eb;
+    border-left:4px solid #0a8a43;
+    border-radius:9px;padding:11px 12px;cursor:pointer;
+    transition:transform .15s,box-shadow .15s
+  }
+  .v1 .k-card:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(10,138,67,.13)}
+
+  /* ─────────────────────────────────────── */
+  /*  VARIANTE 2: gradiente na borda lateral */
+  /* ─────────────────────────────────────── */
+  .v2 .k-card{
+    background:#fff;
+    border:1.5px solid #e5e7eb;
+    border-left:none;
+    border-radius:9px;padding:11px 12px 11px 15px;cursor:pointer;
+    position:relative;
+    transition:transform .15s,box-shadow .15s
+  }
+  .v2 .k-card:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(10,138,67,.13)}
+  .v2 .k-card::before{
+    content:'';
+    position:absolute;left:0;top:0;bottom:0;width:4px;
+    background:linear-gradient(to bottom,#3dff9b 0%,#0a8a43 55%,#054f27 100%);
+    border-radius:7px 0 0 7px
+  }
+
+  /* Card internals (comuns) */
+  .k-card-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:5px}
+  .k-num{font-size:12.5px;font-weight:700;color:#111827;letter-spacing:.2px}
+
+  .rp{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;border-radius:8px;padding:2px 7px}
+  .rp.baixo  {background:#dcfce7;color:#15803d}
+  .rp.medio  {background:#fef9c3;color:#a16207}
+  .rp.alto   {background:#ffedd5;color:#c2410c}
+  .rp.critico{background:#fee2e2;color:#b91c1c}
+
+  .k-benef{font-size:11px;color:#374151;margin-bottom:3px;font-weight:500}
+  .k-tipo{font-size:10.5px;color:#6b7280;margin-bottom:5px}
+  .k-foot{display:flex;align-items:center;justify-content:space-between;margin-top:6px;padding-top:6px;border-top:1px solid #f3f4f6}
+
+  /* Barra de aderência — UNIFICADA (verde-marca, sem semáforo) */
+  .k-adh{height:5px;flex:1;background:#e5e7eb;border-radius:3px;overflow:hidden;margin-right:8px}
+  .k-adh-bar{
+    height:100%;border-radius:3px;
+    background:linear-gradient(to right,#3dff9b,#0a8a43)
+  }
+  .adh-pct{font-size:10px;color:#374151;margin-right:8px;font-weight:600;white-space:nowrap}
+
+  .k-regime{font-size:9.5px;color:#9ca3af;font-weight:500;background:#f9fafb;padding:2px 6px;border-radius:8px;border:1px solid #e5e7eb}
+  .k-regime.urg{background:#fff0f0;color:#b91c1c;font-weight:700;border-color:#fecaca}
+
+  .sep{height:1px;background:#d1d5db;margin:40px 0}
+  .nota{font-size:11px;color:#9ca3af;margin-top:14px;font-style:italic;line-height:1.6}
+
+  /* Label de variante */
+  .var-label{
+    font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;
+    color:#0a8a43;margin-bottom:10px;display:block
+  }
+  .var-desc{font-size:11.5px;color:#6b7280;margin-bottom:12px;line-height:1.5}
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════
+     VARIANTE 1 — borda única sólida verde
+═══════════════════════════════════════════════════════ -->
+<div class="direcao v1">
+  <div class="direcao-label">Variante 1 — Borda sólida verde uniforme</div>
+  <p class="direcao-desc">
+    Todas as bordas laterais: verde-marca fixo <code style="background:#e5e7eb;padding:1px 5px;border-radius:4px;font-size:10px">#0a8a43</code>.
+    Barra de aderência: gradiente verde (sem semáforo). O risco aparece apenas no badge de texto.
+  </p>
+
+  <div class="board">
+
+    <div class="k-col">
+      <div class="k-col-hd">
+        <div style="display:flex;align-items:center"><span class="k-col-icon">⏱</span><span class="k-col-title">Em análise</span></div>
+        <span class="k-count">3</span>
+      </div>
+      <div class="k-col-body">
+        <div class="k-card">
+          <div class="k-card-top"><span class="k-num">#GU-001234</span><span class="rp baixo">● Baixo</span></div>
+          <div class="k-benef">João Silva Ferreira</div>
+          <div class="k-tipo">CONSULTA ELETIVA</div>
+          <div class="k-foot"><div class="k-adh"><div class="k-adh-bar" style="width:82%"></div></div><span class="adh-pct">82%</span><span class="k-regime">Eletivo</span></div>
+        </div>
+        <div class="k-card">
+          <div class="k-card-top"><span class="k-num">#GU-001235</span><span class="rp medio">● Médio</span></div>
+          <div class="k-benef">Maria Oliveira Santos</div>
+          <div class="k-tipo">CIRURGIA — OPME</div>
+          <div class="k-foot"><div class="k-adh"><div class="k-adh-bar" style="width:68%"></div></div><span class="adh-pct">68%</span><span class="k-regime">Eletivo</span></div>
+        </div>
+        <div class="k-card">
+          <div class="k-card-top"><span class="k-num">#GU-001236</span><span class="rp alto">● Alto</span></div>
+          <div class="k-benef">Carlos Mendes</div>
+          <div class="k-tipo">INTERNAÇÃO UTI</div>
+          <div class="k-foot"><div class="k-adh"><div class="k-adh-bar" style="width:51%"></div></div><span class="adh-pct">51%</span><span class="k-regime urg">URG</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="k-col">
+      <div class="k-col-hd">
+        <div style="display:flex;align-items:center"><span class="k-col-icon">⏳</span><span class="k-col-title">Aguardando complemento</span></div>
+        <span class="k-count">2</span>
+      </div>
+      <div class="k-col-body">
+        <div class="k-card">
+          <div class="k-card-top"><span class="k-num">#GU-001240</span><span class="rp critico">● Crítico</span></div>
+          <div class="k-benef">Ana Paula Ramos</div>
+          <div class="k-tipo">QUIMIOTERAPIA</div>
+          <div class="k-foot"><div class="k-adh"><div class="k-adh-bar" style="width:38%"></div></div><span class="adh-pct">38%</span><span class="k-regime urg">URG</span></div>
+        </div>
+        <div class="k-card">
+          <div class="k-card-top"><span class="k-num">#GU-001241</span><span class="rp medio">● Médio</span></div>
+          <div class="k-benef">Roberto Fonseca</div>
+          <div class="k-tipo">EXAME DE IMAGEM</div>
+          <div class="k-foot"><div class="k-adh"><div class="k-adh-bar" style="width:74%"></div></div><span class="adh-pct">74%</span><span class="k-regime">Eletivo</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="k-col">
+      <div class="k-col-hd">
+        <div style="display:flex;align-items:center"><span class="k-col-icon">👥</span><span class="k-col-title">Em junta médica</span></div>
+        <span class="k-count">1</span>
+      </div>
+      <div class="k-col-body">
+        <div class="k-card">
+          <div class="k-card-top"><span class="k-num">#GU-001250</span><span class="rp alto">● Alto</span></div>
+          <div class="k-benef">Fernanda Costa Lima</div>
+          <div class="k-tipo">BARIÁTRICA</div>
+          <div class="k-foot"><div class="k-adh"><div class="k-adh-bar" style="width:58%"></div></div><span class="adh-pct">58%</span><span class="k-regime">Eletivo</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="k-col">
+      <div class="k-col-hd">
+        <div style="display:flex;align-items:center"><span class="k-col-icon">✔</span><span class="k-col-title">Liberada</span></div>
+        <span class="k-count">2</span>
+      </div>
+      <div class="k-col-body">
+        <div class="k-card">
+          <div class="k-card-top"><span class="k-num">#GU-001260</span><span class="rp baixo">● Baixo</span></div>
+          <div class="k-benef">Paulo Henrique</div>
+          <div class="k-tipo">CONSULTA</div>
+          <div class="k-foot"><div class="k-adh"><div class="k-adh-bar" style="width:95%"></div></div><span class="adh-pct">95%</span><span class="k-regime">Eletivo</span></div>
+        </div>
+        <div class="k-card">
+          <div class="k-card-top"><span class="k-num">#GU-001261</span><span class="rp baixo">● Baixo</span></div>
+          <div class="k-benef">Cláudia Rezende</div>
+          <div class="k-tipo">FISIOTERAPIA</div>
+          <div class="k-foot"><div class="k-adh"><div class="k-adh-bar" style="width:91%"></div></div><span class="adh-pct">91%</span><span class="k-regime">Eletivo</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="k-col">
+      <div class="k-col-hd">
+        <div style="display:flex;align-items:center"><span class="k-col-icon">✕</span><span class="k-col-title">Negada</span></div>
+        <span class="k-count">0</span>
+      </div>
+      <div class="k-col-body"><div class="k-empty">Sem guias</div></div>
+    </div>
+
+  </div>
+  <p class="nota">Borda: <strong>#0a8a43</strong> fixo em todos os cards. Barra de aderência: gradiente verde — o % ainda aparece em texto para não perder a informação.</p>
+</div>
+
+<div class="sep"></div>
+
+<!-- ══════════════════════════════════════════════════════
+     VARIANTE 2 — gradiente na borda lateral
+═══════════════════════════════════════════════════════ -->
+<div class="direcao v2">
+  <div class="direcao-label">Variante 2 — Gradiente na borda lateral</div>
+  <p class="direcao-desc">
+    Borda lateral com gradiente vertical
+    <code style="background:#e5e7eb;padding:1px 5px;border-radius:4px;font-size:10px">#3dff9b → #0a8a43 → #054f27</code>.
+    Barra de aderência: mesmo gradiente. Visual mais refinado, mantendo unidade.
+  </p>
+
+  <div class="board">
+
+    <div class="k-col">
+      <div class="k-col-hd">
+        <div style="display:flex;align-items:center"><span class="k-col-icon">⏱</span><span class="k-col-title">Em análise</span></div>
+        <span class="k-count">3</span>
+      </div>
+      <div class="k-col-body">
+        <div class="k-card">
+          <div class="k-card-top"><span class="k-num">#GU-001234</span><span class="rp baixo">● Baixo</span></div>
+          <div class="k-benef">João Silva Ferreira</div>
+          <div class="k-tipo">CONSULTA ELETIVA</div>
+          <div class="k-foot"><div class="k-adh"><div class="k-adh-bar" style="width:82%"></div></div><span class="adh-pct">82%</span><span class="k-regime">Eletivo</span></div>
+        </div>
+        <div class="k-card">
+          <div class="k-card-top"><span class="k-num">#GU-001235</span><span class="rp medio">● Médio</span></div>
+          <div class="k-benef">Maria Oliveira Santos</div>
+          <div class="k-tipo">CIRURGIA — OPME</div>
+          <div class="k-foot"><div class="k-adh"><div class="k-adh-bar" style="width:68%"></div></div><span class="adh-pct">68%</span><span class="k-regime">Eletivo</span></div>
+        </div>
+        <div class="k-card">
+          <div class="k-card-top"><span class="k-num">#GU-001236</span><span class="rp alto">● Alto</span></div>
+          <div class="k-benef">Carlos Mendes</div>
+          <div class="k-tipo">INTERNAÇÃO UTI</div>
+          <div class="k-foot"><div class="k-adh"><div class="k-adh-bar" style="width:51%"></div></div><span class="adh-pct">51%</span><span class="k-regime urg">URG</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="k-col">
+      <div class="k-col-hd">
+        <div style="display:flex;align-items:center"><span class="k-col-icon">⏳</span><span class="k-col-title">Aguardando complemento</span></div>
+        <span class="k-count">2</span>
+      </div>
+      <div class="k-col-body">
+        <div class="k-card">
+          <div class="k-card-top"><span class="k-num">#GU-001240</span><span class="rp critico">● Crítico</span></div>
+          <div class="k-benef">Ana Paula Ramos</div>
+          <div class="k-tipo">QUIMIOTERAPIA</div>
+          <div class="k-foot"><div class="k-adh"><div class="k-adh-bar" style="width:38%"></div></div><span class="adh-pct">38%</span><span class="k-regime urg">URG</span></div>
+        </div>
+        <div class="k-card">
+          <div class="k-card-top"><span class="k-num">#GU-001241</span><span class="rp medio">● Médio</span></div>
+          <div class="k-benef">Roberto Fonseca</div>
+          <div class="k-tipo">EXAME DE IMAGEM</div>
+          <div class="k-foot"><div class="k-adh"><div class="k-adh-bar" style="width:74%"></div></div><span class="adh-pct">74%</span><span class="k-regime">Eletivo</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="k-col">
+      <div class="k-col-hd">
+        <div style="display:flex;align-items:center"><span class="k-col-icon">👥</span><span class="k-col-title">Em junta médica</span></div>
+        <span class="k-count">1</span>
+      </div>
+      <div class="k-col-body">
+        <div class="k-card">
+          <div class="k-card-top"><span class="k-num">#GU-001250</span><span class="rp alto">● Alto</span></div>
+          <div class="k-benef">Fernanda Costa Lima</div>
+          <div class="k-tipo">BARIÁTRICA</div>
+          <div class="k-foot"><div class="k-adh"><div class="k-adh-bar" style="width:58%"></div></div><span class="adh-pct">58%</span><span class="k-regime">Eletivo</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="k-col">
+      <div class="k-col-hd">
+        <div style="display:flex;align-items:center"><span class="k-col-icon">✔</span><span class="k-col-title">Liberada</span></div>
+        <span class="k-count">2</span>
+      </div>
+      <div class="k-col-body">
+        <div class="k-card">
+          <div class="k-card-top"><span class="k-num">#GU-001260</span><span class="rp baixo">● Baixo</span></div>
+          <div class="k-benef">Paulo Henrique</div>
+          <div class="k-tipo">CONSULTA</div>
+          <div class="k-foot"><div class="k-adh"><div class="k-adh-bar" style="width:95%"></div></div><span class="adh-pct">95%</span><span class="k-regime">Eletivo</span></div>
+        </div>
+        <div class="k-card">
+          <div class="k-card-top"><span class="k-num">#GU-001261</span><span class="rp baixo">● Baixo</span></div>
+          <div class="k-benef">Cláudia Rezende</div>
+          <div class="k-tipo">FISIOTERAPIA</div>
+          <div class="k-foot"><div class="k-adh"><div class="k-adh-bar" style="width:91%"></div></div><span class="adh-pct">91%</span><span class="k-regime">Eletivo</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="k-col">
+      <div class="k-col-hd">
+        <div style="display:flex;align-items:center"><span class="k-col-icon">✕</span><span class="k-col-title">Negada</span></div>
+        <span class="k-count">0</span>
+      </div>
+      <div class="k-col-body"><div class="k-empty">Sem guias</div></div>
+    </div>
+
+  </div>
+  <p class="nota">Borda: pseudo-elemento <code>::before</code> com gradiente vertical. Barra de aderência: mesmo gradiente horizontal. Unidade visual total — a paleta da marca aparece em todos os elementos de forma consistente.</p>
+</div>
+
+</body>
+</html>
