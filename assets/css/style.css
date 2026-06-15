@@ -769,7 +769,38 @@ tbody tr:hover{background:#f7fbf8;cursor:pointer}
 .fab-item--gestor {background:linear-gradient(135deg,#064e3b,#022c22)}
 .fab-item--auditor{background:linear-gradient(135deg,#14532d,#0d3318)}
 .fab-item--enf    {background:linear-gradient(135deg,#15803d,#166534)}
-.fab-item--enf2   {background:linear-gradient(135deg,#16a34a,#15803d)}
+/* FAB user picker panel */
+.fab-userpick{position:absolute;bottom:60px;right:0;min-width:230px;max-width:280px;
+  background:#fff;border-radius:13px;
+  box-shadow:0 8px 32px rgba(0,0,0,.18),0 2px 8px rgba(0,0,0,.1);
+  border:1.5px solid var(--g-100);overflow:hidden;display:none;z-index:3}
+.fup-hd{display:flex;align-items:center;justify-content:space-between;gap:8px;
+  padding:9px 12px 8px;border-bottom:1px solid var(--g-50)}
+.fup-title{font-size:12px;font-weight:700;color:var(--g-700);letter-spacing:.3px}
+.fup-back{background:none;border:none;cursor:pointer;font-size:11px;color:var(--muted);
+  display:flex;align-items:center;gap:4px;padding:3px 7px;border-radius:6px;
+  transition:background .1s;font-family:inherit;font-weight:500}
+.fup-back:hover{background:var(--g-50);color:var(--g-700)}
+.fup-search{padding:8px 10px;border-bottom:1px solid var(--g-50)}
+.fup-sinput{width:100%;box-sizing:border-box;border:1.5px solid var(--g-200);border-radius:7px;
+  padding:6px 10px;font-size:12.5px;font-family:inherit;color:var(--ink);outline:none;
+  transition:border-color .15s}
+.fup-sinput:focus{border-color:var(--g-500);box-shadow:0 0 0 2px rgba(22,101,52,.1)}
+.fup-list{max-height:220px;overflow-y:auto}
+.fup-empty{padding:12px 14px;font-size:12px;color:var(--muted);text-align:center}
+.fup-item{width:100%;background:none;border:none;cursor:pointer;display:flex;align-items:center;
+  gap:10px;padding:9px 12px;text-align:left;transition:background .1s;font-family:inherit}
+.fup-item:hover{background:var(--g-50)}
+.fup-item.fup-active{background:linear-gradient(90deg,#f0fdf4,#fafffe)}
+.fup-avatar{width:33px;height:33px;border-radius:50%;display:flex;align-items:center;
+  justify-content:center;font-size:15px;font-weight:800;color:#fff;flex-shrink:0;
+  box-shadow:0 2px 8px rgba(0,0,0,.18)}
+.fup-info{flex:1;min-width:0}
+.fup-name{font-size:13px;font-weight:600;color:var(--ink);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.fup-sub{font-size:11px;color:var(--muted);display:block;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fup-check{color:var(--g-600);display:flex;align-items:center;flex-shrink:0}
 
 /* AI parecer */
 .ai-box{border:1.5px solid var(--g-200);background:linear-gradient(160deg,#edf8f2 0%,#f7fbf8 60%,#fff 100%);border-radius:11px;padding:15px;margin-bottom:14px;box-shadow:0 2px 8px rgba(10,138,67,.07)}
@@ -981,6 +1012,16 @@ tbody tr:hover{background:#f7fbf8;cursor:pointer}
 .cfg-tab:hover{color:var(--g-600);background:var(--g-50)}
 .cfg-tab.active{color:var(--g-700);border-color:var(--g-600);background:#fff}
 .cfg-content{min-height:200px}
+/* Busca rápida em tabelas de parametrização */
+.param-search{width:100%;box-sizing:border-box;padding:7px 12px 7px 34px;
+  border:1.5px solid var(--g-200);border-radius:8px;font-size:12.5px;
+  font-family:inherit;color:var(--ink);
+  background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2316a34a' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E") no-repeat 10px center;
+  transition:border-color .15s,box-shadow .15s}
+.param-search:focus{outline:none;border-color:var(--g-500);box-shadow:0 0 0 3px rgba(22,101,52,.1)}
+.param-search::placeholder{color:var(--muted)}
+/* Busca inline na barra de fluxos — ocupa linha própria no flex-wrap */
+.cfg-sub-search{flex-basis:100%;margin-bottom:4px}
 /* Sub-abas de Fluxos */
 .cfg-sub-tab-bar{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:14px;padding:8px 10px;background:var(--g-50);border:1px solid var(--g-100);border-radius:10px}
 .cfg-sub-tab{padding:5px 14px;border:1.5px solid var(--g-200);border-radius:20px;background:#fff;color:var(--g-700);font-size:12px;font-weight:700;cursor:pointer;transition:border-color .12s,background .12s;letter-spacing:.3px}

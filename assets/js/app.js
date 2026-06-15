@@ -555,42 +555,99 @@
       });
     }
 
-    // FAB trocar perfil (radial orbit menu)
+    // FAB trocar perfil — dois níveis: tipo de perfil → usuário
     function fabClose(){
       var fw=$('#fabWrap'); if(!fw) return;
       fw.classList.remove('fab-open');
+      var up=$('#fabUserPick'); if(up){ up.style.display='none'; up.innerHTML=''; }
       var ic=$('#fabBtn [data-lucide]');
       if(ic){ ic.setAttribute('data-lucide','users'); lcIcons(); }
     }
+    function fabShowUserPick(profile){
+      var fw=$('#fabWrap');
+      fw.classList.remove('fab-open');
+      var ic2=$('#fabBtn [data-lucide]');
+      if(ic2){ ic2.setAttribute('data-lucide','users'); lcIcons(); }
+      var users, label;
+      if(profile==='gestor'){
+        users=[{nome:perfilDef.gestor.nome, cor:perfilDef.gestor.cor, profile:'gestor', enfId:'', sub:'Acesso total'}];
+        label='Gestor';
+      } else if(profile==='auditor'){
+        users=[{nome:perfilDef.auditor.nome, cor:perfilDef.auditor.cor, profile:'auditor', enfId:'', sub:'Auditoria médica'}];
+        label='Auditor';
+      } else {
+        users=ENFERMEIROS.map(function(e){ return {nome:e.nome, cor:e.cor, profile:'enfermeiro', enfId:e.id, sub:e.especialidade}; });
+        label='Enfermeiro';
+      }
+      var up=$('#fabUserPick');
+      var showSearch=users.length>3;
+      function buildFupList(q){
+        var filtered=q?users.filter(function(u){ return u.nome.toLowerCase().indexOf(q)>=0||(u.sub&&u.sub.toLowerCase().indexOf(q)>=0); }):users;
+        var list=up.querySelector('.fup-list'); list.innerHTML='';
+        if(!filtered.length){ list.innerHTML='<div class="fup-empty">Nenhum resultado</div>'; return; }
+        filtered.forEach(function(u){
+          var isActive=(State.perfil===u.profile&&(u.profile!=='enfermeiro'||perfilDef.enfermeiro.enfermeiroId===u.enfId));
+          var btn=document.createElement('button');
+          btn.className='fup-item'+(isActive?' fup-active':'');
+          btn.innerHTML=
+            '<span class="fup-avatar" style="background:'+u.cor+'">'+esc(u.nome.charAt(0))+'</span>'+
+            '<span class="fup-info"><span class="fup-name">'+esc(u.nome)+'</span>'+
+              (u.sub?'<span class="fup-sub">'+esc(u.sub)+'</span>':'')+
+            '</span>'+
+            (isActive?'<span class="fup-check">'+ico('check',13)+'</span>':'');
+          btn.onclick=function(e2){
+            e2.stopPropagation();
+            if(u.profile==='enfermeiro'){
+              var enfSel=null;
+              for(var k=0;k<ENFERMEIROS.length;k++){ if(ENFERMEIROS[k].id===u.enfId){ enfSel=ENFERMEIROS[k]; break; } }
+              if(!enfSel) enfSel=ENFERMEIROS[0];
+              perfilDef.enfermeiro.nome=enfSel.nome; perfilDef.enfermeiro.cor=enfSel.cor;
+              perfilDef.enfermeiro.fluxos=enfSel.fluxos; perfilDef.enfermeiro.enfermeiroId=enfSel.id;
+            }
+            State.perfil=u.profile; State.visaoPerfil=''; State.visaoEnfermeiros=[];
+            localStorage.setItem('regula_perfil',State.perfil);
+            fabClose(); renderUserChip(); render();
+            toast('Perfil: '+u.nome,'ok');
+          };
+          list.appendChild(btn);
+        });
+        lcIcons();
+      }
+      up.innerHTML=
+        '<div class="fup-hd">'+
+          '<button class="fup-back" id="fupBack">'+ico('arrow-left',11)+' Perfis</button>'+
+          '<span class="fup-title">'+esc(label)+'</span>'+
+        '</div>'+
+        (showSearch?'<div class="fup-search"><input class="fup-sinput" type="text" placeholder="Buscar..." autocomplete="off"></div>':'')+
+        '<div class="fup-list"></div>';
+      buildFupList('');
+      var sinput=up.querySelector('.fup-sinput');
+      if(sinput) sinput.oninput=function(){ buildFupList(sinput.value.trim().toLowerCase()); };
+      up.querySelector('#fupBack').onclick=function(e3){
+        e3.stopPropagation();
+        up.style.display='none'; up.innerHTML='';
+        fw.classList.add('fab-open');
+        var ic3=$('#fabBtn [data-lucide]');
+        if(ic3){ ic3.setAttribute('data-lucide','x'); lcIcons(); }
+      };
+      up.style.display='block';
+      lcIcons();
+    }
     $('#fabBtn').onclick=function(e){
       e.stopPropagation();
+      var up=$('#fabUserPick');
+      if(up&&up.style.display==='block'){ fabClose(); return; }
       var fw=$('#fabWrap');
       var isOpen=fw.classList.toggle('fab-open');
       var ic=this.querySelector('[data-lucide]');
       if(ic){ ic.setAttribute('data-lucide',isOpen?'x':'users'); lcIcons(); }
     };
     document.addEventListener('click',function(e){
-      var fw=$('#fabWrap');
-      if(fw&&fw.classList.contains('fab-open')&&!fw.contains(e.target)) fabClose();
+      var fw=$('#fabWrap'), up=$('#fabUserPick');
+      if(fw&&(fw.classList.contains('fab-open')||(up&&up.style.display==='block'))&&!fw.contains(e.target)) fabClose();
     });
     $$('#fabMenu button').forEach(function(b){
-      b.onclick=function(e){
-        e.stopPropagation();
-        var p=b.getAttribute('data-profile');
-        var enfId=b.getAttribute('data-enf-id')||'';
-        if(p==='enfermeiro'){
-          var enfSel=null;
-          for(var k=0;k<ENFERMEIROS.length;k++){ if(ENFERMEIROS[k].id===enfId){ enfSel=ENFERMEIROS[k]; break; } }
-          if(!enfSel) enfSel=ENFERMEIROS[0];
-          perfilDef.enfermeiro.nome=enfSel.nome; perfilDef.enfermeiro.cor=enfSel.cor;
-          perfilDef.enfermeiro.fluxos=enfSel.fluxos; perfilDef.enfermeiro.enfermeiroId=enfSel.id;
-        }
-        State.perfil=p; State.visaoPerfil=''; State.visaoEnfermeiros=[];
-        localStorage.setItem('regula_perfil',State.perfil);
-        fabClose();
-        renderUserChip(); render();
-        toast('Perfil: '+(p==='enfermeiro'?perfilDef.enfermeiro.nome:perfilDef[p].nome),'ok');
-      };
+      b.onclick=function(e){ e.stopPropagation(); fabShowUserPick(b.getAttribute('data-profile')); };
     });
   }
 
@@ -600,12 +657,10 @@
     $('#userRole').textContent=State.perfil;
     $('#userAvatar').textContent=u.nome.charAt(0);
     $('#userAvatar').style.background=u.cor;
-    // Marca ativo no FAB
+    // Marca ativo no FAB (perfil ativo = anel no botão do tipo de perfil)
     $$('#fabMenu button').forEach(function(b){ b.classList.remove('fab-active'); });
-    $$('#fabMenu button[data-profile="'+State.perfil+'"]').forEach(function(b){
-      var eid=b.getAttribute('data-enf-id')||'';
-      if(State.perfil!=='enfermeiro'||eid===perfilDef.enfermeiro.enfermeiroId) b.classList.add('fab-active');
-    });
+    var fabActive=$('#fabMenu button[data-profile="'+State.perfil+'"]');
+    if(fabActive) fabActive.classList.add('fab-active');
   }
 
   /* === Views === */
@@ -2028,11 +2083,22 @@
     var fluxos=MOCK.FLUXOS;
     var subBar=el('div',{class:'cfg-sub-tab-bar'});
     var subContent=el('div',{class:'cfg-sub-content'});
+    // Busca de fluxos — full-width no flex-wrap, filtro nos botões abaixo
+    var srchFluxo=el('input',{class:'param-search cfg-sub-search',type:'text',placeholder:'Buscar fluxo...'});
+    subBar.appendChild(srchFluxo);
     fluxos.forEach(function(f,i){
       var btn=el('button',{class:'cfg-sub-tab'+(i===0?' active':''),'data-fid':f.id},f.id);
       btn.title=f.nome;
       subBar.appendChild(btn);
     });
+    srchFluxo.oninput=function(){
+      var q=srchFluxo.value.trim().toLowerCase();
+      $$('.cfg-sub-tab',subBar).forEach(function(b){
+        var fid=b.getAttribute('data-fid');
+        var fn=''; for(var i=0;i<fluxos.length;i++){ if(fluxos[i].id===fid){ fn=fluxos[i].nome; break; } }
+        b.style.display=(!q||fid.toLowerCase().indexOf(q)>=0||fn.toLowerCase().indexOf(q)>=0)?'':'none';
+      });
+    };
     container.appendChild(subBar);
     container.appendChild(subContent);
 
@@ -2074,6 +2140,9 @@
       var vincPanel=el('div',{class:'vinc-panel'});
 
       function buildSubfluxos(){
+        var wrap2=el('div',{style:'padding:14px'});
+        var srch=el('input',{class:'param-search',type:'text',placeholder:'Filtrar etapa...',style:'margin-bottom:12px'});
+        wrap2.appendChild(srch);
         var ol=el('ol',{class:'fluxo-etapas-ol'});
         f.etapas.forEach(function(nome,idx){
           var key=fid+'|'+idx;
@@ -2095,7 +2164,15 @@
             '</div>';
           ol.appendChild(li);
         });
-        var wrap2=el('div',{style:'padding:14px'}); wrap2.appendChild(ol); return wrap2;
+        srch.oninput=function(){
+          var q=srch.value.trim().toLowerCase();
+          var items=ol.querySelectorAll('.fluxo-etapa-item');
+          for(var ri=0;ri<items.length;ri++){
+            var nm=items[ri].querySelector('.fe-nome');
+            items[ri].style.display=(!q||(nm&&nm.textContent.toLowerCase().indexOf(q)>=0))?'':'none';
+          }
+        };
+        wrap2.appendChild(ol); return wrap2;
       }
 
       function showVinc(vkey){
@@ -2197,6 +2274,15 @@
             toast('Parametrização salva','ok');
           };
           saveBar.appendChild(saveBtn);
+          var srchVinc=el('input',{class:'param-search',type:'text',placeholder:'Filtrar por código ou descrição...',style:'margin:10px 0 4px'});
+          srchVinc.oninput=function(){
+            var q=srchVinc.value.trim().toLowerCase();
+            var rows=tbv.querySelectorAll('tr');
+            for(var ri=0;ri<rows.length;ri++){
+              rows[ri].style.display=(!q||rows[ri].textContent.toLowerCase().indexOf(q)>=0)?'':'none';
+            }
+          };
+          vincPanel.appendChild(srchVinc);
           vincPanel.appendChild(box);
           vincPanel.appendChild(saveBar);
         }
@@ -2655,6 +2741,18 @@
         }
       });
 
+      // Campo de busca acima da tabela (DUT e Documental)
+      var srchRow=el('div',{style:'padding:10px 0 2px'});
+      var srchParam=el('input',{class:'param-search',type:'text',placeholder:'Filtrar por código ou descrição...'});
+      srchRow.appendChild(srchParam);
+      srchParam.oninput=function(){
+        var q=srchParam.value.trim().toLowerCase();
+        var rows=tb.querySelectorAll('tr');
+        for(var ri=0;ri<rows.length;ri++){
+          rows[ri].style.display=(!q||rows[ri].textContent.toLowerCase().indexOf(q)>=0)?'':'none';
+        }
+      };
+      content.appendChild(srchRow);
       content.appendChild(box);
       lcIcons();
     }
