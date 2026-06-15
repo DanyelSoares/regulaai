@@ -12,7 +12,7 @@
 
   function analisarGuiaComIA(guia, paramz){
     paramz = paramz || {};
-    var pesos = paramz.pesos || {documental:3, dut:4, procedimento:3, pacote:2, matmed:3, diaria:2, contratual:3, historico:2};
+    var pesos = paramz.pesos || {documental:6,dut:8,procedimento:7,pacote:5,matmed:7,diaria:5,contratual:7,historico:4};
     var cumpridos=0, total=0;
     var crit_ok=[], crit_no=[], crit_na=[];
     var pendencias=[], alertas=[], sugestoes=[], regrasAplicadas=[], regrasNaoAvaliadas=[];

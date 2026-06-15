@@ -61,8 +61,18 @@
     filtros: { q:'', status:'', fluxo:'', origem:'', risco:'', benef:'', prest:'', tipo:'', congenere:'', solicitante:'', opme:'', uti:'', regimeAte:'', especialidade:'', dataDeEmissao:'', dataAteEmissao:'', sortCol:'', sortDir:'' },
     kanbanPeriodo: { de:'', ate:'' },
     kanbanFiltros: { colunas:[], uti:'', regime:'', tipo:'' },
-    fluxoSLAConfig: JSON.parse(localStorage.getItem('regula_fluxo_sla')||'null') || {}
+    fluxoSLAConfig: JSON.parse(localStorage.getItem('regula_fluxo_sla')||'null') || {},
+    fluxoWeights: JSON.parse(localStorage.getItem('regula_fluxo_weights')||'null') || {}
   };
+
+  var DEFAULT_PESOS={documental:6,dut:8,procedimento:7,pacote:5,matmed:7,diaria:5,contratual:7,historico:4};
+  function getFluxoPesos(fluxoId){
+    var saved=State.fluxoWeights[fluxoId];
+    if(!saved) return DEFAULT_PESOS;
+    var out={}, KEYS=['documental','dut','procedimento','pacote','matmed','diaria','contratual','historico'];
+    for(var ki=0;ki<KEYS.length;ki++) out[KEYS[ki]]=saved[KEYS[ki]]!=null?saved[KEYS[ki]]:DEFAULT_PESOS[KEYS[ki]];
+    return out;
+  }
 
   // Recupera pareceres salvos
   var saved = JSON.parse(localStorage.getItem('regula_pareceres')||'{}');
@@ -266,7 +276,7 @@
          + '<div class="v">'+p+'%</div>'
          + '</div>';
   }
-  function guiaAderencia(g){ if(!g._cache) g._cache = AI.analisarGuiaComIA(g,{}); return g._cache.aderencia; }
+  function guiaAderencia(g){ if(!g._cache) g._cache = AI.analisarGuiaComIA(g,{pesos:getFluxoPesos(g.fluxo&&g.fluxo.id)}); return g._cache.aderencia; }
 
   function calcRiscoScore(g){
     var p=State.riscoConfig.pesos, score=0;
@@ -976,7 +986,7 @@
       var alta=0,mod=0,baixa=0,crit=0,motivos={};
       gs.forEach(function(g){
         var a=guiaAderencia(g);
-        var cache=g._cache; if(!cache){ cache=AI.analisarGuiaComIA(g,{}); g._cache=cache; }
+        var cache=g._cache; if(!cache){ cache=AI.analisarGuiaComIA(g,{pesos:getFluxoPesos(g.fluxo&&g.fluxo.id)}); g._cache=cache; }
         if(a>=90) alta++; else if(a>=70) mod++; else if(a>=50) baixa++; else crit++;
         cache.criteriosNaoCumpridos.forEach(function(c){ motivos[c]=(motivos[c]||0)+1; });
       });
@@ -2136,6 +2146,9 @@
         vBtn.innerHTML=ico(VINC_ICO[v]||'link',12)+' '+(VINC_LABELS[v]||v);
         vincBar.appendChild(vBtn);
       });
+      var vBtnIA=el('button',{class:'vinc-tab','data-vinc':'pesosIA'});
+      vBtnIA.innerHTML=ico('brain',12)+' Pesos IA';
+      vincBar.appendChild(vBtnIA);
 
       var vincPanel=el('div',{class:'vinc-panel'});
 
@@ -2180,6 +2193,67 @@
         vincPanel.innerHTML='';
         if(vkey==='subfluxos'){
           vincPanel.appendChild(buildSubfluxos());
+        } else if(vkey==='pesosIA'){
+          var IA_CRITERIA=[
+            {key:'documental',   label:'Documental',    ico:'file-check',  desc:'Verificação de documentação e anexos obrigatórios (laudo, guia TISS, exames)'},
+            {key:'dut',          label:'DUT',            ico:'shield-check', desc:'Aderência às Diretrizes de Utilização da ANS'},
+            {key:'procedimento', label:'Procedimentos',  ico:'clipboard-list',desc:'Vinculações e parametrização de procedimentos TUSS'},
+            {key:'pacote',       label:'Pacotes',         ico:'package',     desc:'Pacotes clínicos vinculados ao fluxo'},
+            {key:'matmed',       label:'Mat/Med',         ico:'pill',        desc:'Materiais, medicamentos e OPME vinculados'},
+            {key:'diaria',       label:'Diárias/Taxas',   ico:'calendar',    desc:'Diárias de internação e taxas hospitalares'},
+            {key:'contratual',   label:'Contratual',      ico:'badge-check', desc:'Elegibilidade e cobertura contratual do beneficiário'},
+            {key:'historico',    label:'Histórico',       ico:'clock',       desc:'Histórico clínico e tratamentos anteriores do paciente'}
+          ];
+          var _savedPesos=State.fluxoWeights[fid]||{};
+          var _wWrap=el('div',{style:'padding:16px'});
+          var _wInfo=el('div',{style:'font-size:12px;color:var(--muted);margin-bottom:16px;line-height:1.6;background:var(--g-50);border:1px solid var(--g-100);border-radius:8px;padding:10px 14px'});
+          _wInfo.innerHTML=ico('info',13)+' Configure o peso de cada critério no cálculo de aderência das guias deste fluxo. '+
+            '<b style="color:var(--g-700)">0 = não avaliado</b> &nbsp;·&nbsp; <b style="color:var(--g-700)">10 = máxima relevância.</b> '+
+            'Os pesos são proporcionais entre si — o que importa é a relação entre eles.';
+          _wWrap.appendChild(_wInfo);
+          var _wTbl=el('table',{style:'width:100%;border-collapse:collapse'});
+          _wTbl.innerHTML='<thead><tr>'+
+            '<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1.5px solid var(--g-100)">Critério</th>'+
+            '<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1.5px solid var(--g-100)">Descrição</th>'+
+            '<th style="width:220px;padding:8px 12px;text-align:center;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1.5px solid var(--g-100)">Peso (0 – 10)</th>'+
+            '</tr></thead>';
+          var _wTbody=el('tbody');
+          IA_CRITERIA.forEach(function(c,idx){
+            var cur=_savedPesos[c.key]!=null?_savedPesos[c.key]:DEFAULT_PESOS[c.key];
+            var tr=el('tr',{style:'background:'+(idx%2===0?'#f9fcfa':'#fff')});
+            tr.innerHTML=
+              '<td style="padding:11px 12px;font-size:13px;font-weight:700;color:var(--ink)">'+ico(c.ico,13)+' '+esc(c.label)+'</td>'+
+              '<td style="padding:11px 12px;font-size:12px;color:var(--muted)">'+esc(c.desc)+'</td>'+
+              '<td style="padding:11px 12px">'+
+                '<div style="display:flex;align-items:center;gap:10px;justify-content:center">'+
+                  '<input type="range" min="0" max="10" step="1" value="'+cur+'" class="ia-peso-range" data-key="'+esc(c.key)+'"'+
+                    ' style="flex:1;max-width:130px;accent-color:var(--g-600);cursor:pointer;height:4px">'+
+                  '<span class="ia-peso-val" style="font-size:18px;font-weight:800;color:var(--g-700);min-width:28px;text-align:center">'+cur+'</span>'+
+                '</div>'+
+              '</td>';
+            _wTbody.appendChild(tr);
+          });
+          _wTbl.appendChild(_wTbody);
+          _wTbl.addEventListener('input',function(e){
+            if(e.target.classList.contains('ia-peso-range'))
+              e.target.parentNode.querySelector('.ia-peso-val').textContent=e.target.value;
+          });
+          _wWrap.appendChild(_wTbl);
+          var _wBar=el('div',{style:'display:flex;justify-content:flex-end;margin-top:14px'});
+          var _wSave=el('button',{class:'btn-animated'},ico('save',13)+' Salvar pesos deste fluxo');
+          _wSave.onclick=function(){
+            if(!State.fluxoWeights[fid]) State.fluxoWeights[fid]={};
+            _wTbl.querySelectorAll('.ia-peso-range').forEach(function(inp){
+              State.fluxoWeights[fid][inp.getAttribute('data-key')]=+inp.value;
+            });
+            localStorage.setItem('regula_fluxo_weights',JSON.stringify(State.fluxoWeights));
+            State.guias.forEach(function(g){ if(g.fluxo&&g.fluxo.id===fid) g._cache=null; });
+            toast('Pesos IA salvos para '+fid,'ok');
+          };
+          _wBar.appendChild(_wSave);
+          _wWrap.appendChild(_wBar);
+          vincPanel.appendChild(_wWrap);
+          lcIcons();
         } else {
           var data=VINC_DATA[vkey]||[], cols=VINC_COLS[vkey]||['cod','desc'];
           // Colunas configuráveis extras — somente aba Procedimentos
@@ -3700,7 +3774,7 @@
   }
 
   function openGuia(g, tab){
-    g._cache = AI.analisarGuiaComIA(g,{});
+    g._cache = AI.analisarGuiaComIA(g,{pesos:getFluxoPesos(g.fluxo&&g.fluxo.id)});
     var ia=g._cache;
     var TABS_DEF=[
       {id:'resumo',        label:'Resumo',           ico:'layout-dashboard', grp:0},
@@ -3748,7 +3822,7 @@
       document.body.classList.add('pl--blurring');
       showPageLoader();
       setTimeout(function(){
-        g._cache=AI.analisarGuiaComIA(g,{}); ia=g._cache; setTab('ia');
+        g._cache=AI.analisarGuiaComIA(g,{pesos:getFluxoPesos(g.fluxo&&g.fluxo.id)}); ia=g._cache; setTab('ia');
         hidePageLoader();
         document.body.classList.remove('pl--blurring');
         setTimeout(function(){ if(_pl) _pl.classList.remove('pl--transp'); },600);
@@ -4147,7 +4221,7 @@
 
   function openParecer(g){
     if(!can('parecer')){ toast('Seu perfil não pode emitir parecer','warn'); return; }
-    var ia = g._cache || AI.analisarGuiaComIA(g,{});
+    var ia = g._cache || AI.analisarGuiaComIA(g,{pesos:getFluxoPesos(g.fluxo&&g.fluxo.id)});
     var body='<div class="field"><label>Decisão</label><select id="pDec"><option value="Aprovação">Aprovação</option><option value="Aprovação com ressalva">Aprovação com ressalva</option><option value="Reprovação">Reprovação</option><option value="Solicitar complemento">Solicitar complemento</option><option value="Encaminhar para junta médica">Encaminhar para junta médica</option></select></div>'+
       '<div class="field"><label>Motivo padronizado</label><select id="pMot"></select></div>'+
       '<div class="field"><div class="field-lbl-row"><label>Justificativa técnica</label><button class="btn sm ghost" id="pJustIA" type="button">'+ico('sparkles')+' Gerar análise técnica</button></div><textarea id="pJust" placeholder="Descreva a justificativa técnica..."></textarea></div>'+
