@@ -2182,6 +2182,37 @@
           vincPanel.appendChild(buildSubfluxos());
         } else {
           var data=VINC_DATA[vkey]||[], cols=VINC_COLS[vkey]||['cod','desc'];
+          // Colunas configuráveis extras — somente aba Procedimentos
+          var PROC_SELECTS=vkey==='proc'?[
+            {key:'ind_acidente',label:'Ind. Acidente',width:'152px',opts:[
+              {v:'',t:'Todas'},
+              {v:'nao',t:'Não (Não Acidente)'},
+              {v:'sim',t:'Sim (Trabalho, Trânsito e Outros)'}
+            ]},
+            {key:'tipo_atend',label:'Tipo de atend.',width:'152px',opts:[
+              {v:'',t:'Todos'},
+              {v:'01',t:'01 - Remoção'},
+              {v:'02',t:'02 - Pequena Cirurgia'},
+              {v:'03',t:'03 - Outras Terapias'},
+              {v:'04',t:'04 - Consulta'},
+              {v:'08',t:'08 - Quimioterapia'},
+              {v:'09',t:'09 - Radioterapia'}
+            ]},
+            {key:'natureza_atend',label:'Natureza atend.',width:'148px',opts:[
+              {v:'',t:'Todas'},
+              {v:'amb',t:'Ambulatorial'},
+              {v:'int_cli',t:'Internação clínica'},
+              {v:'int_cir',t:'Internação cirúrgica'},
+              {v:'dem_int',t:'Demais internações'},
+              {v:'ocup',t:'Ocupacional'},
+              {v:'exc_ocup',t:'Exceto ocupacional'}
+            ]},
+            {key:'regime_atend',label:'Regime atend.',width:'110px',opts:[
+              {v:'',t:'Todos'},
+              {v:'eletivo',t:'Eletivo'},
+              {v:'urgente',t:'Urgente'}
+            ]}
+          ]:[];
           var box=el('div',{class:'table-wrap'});
           var tv=el('table');
           // Cabeçalhos com larguras fixas para alinhar com as células
@@ -2189,6 +2220,8 @@
             var isBool=(c==='ia'||c==='opme'||c==='obrig');
             var w=c==='cod'?'style="width:110px"':isBool?'style="width:80px;text-align:center"':'';
             return '<th '+w+'>'+(COL_LABELS[c]||c.toUpperCase())+'</th>';
+          }).join('')+PROC_SELECTS.map(function(s){
+            return '<th style="width:'+s.width+'">'+s.label+'</th>';
           }).join('');
           tv.innerHTML='<thead><tr>'+thCols+
             '<th style="width:70px;text-align:center">Peso</th>'+
@@ -2215,7 +2248,15 @@
               if(isBool) val=val?'<span class="badge">Sim</span>':'<span class="badge muted">Não</span>';
               return '<td'+(isBool?' style="text-align:center"':'')+'>'+(val==null?'—':isBool?val:esc(String(val)))+'</td>';
             }).join('');
-            trv.innerHTML=staticCols+
+            var procSelCols=PROC_SELECTS.map(function(s){
+              var curVal=cfg[s.key]||'';
+              var selStyle='width:100%;font-size:11px;border:1.5px solid var(--g-200);border-radius:6px;padding:3px 5px;font-family:inherit;color:var(--ink);background:#fff;cursor:pointer';
+              var optHtml=s.opts.map(function(o){
+                return '<option value="'+esc(o.v)+'"'+(curVal===o.v?' selected':'')+'>'+esc(o.t)+'</option>';
+              }).join('');
+              return '<td style="padding:5px 8px"><select class="vinc-proc-sel" data-field="'+esc(s.key)+'" data-vkey="'+esc(vkey)+'" data-cod="'+esc(r.cod)+'" style="'+selStyle+'">'+optHtml+'</select></td>';
+            }).join('');
+            trv.innerHTML=staticCols+procSelCols+
               '<td style="text-align:center"><input type="number" class="vinc-peso" min="0" max="100" data-vkey="'+vkey+'" data-cod="'+esc(r.cod)+'" value="'+peso+'" style="width:52px;text-align:center;border:1.5px solid var(--g-200);border-radius:6px;padding:3px 5px;font-size:12px"></td>'+
               '<td style="text-align:center"><button class="vinc-status-btn '+(status==='ativo'?'active':'')+'" data-vkey="'+vkey+'" data-cod="'+esc(r.cod)+'" data-status="'+status+'" style="font-size:11px;padding:3px 10px;border-radius:12px;border:1.5px solid;cursor:pointer;font-weight:600;background:'+(status==='ativo'?'var(--g-700)':'#fff')+';color:'+(status==='ativo'?'#fff':'var(--muted)')+';border-color:'+(status==='ativo'?'var(--g-700)':'var(--g-200)')+'">'+esc(status==='ativo'?'Ativo':'Inativo')+'</button></td>'+
               '<td style="text-align:center">'+_vincInstrBtn(vkey,r.cod,!!instr)+'</td>';
@@ -2285,6 +2326,11 @@
               var k=inp.getAttribute('data-vkey')+'|'+inp.getAttribute('data-cod');
               if(!State.vincConfig[k]) State.vincConfig[k]={};
               State.vincConfig[k].peso=+inp.value;
+            });
+            $$('.vinc-proc-sel',box).forEach(function(sel){
+              var k=sel.getAttribute('data-vkey')+'|'+sel.getAttribute('data-cod');
+              if(!State.vincConfig[k]) State.vincConfig[k]={};
+              State.vincConfig[k][sel.getAttribute('data-field')]=sel.value;
             });
             localStorage.setItem('regula_vinc_cfg',JSON.stringify(State.vincConfig));
             toast('Parametrização salva','ok');
