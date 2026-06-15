@@ -3849,36 +3849,61 @@
     el.textContent=ROUTE_LABELS[State.route]||State.route;
   }
 
-  /* === Tooltip global (data-tip) === */
+  /* === Tooltip global === */
   (function(){
-    var box = document.createElement('div');
-    box.style.cssText = 'position:fixed;z-index:9999;display:none;max-width:260px;'
-      + 'background:#1a2e1f;color:#fff;font-size:11px;font-weight:500;line-height:1.55;'
-      + 'padding:8px 12px;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.3);'
-      + 'pointer-events:none;white-space:normal;word-break:break-word';
-    document.body.appendChild(box);
+    var tip=document.createElement('div');
+    tip.className='gtip';
+    tip.setAttribute('role','tooltip');
+    document.body.appendChild(tip);
+    var _mx=0,_my=0,_vis=false;
 
     function findTip(el){
-      while(el && el !== document.body){
-        if(el.getAttribute && el.getAttribute('data-tip')) return el;
-        el = el.parentNode;
+      while(el&&el!==document.body){
+        if(el.getAttribute){
+          var v=el.getAttribute('data-tip')||el.getAttribute('title');
+          if(v&&v.trim()){
+            if(el.hasAttribute('title')){
+              el.setAttribute('data-tip',el.getAttribute('title'));
+              el.removeAttribute('title');
+            }
+            return el.getAttribute('data-tip');
+          }
+        }
+        el=el.parentNode;
       }
       return null;
     }
-    document.addEventListener('mouseover', function(e){
-      var t = findTip(e.target);
-      if(t){ box.textContent = t.getAttribute('data-tip'); box.style.display = 'block'; }
-      else  { box.style.display = 'none'; }
+
+    function pos(){
+      var tw=tip.offsetWidth||180,th=tip.offsetHeight||36;
+      var vw=window.innerWidth,vh=window.innerHeight,PAD=10;
+      var tx=_mx-tw/2;
+      if(tx<PAD) tx=PAD;
+      if(tx+tw>vw-PAD) tx=vw-tw-PAD;
+      var ty=_my-th-16;
+      var below=ty<PAD;
+      tip.classList.toggle('gtip--below',below);
+      if(below) ty=_my+22;
+      tip.style.left=tx+'px';
+      tip.style.top=ty+'px';
+      var arrLeft=Math.round(Math.max(10,Math.min(90,(_mx-tx)/tw*100)));
+      tip.style.setProperty('--arr',arrLeft+'%');
+    }
+
+    document.addEventListener('mouseover',function(e){
+      var txt=findTip(e.target);
+      if(txt){tip.textContent=txt;_vis=true;tip.classList.add('gtip--vis');}
+      else{_vis=false;tip.classList.remove('gtip--vis');}
     });
-    document.addEventListener('mousemove', function(e){
-      if(box.style.display === 'block'){
-        box.style.left = (e.clientX + 14) + 'px';
-        box.style.top  = (e.clientY - 50) + 'px';
-      }
+    document.addEventListener('mousemove',function(e){
+      _mx=e.clientX;_my=e.clientY;
+      if(_vis) pos();
     });
-    document.addEventListener('mouseout', function(e){
-      if(!findTip(e.relatedTarget)) box.style.display = 'none';
+    document.addEventListener('mouseout',function(e){
+      if(!findTip(e.relatedTarget)){_vis=false;tip.classList.remove('gtip--vis');}
     });
+    document.addEventListener('scroll',function(){_vis=false;tip.classList.remove('gtip--vis');},true);
+    document.addEventListener('click',function(){_vis=false;tip.classList.remove('gtip--vis');},true);
   })();
 
   // Fecha dropdowns do kanban ao clicar fora
