@@ -3068,23 +3068,58 @@
     return wrap;
   }
 
+  function _buildPermMatrix(){
+    var PERM_LIST=[
+      {label:'Visualizar guias e dashboard',           desc:'Leitura de guias, indicadores e painel geral',                              p:['gestor','auditor','enfermeiro']},
+      {label:'Triagem e complemento de documentação',  desc:'Solicitar documentos, realizar triagem inicial e registrar pendências',     p:['gestor','auditor','enfermeiro']},
+      {label:'Emitir parecer técnico',                 desc:'Registrar pareceres de análise clínica e regulatória em guias',             p:['gestor','auditor']},
+      {label:'Aprovar guias',                          desc:'Emitir autorização de procedimentos que atendem aos critérios técnicos',    p:['gestor','auditor']},
+      {label:'Reprovar guias',                         desc:'Negar procedimentos por não conformidade técnica ou regulatória',           p:['gestor','auditor']},
+      {label:'Encaminhar para junta médica',           desc:'Solicitar avaliação multidisciplinar por junta médica',                    p:['gestor','auditor']},
+      {label:'Migrar entre perfis / visão geral',      desc:'Alternar entre perfis e visualizar as demandas de todos os usuários',      p:['gestor']},
+      {label:'Acessar Configurações do sistema',       desc:'Editar parâmetros de risco, SLA e regras de classificação',               p:['gestor']},
+      {label:'Parametrizar fluxos, DUT e vinculações', desc:'Configurar etapas, regras DUT, procedimentos e instruções para a IA',     p:['gestor']},
+      {label:'Visualizar logs completos',              desc:'Histórico integral de todas as ações realizadas no sistema',               p:['gestor']},
+      {label:'Dados sensíveis sem mascaramento',       desc:'CPF, cartão e informações pessoais exibidos sem ocultação de dígitos',    p:['gestor']},
+    ];
+    var profiles=['gestor','auditor','enfermeiro'];
+    var profileColors={gestor:'#054f27',auditor:'#066b34',enfermeiro:'#0a8a43'};
+    var t=el('table',{style:'width:100%;border-collapse:collapse'});
+    var thRow='<thead><tr><th style="text-align:left;padding:0 12px 12px 0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Permissão</th>';
+    profiles.forEach(function(p){
+      thRow+='<th style="text-align:center;padding:0 0 12px;width:100px"><span style="display:inline-block;background:'+profileColors[p]+';color:#fff;border-radius:20px;padding:4px 14px;font-size:11.5px;font-weight:700;letter-spacing:.2px">'+p.charAt(0).toUpperCase()+p.slice(1)+'</span></th>';
+    });
+    thRow+='</tr></thead>';
+    t.innerHTML=thRow;
+    var tb=el('tbody');
+    PERM_LIST.forEach(function(perm,idx){
+      var tr=el('tr',{style:'border-top:'+(idx===0?'none':'1px solid var(--g-50)')});
+      var labelCell='<td style="padding:10px 12px 10px 0;vertical-align:top">'+
+        '<div style="font-size:13px;font-weight:600;color:var(--ink)">'+esc(perm.label)+'</div>'+
+        '<div style="font-size:11.5px;color:var(--muted);margin-top:2px;line-height:1.4">'+esc(perm.desc)+'</div>'+
+        '</td>';
+      var permCells=profiles.map(function(p){
+        var has=perm.p.indexOf(p)>=0;
+        return '<td style="text-align:center;vertical-align:middle;padding:10px 0">'+
+          (has?'<span style="color:var(--g-600);display:inline-flex;justify-content:center">'+ico('check-circle',16)+'</span>':
+               '<span style="color:var(--g-200);display:inline-flex;justify-content:center">'+ico('minus',14)+'</span>')+
+          '</td>';
+      }).join('');
+      tr.innerHTML=labelCell+permCells;
+      tb.appendChild(tr);
+    });
+    t.appendChild(tb);
+    return t;
+  }
+
   function viewPermissoes(){
     var wrap=el('div');
-    wrap.appendChild(el('div',{class:'page-title'},'<div><h1>'+ico('shield',18)+' Permissões</h1><p>Perfis de acesso, permissões por papel e governança de dados.</p></div>'));
-    var g=el('div',{class:'panels'});
-    var a=el('div',{class:'panel'},'<h3>Perfis e permissões</h3>');
-    var t=el('table'); t.innerHTML='<thead><tr><th>Perfil</th><th>Permissões</th></tr></thead>';
-    var tb=el('tbody');
-    Object.keys(perfilDef).forEach(function(k){
-      tb.appendChild(el('tr',{},'<td><b>'+k+'</b></td><td>'+perfilDef[k].perms.map(function(p){return '<span class="badge muted" style="margin:2px">'+p+'</span>';}).join('')+'</td>'));
-    });
-    t.appendChild(tb); a.appendChild(t); g.appendChild(a);
-    var b=el('div',{class:'panel'},
-      '<h3>Governança / LGPD</h3>'+
-      '<p style="font-size:13px;color:var(--muted)">Dados sensíveis (CPF, cartão) são mascarados para perfis Enfermeiro e Auditor. Apenas o Gestor visualiza dados completos. Todas as ações são registradas em log.</p>'+
-      '<div class="ai-warn">Parecer gerado como apoio à auditoria. Decisão final exclusiva da operadora.</div>');
-    g.appendChild(b);
+    wrap.appendChild(el('div',{class:'page-title'},'<div><h1>'+ico('shield',18)+' Permissões</h1><p>Perfis de acesso e permissões por papel.</p></div>'));
+    var g=el('div',{class:'panel'});
+    g.innerHTML='<h3>Perfis e permissões</h3><p style="font-size:13px;color:var(--muted);margin-bottom:16px">Cada perfil acessa apenas os recursos compatíveis com sua responsabilidade funcional.</p>';
+    g.appendChild(_buildPermMatrix());
     wrap.appendChild(g);
+    lcIcons();
     return wrap;
   }
 
@@ -3324,20 +3359,11 @@
 
     function renderPermissoes(){
       cfgContent.innerHTML='';
-      var g=el('div',{class:'panels'});
-      var a=el('div',{class:'panel'},'<h3>Perfis e permissões</h3>');
-      var t=el('table'); t.innerHTML='<thead><tr><th>Perfil</th><th>Permissões</th></tr></thead>';
-      var tb=el('tbody');
-      Object.keys(perfilDef).forEach(function(k){
-        tb.appendChild(el('tr',{},'<td><b>'+k+'</b></td><td>'+perfilDef[k].perms.map(function(p){return '<span class="badge muted" style="margin:2px">'+p+'</span>';}).join('')+'</td>'));
-      });
-      t.appendChild(tb); a.appendChild(t); g.appendChild(a);
-      var b=el('div',{class:'panel'},
-        '<h3>Governança / LGPD</h3>'+
-        '<p style="font-size:13px;color:var(--muted)">Dados sensíveis (CPF, cartão) são mascarados para perfis Enfermeiro e Auditor. Apenas o Gestor visualiza dados completos. Todas as ações são registradas em log.</p>'+
-        '<div class="ai-warn">Parecer gerado como apoio à auditoria. Decisão final exclusiva da operadora.</div>');
-      g.appendChild(b);
-      cfgContent.appendChild(g);
+      var panel=el('div',{class:'panel'});
+      panel.innerHTML='<h3>Perfis e permissões</h3><p style="font-size:13px;color:var(--muted);margin-bottom:16px">Cada perfil acessa apenas os recursos compatíveis com sua responsabilidade funcional.</p>';
+      panel.appendChild(_buildPermMatrix());
+      cfgContent.appendChild(panel);
+      lcIcons();
     }
 
     // ── Conteúdo: Fluxos ─────────────────────────────────────────────
