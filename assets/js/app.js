@@ -2110,7 +2110,7 @@
 
       var VINC_LABELS={'proc':'Procedimentos','pac':'Pacotes','matmed':'Mat/Med','dt':'Diárias/Taxas'};
       var VINC_ICO={'proc':'stethoscope','pac':'package','matmed':'pill','dt':'calendar-days'};
-      var VINC_COLS={'proc':['cod','desc','ia'],'pac':['cod','desc'],'matmed':['cod','desc','opme'],'dt':['cod','desc']};
+      var VINC_COLS={'proc':['cod','desc'],'pac':['cod','desc'],'matmed':['cod','desc','opme'],'dt':['cod','desc']};
       var VINC_DATA={'proc':MOCK.PROCEDIMENTOS,'pac':MOCK.PACOTES,'matmed':MOCK.MATMED,'dt':MOCK.DIARIAS_TAXAS};
       var COL_LABELS={cod:'Código',desc:'Descrição',peso:'Peso',obrig:'Obrig.',ia:'IA',opme:'OPME'};
 
