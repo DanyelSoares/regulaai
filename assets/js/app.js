@@ -2290,7 +2290,7 @@
             toast('Parametrização salva','ok');
           };
           saveBar.appendChild(saveBtn);
-          var srchVinc=el('input',{class:'param-search',type:'text',placeholder:'Filtrar por código ou descrição...',style:'margin:12px 0'});
+          var srchVinc=el('input',{class:'param-search',type:'text',placeholder:'Filtrar por código ou descrição...'});
           srchVinc.oninput=function(){
             var q=srchVinc.value.trim().toLowerCase();
             var rows=tbv.querySelectorAll('tr');
@@ -2298,7 +2298,9 @@
               rows[ri].style.display=(!q||rows[ri].textContent.toLowerCase().indexOf(q)>=0)?'':'none';
             }
           };
-          vincPanel.appendChild(srchVinc);
+          var srchWrap=el('div',{style:'padding:10px 12px 0'});
+          srchWrap.appendChild(srchVinc);
+          vincPanel.appendChild(srchWrap);
           vincPanel.appendChild(box);
           vincPanel.appendChild(saveBar);
         }
@@ -2758,7 +2760,7 @@
       });
 
       // Campo de busca acima da tabela (DUT e Documental)
-      var srchRow=el('div',{style:'padding:10px 0 2px'});
+      var srchRow=el('div',{style:'padding:10px 0 2px;margin-bottom:4px'});
       var srchParam=el('input',{class:'param-search',type:'text',placeholder:'Filtrar por código ou descrição...'});
       srchRow.appendChild(srchParam);
       srchParam.oninput=function(){
