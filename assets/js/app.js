@@ -2290,7 +2290,7 @@
             toast('Parametrização salva','ok');
           };
           saveBar.appendChild(saveBtn);
-          var srchVinc=el('input',{class:'param-search',type:'text',placeholder:'Filtrar por código ou descrição...',style:'margin:10px 0 4px'});
+          var srchVinc=el('input',{class:'param-search',type:'text',placeholder:'Filtrar por código ou descrição...',style:'margin:12px 0'});
           srchVinc.oninput=function(){
             var q=srchVinc.value.trim().toLowerCase();
             var rows=tbv.querySelectorAll('tr');
