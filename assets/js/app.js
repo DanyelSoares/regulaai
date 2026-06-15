@@ -2184,8 +2184,24 @@
           var data=VINC_DATA[vkey]||[], cols=VINC_COLS[vkey]||['cod','desc'];
           var box=el('div',{class:'table-wrap'});
           var tv=el('table');
-          tv.innerHTML='<thead><tr>'+cols.map(function(c){return '<th>'+(COL_LABELS[c]||c.toUpperCase())+'</th>';}).join('')+'<th style="width:70px;text-align:center">Peso</th><th style="width:90px;text-align:center">Status</th><th>Instrução IA</th></tr></thead>';
+          // Cabeçalhos com larguras fixas para alinhar com as células
+          var thCols=cols.map(function(c){
+            var isBool=(c==='ia'||c==='opme'||c==='obrig');
+            var w=c==='cod'?'style="width:110px"':isBool?'style="width:80px;text-align:center"':'';
+            return '<th '+w+'>'+(COL_LABELS[c]||c.toUpperCase())+'</th>';
+          }).join('');
+          tv.innerHTML='<thead><tr>'+thCols+
+            '<th style="width:70px;text-align:center">Peso</th>'+
+            '<th style="width:90px;text-align:center">Status</th>'+
+            '<th style="width:140px;text-align:center">Instrução IA</th>'+
+            '</tr></thead>';
           var tbv=el('tbody');
+          // Helper — botão Instrução IA idêntico ao padrão DUT/Documental
+          function _vincInstrBtn(vk,cod,hasInstr){
+            return '<button class="vinc-instr-btn" data-vkey="'+vk+'" data-cod="'+esc(cod)+'" style="font-size:11px;padding:3px 10px;border-radius:12px;border:1.5px solid;cursor:pointer;font-weight:600;white-space:nowrap;'+
+              (hasInstr?'background:var(--g-100);color:var(--g-700);border-color:var(--g-300)':'background:#fff;color:var(--muted);border-color:var(--g-200)')+'">'+
+              ico('sparkles',11)+' '+(hasInstr?'Ler instrução':'Adicionar')+'</button>';
+          }
           data.forEach(function(r){
             var cfg_key=vkey+'|'+r.cod;
             var cfg=State.vincConfig[cfg_key]||{};
@@ -2195,68 +2211,73 @@
             var trv=el('tr');
             var staticCols=cols.map(function(c){
               var val=r[c];
-              if(typeof val==='boolean') val=val?'<span class="badge">Sim</span>':'<span class="badge muted">Não</span>';
-              return '<td>'+(val==null?'—':esc(String(val)))+'</td>';
+              var isBool=typeof val==='boolean';
+              if(isBool) val=val?'<span class="badge">Sim</span>':'<span class="badge muted">Não</span>';
+              return '<td'+(isBool?' style="text-align:center"':'')+'>'+(val==null?'—':isBool?val:esc(String(val)))+'</td>';
             }).join('');
             trv.innerHTML=staticCols+
               '<td style="text-align:center"><input type="number" class="vinc-peso" min="0" max="100" data-vkey="'+vkey+'" data-cod="'+esc(r.cod)+'" value="'+peso+'" style="width:52px;text-align:center;border:1.5px solid var(--g-200);border-radius:6px;padding:3px 5px;font-size:12px"></td>'+
               '<td style="text-align:center"><button class="vinc-status-btn '+(status==='ativo'?'active':'')+'" data-vkey="'+vkey+'" data-cod="'+esc(r.cod)+'" data-status="'+status+'" style="font-size:11px;padding:3px 10px;border-radius:12px;border:1.5px solid;cursor:pointer;font-weight:600;background:'+(status==='ativo'?'var(--g-700)':'#fff')+';color:'+(status==='ativo'?'#fff':'var(--muted)')+';border-color:'+(status==='ativo'?'var(--g-700)':'var(--g-200)')+'">'+esc(status==='ativo'?'Ativo':'Inativo')+'</button></td>'+
-              '<td><textarea class="vinc-instr" data-vkey="'+vkey+'" data-cod="'+esc(r.cod)+'" rows="2" readonly placeholder="Duplo clique para editar..." title="Duplo clique para editar" style="width:100%;font-size:11.5px;border:1.5px solid var(--g-100);border-radius:6px;padding:4px 7px;resize:none;font-family:inherit;color:var(--ink);cursor:pointer;background:#fafdfb">'+esc(instr)+'</textarea></td>';
+              '<td style="text-align:center">'+_vincInstrBtn(vkey,r.cod,!!instr)+'</td>';
             tbv.appendChild(trv);
           });
           tv.appendChild(tbv); box.appendChild(tv);
 
-          // Duplo clique na instrução IA → abre modal de edição
-          box.addEventListener('dblclick',function(e){
-            var ta=e.target.closest('.vinc-instr');
-            if(!ta) return;
-            var vk=ta.getAttribute('data-vkey'), cod=ta.getAttribute('data-cod');
-            var descTd=ta.closest('tr').cells[1];
-            var descTxt=descTd?descTd.textContent.trim():cod;
-            var cur=ta.value;
-            var bodyHTML=
-              '<div style="margin-bottom:10px;font-size:12.5px;color:var(--muted)">Item: <b>'+esc(descTxt)+'</b></div>'+
-              '<textarea id="vincInstrModal" maxlength="3000" rows="14" style="width:100%;font-size:13px;line-height:1.55;border:1.5px solid var(--g-200);border-radius:8px;padding:10px 14px;resize:vertical;font-family:inherit;color:var(--ink);box-sizing:border-box">'+esc(cur)+'</textarea>'+
-              '<div style="display:flex;justify-content:flex-end;margin-top:5px"><span id="vincInstrCount" style="font-size:11px;color:var(--muted)">'+cur.length+' / 3000</span></div>';
-            var footHTML='<button class="btn ghost" id="vincInstrCancel">'+ico('x',13)+' Cancelar</button>'+
-              '<button class="btn" id="vincInstrSave">'+ico('save',13)+' Salvar</button>';
-            var m=modal(ico('sparkles')+' Instrução para a IA','Editar instrução do item · máx. 3000 caracteres',bodyHTML,footHTML);
-            var mta=m.querySelector('#vincInstrModal');
-            var cnt=m.querySelector('#vincInstrCount');
-            mta.oninput=function(){ cnt.textContent=mta.value.length+' / 3000'; };
-            m.querySelector('#vincInstrCancel').onclick=function(){ m.closest('.modal-backdrop').remove(); };
-            m.querySelector('#vincInstrSave').onclick=function(){
-              var newVal=mta.value;
-              ta.value=newVal;
-              var k=vk+'|'+cod;
-              if(!State.vincConfig[k]) State.vincConfig[k]={};
-              State.vincConfig[k].instr=newVal;
-              localStorage.setItem('regula_vinc_cfg',JSON.stringify(State.vincConfig));
-              m.closest('.modal-backdrop').remove();
-              toast('Instrução salva','ok');
-            };
-            setTimeout(function(){ mta.focus(); mta.setSelectionRange(mta.value.length,mta.value.length); },50);
-          });
-
-          // Toggle status
+          // Click unificado: Instrução IA (botão) + Status toggle
           box.addEventListener('click',function(e){
-            var btn=e.target.closest('.vinc-status-btn');
-            if(!btn) return;
-            var k=btn.getAttribute('data-vkey')+'|'+btn.getAttribute('data-cod');
-            var cur=btn.getAttribute('data-status');
-            var novo=cur==='ativo'?'inativo':'ativo';
-            if(!State.vincConfig[k]) State.vincConfig[k]={};
-            State.vincConfig[k].status=novo;
-            btn.setAttribute('data-status',novo);
-            btn.textContent=novo==='ativo'?'Ativo':'Inativo';
-            btn.style.background=novo==='ativo'?'var(--g-700)':'#fff';
-            btn.style.color=novo==='ativo'?'#fff':'var(--muted)';
-            btn.style.borderColor=novo==='ativo'?'var(--g-700)':'var(--g-200)';
-            btn.classList.toggle('active',novo==='ativo');
+            // Instrução IA — abre modal
+            var iBtn=e.target.closest('.vinc-instr-btn');
+            if(iBtn){
+              var vk=iBtn.getAttribute('data-vkey'), cod=iBtn.getAttribute('data-cod');
+              var k=vk+'|'+cod;
+              var descTd=iBtn.closest('tr').cells[1];
+              var descTxt=descTd?descTd.textContent.trim():cod;
+              var cur=(State.vincConfig[k]||{}).instr||'';
+              var bodyHTML=
+                '<div style="margin-bottom:10px;font-size:12.5px;color:var(--muted)">Item: <b>'+esc(descTxt)+'</b></div>'+
+                '<textarea id="vincInstrModal" maxlength="3000" rows="14" style="width:100%;font-size:13px;line-height:1.55;border:1.5px solid var(--g-200);border-radius:8px;padding:10px 14px;resize:vertical;font-family:inherit;color:var(--ink);box-sizing:border-box">'+esc(cur)+'</textarea>'+
+                '<div style="display:flex;justify-content:flex-end;margin-top:5px"><span id="vincInstrCount" style="font-size:11px;color:var(--muted)">'+cur.length+' / 3000</span></div>';
+              var footHTML='<button class="btn ghost" id="vincInstrCancel">'+ico('x',13)+' Cancelar</button>'+
+                '<button class="btn" id="vincInstrSave">'+ico('save',13)+' Salvar</button>';
+              var m=modal(ico('sparkles')+' Instrução para a IA','Editar instrução do item · máx. 3000 caracteres',bodyHTML,footHTML);
+              var mta=m.querySelector('#vincInstrModal');
+              var cnt=m.querySelector('#vincInstrCount');
+              mta.oninput=function(){ cnt.textContent=mta.value.length+' / 3000'; };
+              m.querySelector('#vincInstrCancel').onclick=function(){ m.closest('.modal-backdrop').remove(); };
+              m.querySelector('#vincInstrSave').onclick=function(){
+                var newVal=mta.value;
+                if(!State.vincConfig[k]) State.vincConfig[k]={};
+                State.vincConfig[k].instr=newVal;
+                localStorage.setItem('regula_vinc_cfg',JSON.stringify(State.vincConfig));
+                // Atualiza aparência do botão inline
+                iBtn.innerHTML=ico('sparkles',11)+' '+(newVal?'Ler instrução':'Adicionar');
+                iBtn.style.background=newVal?'var(--g-100)':'#fff';
+                iBtn.style.color=newVal?'var(--g-700)':'var(--muted)';
+                iBtn.style.borderColor=newVal?'var(--g-300)':'var(--g-200)';
+                m.closest('.modal-backdrop').remove();
+                toast('Instrução salva','ok');
+                lcIcons();
+              };
+              setTimeout(function(){ mta.focus(); mta.setSelectionRange(mta.value.length,mta.value.length); },50);
+              return;
+            }
+            // Status toggle
+            var sBtn=e.target.closest('.vinc-status-btn');
+            if(!sBtn) return;
+            var k2=sBtn.getAttribute('data-vkey')+'|'+sBtn.getAttribute('data-cod');
+            var cur2=sBtn.getAttribute('data-status'), novo=cur2==='ativo'?'inativo':'ativo';
+            if(!State.vincConfig[k2]) State.vincConfig[k2]={};
+            State.vincConfig[k2].status=novo;
+            sBtn.setAttribute('data-status',novo);
+            sBtn.textContent=novo==='ativo'?'Ativo':'Inativo';
+            sBtn.style.background=novo==='ativo'?'var(--g-700)':'#fff';
+            sBtn.style.color=novo==='ativo'?'#fff':'var(--muted)';
+            sBtn.style.borderColor=novo==='ativo'?'var(--g-700)':'var(--g-200)';
+            sBtn.classList.toggle('active',novo==='ativo');
             localStorage.setItem('regula_vinc_cfg',JSON.stringify(State.vincConfig));
           });
 
-          // Salvar peso e instrução
+          // Salvar pesos
           var saveBar=el('div',{style:'display:flex;justify-content:flex-end;padding:8px 14px;border-top:1px solid var(--g-100)'});
           var saveBtn=el('button',{class:'btn-animated'},ico('save',13)+' Salvar parametrização');
           saveBtn.onclick=function(){
@@ -2264,11 +2285,6 @@
               var k=inp.getAttribute('data-vkey')+'|'+inp.getAttribute('data-cod');
               if(!State.vincConfig[k]) State.vincConfig[k]={};
               State.vincConfig[k].peso=+inp.value;
-            });
-            $$('.vinc-instr',box).forEach(function(ta){
-              var k=ta.getAttribute('data-vkey')+'|'+ta.getAttribute('data-cod');
-              if(!State.vincConfig[k]) State.vincConfig[k]={};
-              State.vincConfig[k].instr=ta.value;
             });
             localStorage.setItem('regula_vinc_cfg',JSON.stringify(State.vincConfig));
             toast('Parametrização salva','ok');
