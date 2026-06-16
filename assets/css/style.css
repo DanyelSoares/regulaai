@@ -515,6 +515,9 @@ tbody tr:hover{background:#f7fbf8;cursor:pointer}
 .risk.medio{background:#fff7e0;color:#8a6300} .risk.medio::before{background:#d4a017}
 .risk.alto{background:#fce8d5;color:#a85700} .risk.alto::before{background:#d97706}
 .risk.critico{background:#fdecea;color:#a01b14} .risk.critico::before{background:var(--danger)}
+.risk-clickable{cursor:pointer;transition:filter .15s,transform .12s}
+.risk-clickable:hover{filter:brightness(.94)}
+.risk-clickable:active{transform:scale(.96)}
 
 /* Modal */
 .modal-backdrop{position:fixed;inset:0;background:rgba(2,31,16,.6);display:flex;align-items:flex-start;justify-content:center;padding:40px 20px;z-index:50;overflow-y:auto}
@@ -1157,7 +1160,7 @@ tbody tr:hover{background:#f7fbf8;cursor:pointer}
 .risco-toggle-wrap{display:flex;align-items:center;gap:8px;flex-shrink:0}
 .risco-toggle-lbl{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500;color:var(--g-700);cursor:pointer;white-space:nowrap}
 .risco-toggle-lbl input[type=checkbox]{accent-color:var(--g-600);width:15px;height:15px;cursor:pointer}
-.risco-section{margin-bottom:20px}
+.risco-section{margin-bottom:20px;margin-top:18px}
 .risco-section h4{margin:0 0 10px;font-size:12.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--g-600);display:flex;align-items:center;gap:6px}
 .risco-table{width:100%;border-collapse:collapse}
 .risco-table thead tr{background:var(--g-50)}

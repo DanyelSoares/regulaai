@@ -13,6 +13,7 @@
   function analisarGuiaComIA(guia, paramz){
     paramz = paramz || {};
     var pesos = paramz.pesos || {documental:6,dut:8,procedimento:7,pacote:5,matmed:7,diaria:5,contratual:7,historico:4};
+    var itemExtra = paramz.itemPesosExtra || {procedimento:0,pacote:0,matmed:0,diaria:0};
     var cumpridos=0, total=0;
     var crit_ok=[], crit_no=[], crit_na=[];
     var pendencias=[], alertas=[], sugestoes=[], regrasAplicadas=[], regrasNaoAvaliadas=[];
@@ -33,28 +34,40 @@
 
     // Procedimentos
     if(guia.procedimentos.length){
-      total+=pesos.procedimento;
-      cumpridos+=pesos.procedimento*0.9;
-      crit_ok.push('Procedimentos vinculados encontrados ('+guia.procedimentos.length+')');
+      var pesoProc=pesos.procedimento+itemExtra.procedimento;
+      total+=pesoProc;
+      cumpridos+=pesoProc*0.9;
+      crit_ok.push('Procedimentos vinculados encontrados ('+guia.procedimentos.length+')'+(itemExtra.procedimento?' · +'+itemExtra.procedimento+' pts dos itens':''));
       regrasAplicadas.push('Vinculação de procedimentos');
     } else { crit_no.push('Sem procedimentos vinculados'); }
 
     // Pacotes
-    if(guia.pacotes.length){ total+=pesos.pacote; cumpridos+=pesos.pacote; crit_ok.push('Pacotes vinculados'); regrasAplicadas.push('Vinc. pacotes'); }
+    if(guia.pacotes.length){
+      var pesoPac=pesos.pacote+itemExtra.pacote;
+      total+=pesoPac; cumpridos+=pesoPac;
+      crit_ok.push('Pacotes vinculados'+(itemExtra.pacote?' · +'+itemExtra.pacote+' pts dos itens':''));
+      regrasAplicadas.push('Vinc. pacotes');
+    }
     else { regrasNaoAvaliadas.push('Pacotes — sem parametrização cadastrada para esta guia'); crit_na.push('Pacotes não parametrizados'); }
 
     // Mat/Med
     if(guia.matmed.length){
-      total+=pesos.matmed;
+      var pesoMatmed=pesos.matmed+itemExtra.matmed;
+      total+=pesoMatmed;
       var opmes=0; for(var j=0;j<guia.matmed.length;j++){ if(guia.matmed[j].opme) opmes++; }
-      cumpridos+=pesos.matmed*0.8;
-      crit_ok.push('Mat/Med vinculados ('+guia.matmed.length+(opmes?', '+opmes+' OPME':'')+')');
+      cumpridos+=pesoMatmed*0.8;
+      crit_ok.push('Mat/Med vinculados ('+guia.matmed.length+(opmes?', '+opmes+' OPME':'')+')'+(itemExtra.matmed?' · +'+itemExtra.matmed+' pts dos itens':''));
       regrasAplicadas.push('Vinc. Mat/Med');
       if(opmes) alertas.push('OPME presente — exigir cotação de 3 fornecedores');
     } else { regrasNaoAvaliadas.push('Mat/Med — sem itens vinculados'); crit_na.push('Mat/Med não avaliados'); }
 
     // Diárias/Taxas
-    if(guia.diariasTaxas.length){ total+=pesos.diaria; cumpridos+=pesos.diaria*0.85; crit_ok.push('Diárias/Taxas vinculadas'); regrasAplicadas.push('Vinc. Diárias/Taxas'); }
+    if(guia.diariasTaxas.length){
+      var pesoDiaria=pesos.diaria+itemExtra.diaria;
+      total+=pesoDiaria; cumpridos+=pesoDiaria*0.85;
+      crit_ok.push('Diárias/Taxas vinculadas'+(itemExtra.diaria?' · +'+itemExtra.diaria+' pts dos itens':''));
+      regrasAplicadas.push('Vinc. Diárias/Taxas');
+    }
     else { regrasNaoAvaliadas.push('Diárias/Taxas — sem parametrização cadastrada'); crit_na.push('Diárias/Taxas não parametrizadas'); }
 
     // Contratual / histórico

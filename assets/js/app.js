@@ -5,18 +5,19 @@
   var DEFAULT_RISCO_CFG = {
     ativo: true,
     pesos: {
-      urgencia:         30,
-      uti:              25,
-      opme:             20,
-      semAnexos:        20,
-      prazoVencido:     20,
-      semDut:           15,
-      aderenciaCrit:    25,
-      aderenciaBaixa:   10,
-      altaComplexidade: 10,
-      oncologia:        15
+      urgencia:         10,
+      uti:              8,
+      opme:             7,
+      semAnexos:        7,
+      prazoVencido:     7,
+      semDut:           5,
+      aderenciaCrit:    8,
+      aderenciaBaixa:   3,
+      altaComplexidade: 3,
+      oncologia:        5
     },
-    limiares: { baixo: 20, medio: 45, alto: 70 }
+    // Teto = soma simples dos pesos acima (10+8+7+7+7+5+8+3+3+5) = 63 pontos
+    limiares: { baixo: 7, medio: 15, alto: 23 }
   };
 
   var FLUXO_SLA_DEFAULTS = {
@@ -62,7 +63,8 @@
     kanbanPeriodo: { de:'', ate:'' },
     kanbanFiltros: { colunas:[], uti:'', regime:'', tipo:'' },
     fluxoSLAConfig: JSON.parse(localStorage.getItem('regula_fluxo_sla')||'null') || {},
-    fluxoWeights: JSON.parse(localStorage.getItem('regula_fluxo_weights')||'null') || {}
+    fluxoWeights: JSON.parse(localStorage.getItem('regula_fluxo_weights')||'null') || {},
+    permOverrides: JSON.parse(localStorage.getItem('regula_perm_overrides')||'null') || {}
   };
 
   var DEFAULT_PESOS={documental:6,dut:8,procedimento:7,pacote:5,matmed:7,diaria:5,contratual:7,historico:4};
@@ -275,7 +277,44 @@
     var tip=_statusTips[s]||('Status atual da guia: '+s);
     return '<span class="badge '+cls+'" data-tip="'+esc(tip)+'">'+esc(s)+'</span>';
   }
-  function riskPill(r){ return '<span class="risk '+r+'">'+r.charAt(0).toUpperCase()+r.slice(1)+'</span>'; }
+  function riskPill(r,guiaNumero){
+    var clickable=guiaNumero!=null;
+    return '<span class="risk '+r+(clickable?' risk-clickable':'')+'"'+(clickable?' data-risco-guia="'+esc(String(guiaNumero))+'" title="Clique para ver o cálculo"':'')+'>'+r.charAt(0).toUpperCase()+r.slice(1)+'</span>';
+  }
+  function showRiscoCalculo(g){
+    var det=calcRiscoDetalhe(g);
+    var lim=State.riscoConfig.limiares;
+    var nivel=calcRisco(g);
+    var nivelLabel={baixo:'Baixo',medio:'Médio',alto:'Alto',critico:'Crítico'}[nivel]||nivel;
+    var rows=det.itens.map(function(it){
+      return '<tr style="'+(it.aplica?'':'opacity:.45')+'">'+
+        '<td style="padding:7px 10px;font-size:12.5px">'+(it.aplica?ico('check-circle',13):ico('minus',13))+' '+esc(it.label)+'</td>'+
+        '<td style="padding:7px 10px;text-align:right;font-size:12.5px;font-weight:700">'+(it.aplica?'+'+it.peso:'0')+'</td>'+
+      '</tr>';
+    }).join('');
+    var body=
+      '<p style="font-size:13px;color:var(--muted);margin:0 0 14px">Soma dos fatores presentes nesta guia, conforme pesos configurados em <b>Configurações → Classificação de Risco</b>.</p>'+
+      '<table style="width:100%;border-collapse:collapse;margin-bottom:14px">'+
+        '<thead><tr><th style="text-align:left;padding:0 10px 8px;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)">Fator</th>'+
+        '<th style="text-align:right;padding:0 10px 8px;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)">Pontos</th></tr></thead>'+
+        '<tbody>'+rows+
+        '<tr style="border-top:1.5px solid var(--g-100)"><td style="padding:9px 10px;font-weight:700">Total</td>'+
+        '<td style="padding:9px 10px;text-align:right;font-weight:800;font-size:14px;color:var(--g-700)">'+det.score+'</td></tr>'+
+        '</tbody>'+
+      '</table>'+
+      '<div style="background:var(--g-50);border:1px solid var(--g-100);border-radius:8px;padding:10px 14px;font-size:12.5px;color:var(--ink-2);line-height:1.7">'+
+        '<b>Faixas:</b> Baixo até '+lim.baixo+' · Médio até '+lim.medio+' · Alto até '+lim.alto+' · Crítico acima de '+lim.alto+'<br>'+
+        '<b>Resultado:</b> '+det.score+' pontos → <span class="risk '+nivel+'" style="margin-left:4px">'+nivelLabel+'</span>'+
+      '</div>';
+    modal(ico('shield-alert',16)+' Cálculo do nível de risco','Guia '+esc(g.numero),body);
+  }
+  document.addEventListener('click',function(e){
+    var pill=e.target.closest&&e.target.closest('.risk-clickable');
+    if(!pill) return;
+    var numero=pill.getAttribute('data-risco-guia');
+    var g=State.guias.find(function(gg){return String(gg.numero)===numero;});
+    if(g) showRiscoCalculo(g);
+  });
   function aderenciaBar(p){
     var cls   = p>=90?'alta':(p>=70?'mod':(p>=50?'baixa':'crit'));
     var label = p>=90?'Alta':(p>=70?'Moderada':(p>=50?'Baixa':'Crítica'));
@@ -287,23 +326,43 @@
          + '<div class="v">'+p+'%</div>'
          + '</div>';
   }
-  function guiaAderencia(g){ if(!g._cache) g._cache = AI.analisarGuiaComIA(g,{pesos:getFluxoPesos(g.fluxo&&g.fluxo.id)}); return g._cache.aderencia; }
-
-  function calcRiscoScore(g){
-    var p=State.riscoConfig.pesos, score=0;
-    if(g.regime==='Urgência')                               score+=+p.urgencia||0;
-    if(g.uti)                                               score+=+p.uti||0;
-    if(g.opme)                                              score+=+p.opme||0;
-    if(!g.anexos)                                           score+=+p.semAnexos||0;
-    if(g.prazoVencido)                                      score+=+p.prazoVencido||0;
-    if(!g.dut && g.procedimentos.some(function(p2){return p2.dut;})) score+=+p.semDut||0;
-    var ad=guiaAderencia(g);
-    if(ad<50)       score+=+p.aderenciaCrit||0;
-    else if(ad<70)  score+=+p.aderenciaBaixa||0;
-    if(g.fluxo.id==='F2'||g.fluxo.id==='F5') score+=+p.altaComplexidade||0;
-    if(g.fluxo.id==='F8')                     score+=+p.oncologia||0;
-    return score;
+  // Soma os pesos por item (configurados em Procedimentos/Pacotes/Mat-Med/Diárias-Taxas)
+  // vinculados a esta guia, por categoria — somado ao peso categórico do Pesos IA.
+  function _itemPeso(vkey,cod,base){
+    var cfg=State.vincConfig[vkey+'|'+cod];
+    return (cfg&&cfg.peso!=null)?cfg.peso:base;
   }
+  function getItemPesosSoma(g){
+    var soma={procedimento:0,pacote:0,matmed:0,diaria:0};
+    (g.procedimentos||[]).forEach(function(p){ soma.procedimento+=_itemPeso('proc',p.cod,p.peso)||0; });
+    (g.pacotes||[]).forEach(function(p){ soma.pacote+=_itemPeso('pac',p.cod,p.peso)||0; });
+    (g.matmed||[]).forEach(function(p){ soma.matmed+=_itemPeso('matmed',p.cod,p.peso)||0; });
+    (g.diariasTaxas||[]).forEach(function(p){ soma.diaria+=_itemPeso('dt',p.cod,p.peso)||0; });
+    return soma;
+  }
+  function guiaAderencia(g){ if(!g._cache) g._cache = AI.analisarGuiaComIA(g,{pesos:getFluxoPesos(g.fluxo&&g.fluxo.id),itemPesosExtra:getItemPesosSoma(g)}); return g._cache.aderencia; }
+
+  function calcRiscoDetalhe(g){
+    var p=State.riscoConfig.pesos, score=0, itens=[];
+    function add(label,aplica,peso){
+      if(aplica) score+=+peso||0;
+      itens.push({label:label,aplica:!!aplica,peso:+peso||0});
+    }
+    add('Regime de urgência',          g.regime==='Urgência',                                       p.urgencia);
+    add('Internação em UTI',           g.uti,                                                        p.uti);
+    add('OPME presente',               g.opme,                                                       p.opme);
+    add('Sem documentação anexada',    !g.anexos,                                                    p.semAnexos);
+    add('Prazo de auditoria vencido',  g.prazoVencido,                                               p.prazoVencido);
+    var temDutObrig=g.procedimentos.some(function(p2){return p2.dut;});
+    add('DUT não comprovada',          !g.dut && temDutObrig,                                        p.semDut);
+    var ad=guiaAderencia(g);
+    add('Aderência crítica (< 50%)',   ad<50,                                                        p.aderenciaCrit);
+    add('Aderência baixa (50–69%)',    ad>=50 && ad<70,                                              p.aderenciaBaixa);
+    add('Fluxo alta complexidade',     g.fluxo.id==='F2'||g.fluxo.id==='F5',                         p.altaComplexidade);
+    add('Fluxo oncologia / imunobiológico', g.fluxo.id==='F8',                                       p.oncologia);
+    return {score:score, itens:itens, aderencia:ad};
+  }
+  function calcRiscoScore(g){ return calcRiscoDetalhe(g).score; }
 
   function calcRisco(g){
     var score=calcRiscoScore(g), lim=State.riscoConfig.limiares;
@@ -1553,7 +1612,7 @@
         '<td>'+
           '<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;max-width:180px" title="'+esc(etAtual)+'">'+esc(etAtual)+'</span>'+
           '<div style="margin-top:5px;'+L2H+'"></div>'+
-          '<div style="margin-top:9px">'+riskPill(g.risco)+'</div>'+
+          '<div style="margin-top:9px">'+riskPill(g.risco,g.numero)+'</div>'+
         '</td>';
       bindDbl(tr.cells[1],'benef',g.beneficiario.nome,'Beneficiário');
       // duplo clique no badge de congênere dentro da célula do beneficiário
@@ -3480,53 +3539,64 @@
     return wrap;
   }
 
+  var PERM_LIST=[
+    {key:'verGuias',     label:'Visualizar guias e dashboard',           desc:'Leitura de guias, indicadores e painel geral',                             p:['gestor','auditor','enfermeiro'], v:[]},
+    {key:'triagem',      label:'Triagem e complemento de documentação',  desc:'Solicitar documentos, triagem inicial e registrar pendências',            p:['gestor','auditor','enfermeiro'], v:[]},
+    {key:'parecer',      label:'Emitir parecer técnico',                 desc:'Registrar pareceres de análise clínica e regulatória em guias',           p:['gestor','auditor'],              v:[]},
+    {key:'aprovar',      label:'Aprovar guias',                          desc:'Emitir autorização de procedimentos que atendem aos critérios técnicos',  p:['gestor','auditor'],              v:[]},
+    {key:'reprovar',     label:'Reprovar guias',                         desc:'Negar procedimentos por não conformidade técnica ou regulatória',         p:['gestor','auditor'],              v:[]},
+    {key:'juntaMedica',  label:'Encaminhar para junta médica',           desc:'Solicitar avaliação multidisciplinar por junta médica',                  p:['gestor','auditor'],              v:[]},
+    {key:'migrarPerfil', label:'Migrar entre perfis / visão geral',      desc:'Alternar entre perfis e visualizar as demandas de todos os usuários',    p:['gestor'],                        v:[]},
+    {key:'config',       label:'Acessar Configurações do sistema',       desc:'Gestor edita; Auditor e Enfermeiro podem consultar, sem alterar valores', p:['gestor'],                        v:['auditor','enfermeiro']},
+    {key:'parametrizar', label:'Parametrizar fluxos, DUT e vinculações', desc:'Gestor configura; Auditor e Enfermeiro visualizam os parâmetros ativos', p:['gestor'],                        v:['auditor','enfermeiro']},
+    {key:'logs',         label:'Visualizar logs completos',              desc:'Gestor acessa todo o histórico; Auditor consulta os próprios registros',  p:['gestor'],                        v:['auditor']},
+    {key:'dadosSensiveis',label:'Dados sensíveis sem mascaramento',      desc:'CPF, cartão e informações pessoais exibidos sem ocultação de dígitos',   p:['gestor'],                        v:[]},
+  ];
+  var PERM_PROFILES=['gestor','auditor','enfermeiro'];
+  var PERM_LEVELS=['edit','view','none']; // ciclo ao clicar
+  function _permBaseLevel(perm,profile){
+    if(perm.p.indexOf(profile)>=0) return 'edit';
+    if(perm.v&&perm.v.indexOf(profile)>=0) return 'view';
+    return 'none';
+  }
+  function _permLevel(perm,profile){
+    var k=perm.key+'|'+profile;
+    var ov=State.permOverrides[k];
+    return ov||_permBaseLevel(perm,profile);
+  }
   function _buildPermMatrix(){
-    // p = acesso total (editar/executar) | v = somente leitura | ausente = sem acesso
-    var PERM_LIST=[
-      {label:'Visualizar guias e dashboard',           desc:'Leitura de guias, indicadores e painel geral',                             p:['gestor','auditor','enfermeiro'], v:[]},
-      {label:'Triagem e complemento de documentação',  desc:'Solicitar documentos, triagem inicial e registrar pendências',            p:['gestor','auditor','enfermeiro'], v:[]},
-      {label:'Emitir parecer técnico',                 desc:'Registrar pareceres de análise clínica e regulatória em guias',           p:['gestor','auditor'],              v:[]},
-      {label:'Aprovar guias',                          desc:'Emitir autorização de procedimentos que atendem aos critérios técnicos',  p:['gestor','auditor'],              v:[]},
-      {label:'Reprovar guias',                         desc:'Negar procedimentos por não conformidade técnica ou regulatória',         p:['gestor','auditor'],              v:[]},
-      {label:'Encaminhar para junta médica',           desc:'Solicitar avaliação multidisciplinar por junta médica',                  p:['gestor','auditor'],              v:[]},
-      {label:'Migrar entre perfis / visão geral',      desc:'Alternar entre perfis e visualizar as demandas de todos os usuários',    p:['gestor'],                        v:[]},
-      {label:'Acessar Configurações do sistema',       desc:'Gestor edita; Auditor e Enfermeiro podem consultar, sem alterar valores', p:['gestor'],                        v:['auditor','enfermeiro']},
-      {label:'Parametrizar fluxos, DUT e vinculações', desc:'Gestor configura; Auditor e Enfermeiro visualizam os parâmetros ativos', p:['gestor'],                        v:['auditor','enfermeiro']},
-      {label:'Visualizar logs completos',              desc:'Gestor acessa todo o histórico; Auditor consulta os próprios registros',  p:['gestor'],                        v:['auditor']},
-      {label:'Dados sensíveis sem mascaramento',       desc:'CPF, cartão e informações pessoais exibidos sem ocultação de dígitos',   p:['gestor'],                        v:[]},
-    ];
-    var profiles=['gestor','auditor','enfermeiro'];
+    var editable=State.perfil==='gestor';
     var profileColors={gestor:'#054f27',auditor:'#066b34',enfermeiro:'#0a8a43'};
+    var LEVEL_ICO={edit:'check-circle',view:'eye',none:'minus'};
+    var LEVEL_COLOR={edit:'var(--g-600)',view:'#64748b',none:'var(--g-200)'};
+    var LEVEL_LABEL={edit:'Acesso total',view:'Somente leitura',none:'Sem acesso'};
     var t=el('table',{style:'width:100%;border-collapse:collapse'});
-    var thRow='<thead><tr><th style="text-align:left;padding:0 12px 16px 0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Permissão</th>';
-    profiles.forEach(function(p){
-      thRow+='<th style="text-align:center;padding:0 0 16px;width:100px"><span style="display:inline-block;background:'+profileColors[p]+';color:#fff;border-radius:20px;padding:4px 14px;font-size:11.5px;font-weight:700;letter-spacing:.2px">'+p.charAt(0).toUpperCase()+p.slice(1)+'</span></th>';
+    var thRow='<thead><tr><th style="text-align:left;padding:0 12px 22px 0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Permissão</th>';
+    PERM_PROFILES.forEach(function(p){
+      thRow+='<th style="text-align:center;padding:0 8px 22px;width:100px"><span style="display:inline-block;background:'+profileColors[p]+';color:#fff;border-radius:20px;padding:4px 14px;font-size:11.5px;font-weight:700;letter-spacing:.2px">'+p.charAt(0).toUpperCase()+p.slice(1)+'</span></th>';
     });
-    // Legenda
     thRow+='</tr></thead>';
     t.innerHTML=thRow;
     var tb=el('tbody');
     PERM_LIST.forEach(function(perm,idx){
       var tr=el('tr',{style:'border-top:'+(idx===0?'none':'1px solid var(--g-50)')});
-      var labelCell='<td style="padding:10px 12px 10px 0;vertical-align:top">'+
+      var labelCell='<td style="padding:16px 12px 16px 0;vertical-align:top">'+
         '<div style="font-size:13px;font-weight:600;color:var(--ink)">'+esc(perm.label)+'</div>'+
-        '<div style="font-size:11.5px;color:var(--muted);margin-top:2px;line-height:1.4">'+esc(perm.desc)+'</div>'+
+        '<div style="font-size:11.5px;color:var(--muted);margin-top:3px;line-height:1.5">'+esc(perm.desc)+'</div>'+
         '</td>';
-      var permCells=profiles.map(function(p){
-        var isEdit=perm.p.indexOf(p)>=0;
-        var isView=!isEdit&&perm.v&&perm.v.indexOf(p)>=0;
-        var cell;
-        if(isEdit){
-          cell='<span style="color:var(--g-600);display:inline-flex;justify-content:center">'+ico('check-circle',16)+'</span>';
-        } else if(isView){
-          cell='<span style="display:inline-flex;flex-direction:column;align-items:center;gap:2px;color:#64748b">'+
+      var permCells=PERM_PROFILES.map(function(p){
+        var lvl=_permLevel(perm,p);
+        var cellInner;
+        if(lvl==='view'){
+          cellInner='<span style="display:inline-flex;flex-direction:column;align-items:center;gap:2px;color:'+LEVEL_COLOR.view+'">'+
             ico('eye',14)+
             '<span style="font-size:9px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;line-height:1">Leitura</span>'+
           '</span>';
         } else {
-          cell='<span style="color:var(--g-200);display:inline-flex;justify-content:center">'+ico('minus',14)+'</span>';
+          cellInner='<span style="color:'+LEVEL_COLOR[lvl]+';display:inline-flex;justify-content:center">'+ico(LEVEL_ICO[lvl],16)+'</span>';
         }
-        return '<td style="text-align:center;vertical-align:middle;padding:10px 0">'+cell+'</td>';
+        var cls='perm-cell'+(editable?' perm-cell-editable':'');
+        return '<td class="'+cls+'" data-perm-key="'+esc(perm.key)+'" data-perm-profile="'+p+'" title="'+esc(LEVEL_LABEL[lvl])+(editable?' — clique para alterar':'')+'" style="text-align:center;vertical-align:middle;padding:16px 0;cursor:'+(editable?'pointer':'default')+'">'+cellInner+'</td>';
       }).join('');
       tr.innerHTML=labelCell+permCells;
       tb.appendChild(tr);
@@ -3539,12 +3609,29 @@
         '<span style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--ink-2)">'+ico('check-circle',13)+' <span style="color:var(--g-600);font-weight:600">Acesso total</span></span>'+
         '<span style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--ink-2)">'+ico('eye',13)+' <span style="color:#64748b;font-weight:600">Somente leitura</span></span>'+
         '<span style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--ink-2)">'+ico('minus',13)+' <span style="color:var(--muted)">Sem acesso</span></span>'+
+        (editable?'<span style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--g-700);font-weight:600;margin-left:auto">'+ico('mouse-pointer-click',13)+' Clique numa célula para alterar</span>':'')+
       '</div>'+
     '</td>';
     tb.appendChild(legRow);
     t.appendChild(tb);
     var _pmWrap=el('div',{class:'table-wrap'});
     _pmWrap.appendChild(t);
+    if(editable){
+      $$('.perm-cell-editable',_pmWrap).forEach(function(td){
+        td.onclick=function(){
+          var key=td.getAttribute('data-perm-key'), profile=td.getAttribute('data-perm-profile');
+          var perm=null; for(var i=0;i<PERM_LIST.length;i++){ if(PERM_LIST[i].key===key){ perm=PERM_LIST[i]; break; } }
+          var cur=_permLevel(perm,profile);
+          var next=PERM_LEVELS[(PERM_LEVELS.indexOf(cur)+1)%PERM_LEVELS.length];
+          State.permOverrides[key+'|'+profile]=next;
+          localStorage.setItem('regula_perm_overrides',JSON.stringify(State.permOverrides));
+          var newWrap=_buildPermMatrix();
+          _pmWrap.replaceWith(newWrap);
+          lcIcons();
+          toast('Permissão atualizada','ok');
+        };
+      });
+    }
     return _pmWrap;
   }
 
@@ -3566,8 +3653,8 @@
     // ── Abas principais ──────────────────────────────────────────────
     var CFG_TABS=[
       {id:'risco',      label:'Classificação de Risco', ico:'shield-alert'},
-      {id:'permissoes', label:'Permissões',             ico:'shield'},
       {id:'fluxos',     label:'Fluxos',                 ico:'git-branch'},
+      {id:'permissoes', label:'Permissões',             ico:'shield'},
     ];
 
     var tabBar=el('div',{class:'cfg-tab-bar'});
@@ -3638,20 +3725,23 @@
           FATORES.forEach(function(f){
             var tr=el('tr');
             tr.innerHTML='<td><b>'+esc(f.label)+'</b></td><td style="color:var(--muted);font-size:12px">'+esc(f.desc)+'</td>'+
-              '<td style="text-align:center"><input class="risco-pts" type="number" min="0" max="100" data-key="'+f.key+'" value="'+(cfg.pesos[f.key]||0)+'" /></td>';
+              '<td style="text-align:center"><input class="risco-pts" type="number" min="0" max="10" data-key="'+f.key+'" value="'+(cfg.pesos[f.key]||0)+'" /></td>';
             tbFat.appendChild(tr);
           });
           tFat.appendChild(tbFat); var _tfWrap=el('div',{class:'table-wrap'}); _tfWrap.appendChild(tFat); secF.appendChild(_tfWrap); rstContent.appendChild(secF);
 
+          var _somaPesos=0; FATORES.forEach(function(f){ _somaPesos+=(cfg.pesos[f.key]||0); });
           var secL=el('div',{class:'risco-section'});
           secL.innerHTML='<h4>'+ico('sliders-horizontal',13)+' Limiares por nível (pontuação máxima)</h4>'+
-            '<p style="font-size:12px;color:var(--muted);margin:0 0 10px">Pontuação <b>até</b> o limiar = nível correspondente. Acima do Alto = Crítico.</p>';
+            '<p style="font-size:12px;color:var(--muted);margin:0 0 10px">Pontuação <b>até</b> o limiar = nível correspondente. Acima do Alto = Crítico. '+
+            'Soma atual de todos os pesos da tabela acima: <b>'+_somaPesos+' pontos</b> '+
+            '<span style="color:var(--muted)">(se todos os '+FATORES.length+' fatores estivessem com peso máximo de 10, o total chegaria a '+(FATORES.length*10)+').</span></p>';
           var limGrid=el('div',{class:'risco-lim-grid'});
           [{key:'baixo',label:'Baixo',cls:'baixo',icon:'circle-check'},{key:'medio',label:'Médio',cls:'medio',icon:'circle-alert'},{key:'alto',label:'Alto',cls:'alto',icon:'triangle-alert'}].forEach(function(l){
             var card=el('div',{class:'risco-lim-card'});
             card.innerHTML='<div class="risco-lim-ico '+l.cls+'">'+ico(l.icon,16)+'</div>'+
               '<div class="risco-lim-body"><div class="risco-lim-name">'+l.label+'</div><div style="font-size:11px;color:var(--muted)">0 até...</div>'+
-              '<input class="risco-lim" type="number" min="0" max="200" data-key="'+l.key+'" value="'+(cfg.limiares[l.key]||0)+'" /></div>';
+              '<input class="risco-lim" type="number" min="0" max="'+_somaPesos+'" data-key="'+l.key+'" value="'+(cfg.limiares[l.key]||0)+'" /></div>';
             limGrid.appendChild(card);
           });
           var cardCrit=el('div',{class:'risco-lim-card'});
@@ -3696,9 +3786,17 @@
             '<button class="btn-animated" id="riscoSalvar">'+ico('save',14)+' Salvar e aplicar</button>';
           rstContent.appendChild(foot);
 
+          function syncTeto(){
+            var soma=0; $$('.risco-pts',rp).forEach(function(inp){ soma+=(+inp.value||0); });
+            $$('.risco-lim',rp).forEach(function(inp){ inp.setAttribute('max',soma); });
+            var tetoEl=secL.querySelector('.risco-teto-val');
+            if(tetoEl) tetoEl.textContent=soma;
+          }
+          var _tetoSpan=secL.querySelector('p');
+          if(_tetoSpan) _tetoSpan.innerHTML=_tetoSpan.innerHTML.replace('<b>'+_somaPesos+' pontos</b>','<b><span class="risco-teto-val">'+_somaPesos+'</span> pontos</b>');
           setTimeout(function(){
             renderPrevia();
-            $$('.risco-pts,.risco-lim',rp).forEach(function(inp){ inp.oninput=function(){ renderPrevia(); }; });
+            $$('.risco-pts,.risco-lim',rp).forEach(function(inp){ inp.oninput=function(){ renderPrevia(); syncTeto(); }; });
             $('#riscoAtivo').onchange=function(){
               var on=this.checked, tag=$('#modoTag');
               if(tag){ tag.textContent=on?'Automático':'Manual'; tag.className='badge '+(on?'':'muted'); }
