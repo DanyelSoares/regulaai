@@ -978,7 +978,7 @@
     var panels=el('div',{class:'panels'});
 
     // Distribuição por status (barras)
-    var pa=el('div',{class:'panel'},'<h3>Distribuição por status <span class="badge muted">Tempo real</span></h3>');
+    var pa=el('div',{class:'panel'},'<h3>Distribuição por status</h3>');
     var bars=el('div',{class:'bars'});
     MOCK.STATUS.forEach(function(s){
       var c=count(function(g){return g.status===s}); if(c===0) return;
@@ -1021,7 +1021,6 @@
     var avgCls=AI.classificaAderencia(avg);
     var clrMap={alta:'var(--g-700)',mod:'#8a6300',baixa:'#a85700',crit:'var(--danger)'};
     var donutLblEl=el('div',{id:'donut-label',style:'font-size:13px;font-weight:700;letter-spacing:.2px;color:'+(clrMap[avgCls.cls]||'var(--g-600)')},avgCls.label);
-    var donutHint=el('div',{style:'font-size:11px;color:var(--muted);margin-top:6px;line-height:1.4'},'Clique nas barras<br>para filtrar por grupo');
     var donutLegend=el('div',{style:'margin-top:14px;display:flex;flex-direction:column;gap:4px;text-align:left;border-top:1px solid var(--g-100);padding-top:11px'});
     donutLegend.innerHTML=
       '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:3px">Faixas de classificação</div>'+
@@ -1029,7 +1028,7 @@
       '<div style="display:flex;align-items:center;gap:7px;font-size:11.5px"><span style="width:9px;height:9px;border-radius:50%;background:#8a6300;flex-shrink:0;display:inline-block"></span><span style="color:var(--ink)">Moderada</span><span style="margin-left:auto;color:var(--muted)">70 – 89%</span></div>'+
       '<div style="display:flex;align-items:center;gap:7px;font-size:11.5px"><span style="width:9px;height:9px;border-radius:50%;background:#a85700;flex-shrink:0;display:inline-block"></span><span style="color:var(--ink)">Baixa</span><span style="margin-left:auto;color:var(--muted)">50 – 69%</span></div>'+
       '<div style="display:flex;align-items:center;gap:7px;font-size:11.5px"><span style="width:9px;height:9px;border-radius:50%;background:var(--danger);flex-shrink:0;display:inline-block"></span><span style="color:var(--ink)">Crítica</span><span style="margin-left:auto;color:var(--muted)">&lt; 50%</span></div>';
-    pb.appendChild(donutEl); pb.appendChild(donutLblEl); pb.appendChild(donutHint); pb.appendChild(donutLegend);
+    pb.appendChild(donutEl); pb.appendChild(donutLblEl); pb.appendChild(donutLegend);
     panels.appendChild(pb);
     var _donutCur=avg, _donutTimer=null, _tipGuias=guias;
     function updateDonut(filteredGs, filterName){
@@ -1132,13 +1131,15 @@
     var fluxoById={}; MOCK.FLUXOS.forEach(function(f){fluxoById[f.nome]=f.id});
     var br=el('div',{class:'bars bars-scroll'});
     pc.appendChild(wrapBarsScroll(br));
+    var pcLegRow=el('div',{class:'dur-legend'});
+    pcLegRow.innerHTML='<div class="dur-sla-ref">'+ico('lightbulb',10)+' Dica: clique em uma barra de status ou fluxo para abrir a relação filtrada de guias.</div>';
+    pc.appendChild(pcLegRow);
 
     State.fluxoSortDir = State.fluxoSortDir || 'desc';
     function buildFluxoBars(){
       pcH3.innerHTML='Fluxos mais utilizados '+
         '<span style="display:flex;align-items:center;gap:8px">'+
           '<button class="sort-toggle" id="fluxoSortBtn" title="Alternar ordenação">'+ico(State.fluxoSortDir==='desc'?'arrow-down-wide-narrow':'arrow-up-narrow-wide',12)+' '+(State.fluxoSortDir==='desc'?'Mais usados':'Menos usados')+'</button>'+
-          '<span class="badge muted">clique para filtrar</span>'+
         '</span>';
       br.innerHTML='';
       var dir=State.fluxoSortDir==='desc'?-1:1;
@@ -1271,8 +1272,6 @@
     bottomRow.appendChild(pc);
     bottomRow.appendChild(pd);
     wrap.appendChild(bottomRow);
-
-    wrap.appendChild(el('div',{style:'margin-top:8px;font-size:12px;color:var(--muted)'},ico('lightbulb')+' Dica: clique em uma barra de status ou fluxo para abrir a relação filtrada de guias.'));
 
     return wrap;
   }

@@ -285,11 +285,11 @@ body.pl--blurring .pl--blur-target{filter:blur(5px)}
 .kpi .v{font-size:24px;font-weight:700;margin-top:5px;color:var(--g-800)}
 
 .panels{display:grid;grid-template-columns:2fr 1fr;gap:14px}
-.panel{background:#fff;border:1.5px solid var(--g-100);border-radius:11px;padding:16px;box-shadow:0 2px 8px rgba(10,138,67,.06);min-width:0}
+.panel{background:#fff;border:1.5px solid var(--g-100);border-radius:11px;padding:16px;box-shadow:0 2px 8px rgba(10,138,67,.06);min-width:0;display:flex;flex-direction:column}
 .panel h3{margin:0 0 12px;font-size:13.5px;font-weight:700;color:var(--g-700);display:flex;align-items:center;justify-content:space-between;padding-bottom:9px;border-bottom:1.5px solid var(--g-100)}
 
 /* Bar chart simple */
-.bars{display:flex;flex-direction:column;gap:8px}
+.bars{display:flex;flex-direction:column;gap:8px;flex:1;justify-content:space-evenly}
 .bar-row{display:grid;grid-template-columns:300px 1fr 36px;align-items:center;gap:12px;font-size:12.5px;border-radius:7px;padding:5px 8px;margin:0 -8px;transition:background .18s ease}
 .bar-row:hover{background:rgba(47,170,102,.07)}
 .bar-row>div:first-child{white-space:normal;word-break:break-word;line-height:1.35}
