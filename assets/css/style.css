@@ -285,7 +285,7 @@ body.pl--blurring .pl--blur-target{filter:blur(5px)}
 .kpi .v{font-size:24px;font-weight:700;margin-top:5px;color:var(--g-800)}
 
 .panels{display:grid;grid-template-columns:2fr 1fr;gap:14px}
-.panel{background:#fff;border:1.5px solid var(--g-100);border-radius:11px;padding:16px;box-shadow:0 2px 8px rgba(10,138,67,.06)}
+.panel{background:#fff;border:1.5px solid var(--g-100);border-radius:11px;padding:16px;box-shadow:0 2px 8px rgba(10,138,67,.06);min-width:0}
 .panel h3{margin:0 0 12px;font-size:13.5px;font-weight:700;color:var(--g-700);display:flex;align-items:center;justify-content:space-between;padding-bottom:9px;border-bottom:1.5px solid var(--g-100)}
 
 /* Bar chart simple */
@@ -967,21 +967,24 @@ tbody tr:hover{background:#f7fbf8;cursor:pointer}
   /* Marca R AI no topbar mobile */
   .topbar-mob-brand{
     display:flex;align-items:center;justify-content:center;
-    flex-shrink:0;width:36px;height:36px;
-    border-radius:9px;
+    flex-shrink:0;width:44px;height:44px;
+    border-radius:10px;
     background:rgba(255,255,255,.15);
     border:2px solid rgba(255,255,255,.35);
-    color:#fff;font-size:13px;font-weight:900;letter-spacing:-.5px;
+    color:#fff;font-size:16px;font-weight:900;letter-spacing:-.5px;
     margin-right:8px;
   }
   .topbar-mob-brand span{
-    font-size:7px;font-weight:900;vertical-align:super;
+    font-size:9px;font-weight:900;vertical-align:super;
     letter-spacing:0;margin-left:1px;
   }
 
   /* Conteúdo: página */
   .page-title{flex-direction:column;align-items:flex-start;gap:8px}
   .page-title h1{font-size:18px}
+
+  /* Header dos painéis: evita texto/badge colado na borda direita */
+  .panel h3{flex-wrap:wrap;gap:6px 8px;row-gap:6px}
 
   /* KPIs: reduzir sutilmente para caber mais cards por linha */
   .kpi-grid{grid-template-columns:repeat(auto-fit,minmax(108px,1fr));gap:8px}
@@ -1035,7 +1038,23 @@ tbody tr:hover{background:#f7fbf8;cursor:pointer}
   .dur-name{grid-column:1 / -1;white-space:normal;line-height:1.45;font-size:13px}
   .dur-track{grid-column:1;height:11px}
   .dur-meta{grid-column:2;font-size:13px;align-self:center}
-  .bars-scroll{overflow-x:hidden;max-height:300px}
+  .bars-scroll{
+    overflow-x:hidden;overflow-y:scroll;max-height:300px;
+    -webkit-overflow-scrolling:touch;
+    scrollbar-width:thin;scrollbar-color:var(--g-400) var(--g-50);
+  }
+  .bars-scroll::-webkit-scrollbar{width:6px;display:block}
+  .bars-scroll::-webkit-scrollbar-track{background:var(--g-50);border-radius:4px}
+  .bars-scroll::-webkit-scrollbar-thumb{background:var(--g-400);border-radius:4px}
+  /* Indicador visual de conteúdo abaixo, pois o WebKit mobile some com a scrollbar nativa */
+  .bars-scroll-wrap{position:relative}
+  .bars-scroll-wrap::after{
+    content:'';position:absolute;left:0;right:10px;bottom:0;height:22px;
+    background:linear-gradient(to bottom,transparent,#fff);
+    pointer-events:none;border-radius:0 0 8px 8px;
+    transition:opacity .2s ease;
+  }
+  .bars-scroll-wrap.at-bottom::after{opacity:0}
 }
 
 /* ═══════════════════════════════════════════

@@ -238,6 +238,18 @@
   function $(s,r){return (r||document).querySelector(s);}
   function $$(s,r){return Array.prototype.slice.call((r||document).querySelectorAll(s));}
   function el(tag, attrs, html){ var e=document.createElement(tag); if(attrs) for(var k in attrs){ if(k==='class') e.className=attrs[k]; else if(k==='html') e.innerHTML=attrs[k]; else e.setAttribute(k,attrs[k]); } if(html!=null) e.innerHTML=html; return e; }
+  function wrapBarsScroll(scrollEl){
+    var wrap=el('div',{class:'bars-scroll-wrap'});
+    wrap.appendChild(scrollEl);
+    function syncBottom(){
+      var atBottom=scrollEl.scrollHeight-scrollEl.scrollTop-scrollEl.clientHeight<4;
+      wrap.classList.toggle('at-bottom',atBottom);
+    }
+    scrollEl.addEventListener('scroll',syncBottom);
+    scrollEl._syncBottom=syncBottom;
+    setTimeout(syncBottom,0);
+    return wrap;
+  }
   function esc(s){ if(s==null) return ''; return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]}); }
   function mask(v){ if(State.perfil==='gestor') return v; if(!v) return ''; return v.replace(/\d(?=\d{2})/g,'•'); }
   function toast(msg,kind){ var t=el('div',{class:'toast '+(kind||'')},esc(msg)); $('#toastRoot').appendChild(t); setTimeout(function(){t.style.opacity=0; setTimeout(function(){t.remove()},300)},2800); }
@@ -1013,25 +1025,45 @@
         '</div>';
       return h;
     }
-    pb.addEventListener('mouseenter',function(){
-      donutTip.innerHTML=buildDonutTip(_tipGuias);
-      donutTip.classList.add('visible');
-    });
-    pb.addEventListener('mousemove',function(e){
+    function positionDonutTip(clientX,clientY){
       var PAD=10;
       var tw=donutTip.offsetWidth, th=donutTip.offsetHeight;
       var vw=window.innerWidth, vh=window.innerHeight;
       // prefer right of cursor, fall back to left
-      var tx=e.clientX+18;
-      if(tx+tw>vw-PAD) tx=e.clientX-tw-14;
+      var tx=clientX+18;
+      if(tx+tw>vw-PAD) tx=clientX-tw-14;
       if(tx<PAD) tx=PAD;
       // prefer below cursor, fall back to above
-      var ty=e.clientY-14;
+      var ty=clientY-14;
       if(ty+th>vh-PAD) ty=vh-th-PAD;
       if(ty<PAD) ty=PAD;
       donutTip.style.left=tx+'px'; donutTip.style.top=ty+'px';
-    });
-    pb.addEventListener('mouseleave',function(){ donutTip.classList.remove('visible'); });
+    }
+    var _isTouchDevice=window.matchMedia&&window.matchMedia('(hover: none)').matches;
+    if(!_isTouchDevice){
+      pb.addEventListener('mouseenter',function(){
+        donutTip.innerHTML=buildDonutTip(_tipGuias);
+        donutTip.classList.add('visible');
+      });
+      pb.addEventListener('mousemove',function(e){ positionDonutTip(e.clientX,e.clientY); });
+      pb.addEventListener('mouseleave',function(){ donutTip.classList.remove('visible'); });
+    } else {
+      // Mobile/touch: cada toque na div alterna a tooltip (abre/fecha); toque fora fecha.
+      pb.addEventListener('click',function(e){
+        e.stopPropagation();
+        var willOpen=!donutTip.classList.contains('visible');
+        donutTip.classList.remove('visible');
+        if(willOpen){
+          donutTip.innerHTML=buildDonutTip(_tipGuias);
+          var r=pb.getBoundingClientRect();
+          positionDonutTip(r.left+r.width/2,r.top+r.height/2);
+          donutTip.classList.add('visible');
+        }
+      });
+      document.addEventListener('click',function(e){
+        if(!pb.contains(e.target)) donutTip.classList.remove('visible');
+      });
+    }
 
     // ── Ranking fluxos ────────────────────────────────────────────────────────
     var pc=el('div',{class:'panel'});
@@ -1040,7 +1072,7 @@
     var fluxoCount={}; guias.forEach(function(g){fluxoCount[g.fluxo.nome]=(fluxoCount[g.fluxo.nome]||0)+1});
     var fluxoById={}; MOCK.FLUXOS.forEach(function(f){fluxoById[f.nome]=f.id});
     var br=el('div',{class:'bars bars-scroll'});
-    pc.appendChild(br);
+    pc.appendChild(wrapBarsScroll(br));
 
     State.fluxoSortDir = State.fluxoSortDir || 'desc';
     function buildFluxoBars(){
@@ -1086,6 +1118,7 @@
       var fluxoSortBtn=pcH3.querySelector('#fluxoSortBtn');
       if(fluxoSortBtn) fluxoSortBtn.onclick=function(){ State.fluxoSortDir=State.fluxoSortDir==='desc'?'asc':'desc'; buildFluxoBars(); lcIcons(); };
       lcIcons();
+      if(br._syncBottom) setTimeout(br._syncBottom,0);
     }
     buildFluxoBars();
 
@@ -1094,7 +1127,7 @@
     var pdH3=el('h3');
     pd.appendChild(pdH3);
     var dBars=el('div',{class:'bars dur-bars bars-scroll'});
-    pd.appendChild(dBars);
+    pd.appendChild(wrapBarsScroll(dBars));
     var legRow=el('div',{class:'dur-legend'});
     legRow.innerHTML='<div class="dur-sla-ref">'+ico('flag',10)+' Linha vermelha = prazo padrão da etapa. Barras além dela indicam risco de prazo.</div>';
     pd.appendChild(legRow);
@@ -1133,12 +1166,12 @@
       pdH3.innerHTML='<span>Duração dos subfluxos '+ico('clock',13)+'</span>'+
         '<span style="display:flex;align-items:center;gap:8px">'+
           '<button class="sort-toggle" id="duracaoSortBtn" title="Alternar ordenação">'+ico(State.duracaoSortDir==='desc'?'arrow-down-wide-narrow':'arrow-up-narrow-wide',12)+' '+(State.duracaoSortDir==='desc'?'Maior duração':'Menor duração')+'</button>'+
-          '<span class="badge muted">dias em auditoria</span>'+(filterLabel?' <span class="badge warn" style="font-size:10px;margin-left:4px">'+esc(filterLabel)+'</span>':'')+
+          (filterLabel?'<span class="badge warn" style="font-size:10px;margin-left:4px">'+esc(filterLabel)+'</span>':'')+
         '</span>';
       dBars.innerHTML='';
       if(!eStats.length){
         dBars.innerHTML='<div style="padding:18px 0;text-align:center;color:var(--muted);font-size:13px">Sem guias no filtro selecionado.</div>';
-        lcIcons(); return;
+        lcIcons(); if(dBars._syncBottom) setTimeout(dBars._syncBottom,0); return;
       }
       eStats.forEach(function(es){
         var barPct=Math.round((es.avg/rfMax)*100);
@@ -1168,6 +1201,7 @@
       var duracaoSortBtn=pdH3.querySelector('#duracaoSortBtn');
       if(duracaoSortBtn) duracaoSortBtn.onclick=function(){ State.duracaoSortDir=State.duracaoSortDir==='desc'?'asc':'desc'; buildDurBars(_lastDurArgs[0],_lastDurArgs[1]); };
       lcIcons();
+      if(dBars._syncBottom) setTimeout(dBars._syncBottom,0);
     }
 
     buildDurBars(guias,null);
