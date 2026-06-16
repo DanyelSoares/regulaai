@@ -160,13 +160,15 @@
     // Linha principal: sempre Todos | Enfermeiros | Auditor
     var mainBar=el('div',{class:'visao-bar'});
     mainBar.innerHTML=
-      ico('eye',13)+' <span style="font-size:12px;font-weight:600;color:var(--g-700)">Simular visão:</span>'+
-      '<button class="visao-btn'+(State.visaoPerfil===''?' active':'')+'" data-v="">'+
-        ico('users',12)+' Todos ('+totalTodos+')</button>'+
-      '<button class="visao-btn'+(enfAtivo?' active':'')+'" data-v="enfermeiro">'+
-        ico('stethoscope',12)+' Enfermeiros'+(enfAtivo?' '+ico('chevron-up',11):' '+ico('chevron-down',11))+'</button>'+
-      '<button class="visao-btn'+(State.visaoPerfil==='auditor'?' active':'')+'" data-v="auditor">'+
-        ico('user-check',12)+' Auditor</button>';
+      '<span class="visao-bar-lbl">'+ico('telescope',13)+' <span style="font-size:12px;font-weight:600;color:var(--g-700)">Visualizar:</span></span>'+
+      '<span class="visao-bar-btns">'+
+        '<button class="visao-btn'+(State.visaoPerfil===''?' active':'')+'" data-v="">'+
+          ico('users',12)+' Todos ('+totalTodos+')</button>'+
+        '<button class="visao-btn'+(enfAtivo?' active':'')+'" data-v="enfermeiro">'+
+          ico('stethoscope',12)+' Enfermeiros'+(enfAtivo?' '+ico('chevron-up',11):' '+ico('chevron-down',11))+'</button>'+
+        '<button class="visao-btn'+(State.visaoPerfil==='auditor'?' active':'')+'" data-v="auditor">'+
+          ico('user-check',12)+' Auditor</button>'+
+      '</span>';
 
     $$('.visao-btn',mainBar).forEach(function(b){
       b.onclick=function(){
@@ -247,20 +249,17 @@
     'Em análise':             'Guia em análise técnica pelo auditor médico.',
     'Em junta médica':        'Aguardando avaliação pela junta médica multidisciplinar.',
     'Aguardando complemento': 'Prestador notificado para enviar documentação complementar. Análise suspensa.',
-    'Aguardando documentação':'Documentação exigida pelo protocolo ainda não foi enviada pelo prestador.',
-    'Em correção pelo prestador':'Prestador realizando as correções solicitadas pelo auditor.',
+    'Cotação de OPME':        'Aguardando cotação de fornecedores para materiais/órteses, próteses e materiais especiais.',
     'Analisada':              'Análise técnica concluída. Aguardando decisão final da operadora.',
     'Liberada':               'Autorização emitida. Procedimento aprovado pela operadora.',
-    'Negada':                 'Solicitação negada por não conformidade com critérios técnicos ou regulatórios.',
-    'Sem parametrização':     'Fluxo de auditoria não definido para este tipo de procedimento.'
+    'Negada':                 'Solicitação negada por não conformidade com critérios técnicos ou regulatórios.'
   };
   function statusBadge(s){
     var cls='muted';
     if(s==='Liberada') cls='';
     else if(s==='Negada') cls='danger';
     else if(s==='Em junta médica') cls='info';
-    else if(s==='Aguardando complemento'||s==='Aguardando documentação'||s==='Em correção pelo prestador') cls='warn';
-    else if(s==='Sem parametrização') cls='dark';
+    else if(s==='Aguardando complemento'||s==='Cotação de OPME') cls='warn';
     var tip=_statusTips[s]||('Status atual da guia: '+s);
     return '<span class="badge '+cls+'" data-tip="'+esc(tip)+'">'+esc(s)+'</span>';
   }
@@ -913,8 +912,9 @@
     MOCK.STATUS.forEach(function(s){
       var c=count(function(g){return g.status===s}); if(c===0) return;
       var pct=Math.round(c/guias.length*100);
-      var row=el('div',{class:'bar-row',style:'cursor:pointer',title:'Duplo clique: ver guias com status "'+esc(s)+'"'},'<div>'+esc(s)+'</div><div class="bar-track"><div class="bar-fill" style="width:'+pct+'%"></div></div><div>'+c+'</div>');
-      row.ondblclick=function(){
+      var row=el('div',{class:'bar-row',style:'cursor:pointer',title:'Clique: ver guias com status "'+esc(s)+'"'},'<div>'+esc(s)+'</div><div class="bar-track"><div class="bar-fill" style="width:'+pct+'%"></div></div><div>'+c+'</div>');
+      row.onclick=function(){
+        if(window.getSelection&&window.getSelection().toString()) return;
         State.filtros={q:'',status:s,fluxo:'',origem:'',risco:'',sortCol:'',sortDir:''};
         State.route='guias';
         $$('.nav-item').forEach(function(x){x.classList.toggle('active',x.getAttribute('data-route')==='guias')});
@@ -1034,108 +1034,139 @@
     pb.addEventListener('mouseleave',function(){ donutTip.classList.remove('visible'); });
 
     // ── Ranking fluxos ────────────────────────────────────────────────────────
-    var pc=el('div',{class:'panel'},'<h3>Fluxos mais utilizados <span class="badge muted">duplo clique para filtrar</span></h3>');
+    var pc=el('div',{class:'panel'});
+    var pcH3=el('h3');
+    pc.appendChild(pcH3);
     var fluxoCount={}; guias.forEach(function(g){fluxoCount[g.fluxo.nome]=(fluxoCount[g.fluxo.nome]||0)+1});
     var fluxoById={}; MOCK.FLUXOS.forEach(function(f){fluxoById[f.nome]=f.id});
-    var br=el('div',{class:'bars'});
-    Object.keys(fluxoCount).sort(function(a,b){return fluxoCount[b]-fluxoCount[a]}).forEach(function(k){
-      var c=fluxoCount[k], pct=Math.round(c/guias.length*100);
-      var row=el('div',{class:'bar-row',style:'cursor:pointer',title:'Duplo clique: ver guias do fluxo "'+esc(k)+'"'},'<div>'+esc(k)+'</div><div class="bar-track"><div class="bar-fill" style="width:'+pct+'%"></div></div><div>'+c+'</div>');
-      row.ondblclick=function(){
-        State.filtros={q:'',status:'',fluxo:fluxoById[k]||'',origem:'',risco:'',sortCol:'',sortDir:''};
-        State.route='guias';
-        $$('.nav-item').forEach(function(x){x.classList.toggle('active',x.getAttribute('data-route')==='guias')});
-        toast('Filtrando guias por fluxo: '+k,'ok'); render();
-      };
-      row.querySelector('.bar-track').onclick=function(e){
-        e.stopPropagation();
-        var fill=this.querySelector('.bar-fill');
-        var isActive=fill.classList.contains('bar-selected');
-        $$('.bar-fill').forEach(function(x){x.classList.remove('bar-selected')});
-        $$('.bar-row').forEach(function(x){x.classList.remove('bar-active')});
-        $$('.bars').forEach(function(x){x.classList.remove('has-selection')});
-        if(!isActive){
-          fill.classList.add('bar-selected');
-          row.classList.add('bar-active');
-          br.classList.add('has-selection');
-          var _fgk=guias.filter(function(g){return g.fluxo.nome===k;});
-          var _klbl=k.length>25?k.slice(0,23)+'…':k;
-          updateDonut(_fgk,_klbl);
-          if(refreshDuracao) refreshDuracao(_fgk,_klbl);
-        } else {
-          updateDonut(guias,null);
-          if(refreshDuracao) refreshDuracao(guias,null);
-        }
-      };
-      br.appendChild(row);
-    });
+    var br=el('div',{class:'bars bars-scroll'});
     pc.appendChild(br);
 
-    // ── Duração dos fluxos ────────────────────────────────────────────────────
-    var fluxoSLACfg=State.fluxoSLAConfig||{};
-    function getFluxoSLA(fid){ var c=fluxoSLACfg[fid]; return (c&&c.prazo>0)?c.prazo:((FLUXO_SLA_DEFAULTS[fid]&&FLUXO_SLA_DEFAULTS[fid].prazo)||5); }
+    State.fluxoSortDir = State.fluxoSortDir || 'desc';
+    function buildFluxoBars(){
+      pcH3.innerHTML='Fluxos mais utilizados '+
+        '<span style="display:flex;align-items:center;gap:8px">'+
+          '<button class="sort-toggle" id="fluxoSortBtn" title="Alternar ordenação">'+ico(State.fluxoSortDir==='desc'?'arrow-down-wide-narrow':'arrow-up-narrow-wide',12)+' '+(State.fluxoSortDir==='desc'?'Mais usados':'Menos usados')+'</button>'+
+          '<span class="badge muted">clique para filtrar</span>'+
+        '</span>';
+      br.innerHTML='';
+      var dir=State.fluxoSortDir==='desc'?-1:1;
+      Object.keys(fluxoCount).sort(function(a,b){return dir*(fluxoCount[a]-fluxoCount[b])}).forEach(function(k){
+        var c=fluxoCount[k], pct=Math.round(c/guias.length*100);
+        var row=el('div',{class:'bar-row',style:'cursor:pointer',title:'Clique: ver guias do fluxo "'+esc(k)+'"'},'<div>'+esc(k)+'</div><div class="bar-track"><div class="bar-fill" style="width:'+pct+'%"></div></div><div>'+c+'</div>');
+        row.onclick=function(){
+          if(window.getSelection&&window.getSelection().toString()) return;
+          State.filtros={q:'',status:'',fluxo:fluxoById[k]||'',origem:'',risco:'',sortCol:'',sortDir:''};
+          State.route='guias';
+          $$('.nav-item').forEach(function(x){x.classList.toggle('active',x.getAttribute('data-route')==='guias')});
+          toast('Filtrando guias por fluxo: '+k,'ok'); render();
+        };
+        row.querySelector('.bar-track').onclick=function(e){
+          e.stopPropagation();
+          var fill=this.querySelector('.bar-fill');
+          var isActive=fill.classList.contains('bar-selected');
+          $$('.bar-fill').forEach(function(x){x.classList.remove('bar-selected')});
+          $$('.bar-row').forEach(function(x){x.classList.remove('bar-active')});
+          $$('.bars').forEach(function(x){x.classList.remove('has-selection')});
+          if(!isActive){
+            fill.classList.add('bar-selected');
+            row.classList.add('bar-active');
+            br.classList.add('has-selection');
+            var _fgk=guias.filter(function(g){return g.fluxo.nome===k;});
+            var _klbl=k.length>25?k.slice(0,23)+'…':k;
+            updateDonut(_fgk,_klbl);
+            if(refreshDuracao) refreshDuracao(_fgk,_klbl);
+          } else {
+            updateDonut(guias,null);
+            if(refreshDuracao) refreshDuracao(guias,null);
+          }
+        };
+        br.appendChild(row);
+      });
+      var fluxoSortBtn=pcH3.querySelector('#fluxoSortBtn');
+      if(fluxoSortBtn) fluxoSortBtn.onclick=function(){ State.fluxoSortDir=State.fluxoSortDir==='desc'?'asc':'desc'; buildFluxoBars(); lcIcons(); };
+      lcIcons();
+    }
+    buildFluxoBars();
 
+    // ── Duração dos subfluxos (etapas) ──────────────────────────────────────────
     var pd=el('div',{class:'panel'});
     var pdH3=el('h3');
     pd.appendChild(pdH3);
-    var dBars=el('div',{class:'bars dur-bars'});
+    var dBars=el('div',{class:'bars dur-bars bars-scroll'});
     pd.appendChild(dBars);
     var legRow=el('div',{class:'dur-legend'});
-    legRow.innerHTML='<div class="dur-sla-ref">'+ico('flag',10)+' Linha vermelha = SLA por fluxo, configurável em <b>Configurações → Fluxos</b>. Barras além dela indicam risco de prazo.</div>';
+    legRow.innerHTML='<div class="dur-sla-ref">'+ico('flag',10)+' Linha vermelha = prazo padrão da etapa. Barras além dela indicam risco de prazo.</div>';
     pd.appendChild(legRow);
 
+    State.duracaoSortDir = State.duracaoSortDir || 'desc';
+    var _lastDurArgs=[guias,null];
     function buildDurBars(gsToUse, filterLabel){
-      var fDias={};
+      _lastDurArgs=[gsToUse,filterLabel];
+      var eHoras={};
       gsToUse.forEach(function(g){
-        var fid=g.fluxo.id;
-        if(!fDias[fid]) fDias[fid]={nome:g.fluxo.nome,dias:[]};
-        fDias[fid].dias.push(g.diasAuditoria);
-      });
-      var fStats=[];
-      Object.keys(fDias).forEach(function(fid){
-        var fd=fDias[fid]; var dias=fd.dias; var sla=getFluxoSLA(fid);
-        var sum=dias.reduce(function(acc2,x){return acc2+x;},0);
-        var avg2=sum/dias.length;
-        fStats.push({
-          id:fid, nome:fd.nome, avg:avg2, sla:sla,
-          max:Math.max.apply(null,dias), min:Math.min.apply(null,dias),
-          count:dias.length,
-          acimaSLA:dias.filter(function(d){return d>sla;}).length
+        (g.etapas||[]).forEach(function(et){
+          if(!et.horasReais) return;
+          if(!eHoras[et.nome]) eHoras[et.nome]={nome:et.nome,horas:[],prazoHoras:et.prazoHoras};
+          eHoras[et.nome].horas.push(et.horasReais);
         });
       });
-      fStats.sort(function(a,b){return b.avg-a.avg;});
-      var mxAvg=fStats.length?fStats[0].avg:5;
-      var mxSLA=fStats.reduce(function(m,fs){return Math.max(m,fs.sla);},5);
+      var eStats=[];
+      Object.keys(eHoras).forEach(function(nome){
+        var ed=eHoras[nome]; var horas=ed.horas; var slaDias=ed.prazoHoras/24;
+        var dias=horas.map(function(h){return h/24;});
+        var sum=dias.reduce(function(acc2,x){return acc2+x;},0);
+        var avg2=sum/dias.length;
+        eStats.push({
+          nome:nome, avg:avg2, sla:slaDias,
+          max:Math.max.apply(null,dias), min:Math.min.apply(null,dias),
+          count:dias.length,
+          acimaSLA:dias.filter(function(d){return d>slaDias;}).length
+        });
+      });
+      var durDir=State.duracaoSortDir==='desc'?-1:1;
+      eStats.sort(function(a,b){return durDir*(a.avg-b.avg);});
+      var mxAvg=eStats.length?Math.max.apply(null,eStats.map(function(es){return es.avg;})):5;
+      var mxSLA=eStats.reduce(function(m,es){return Math.max(m,es.sla);},5);
       var rfMax=Math.max(mxAvg,mxSLA)*1.35;
 
-      pdH3.innerHTML='Duração dos fluxos '+ico('clock',13)+' <span class="badge muted">dias em auditoria</span>'+(filterLabel?' <span class="badge warn" style="font-size:10px;margin-left:4px">'+esc(filterLabel)+'</span>':'');
+      pdH3.innerHTML='<span>Duração dos subfluxos '+ico('clock',13)+'</span>'+
+        '<span style="display:flex;align-items:center;gap:8px">'+
+          '<button class="sort-toggle" id="duracaoSortBtn" title="Alternar ordenação">'+ico(State.duracaoSortDir==='desc'?'arrow-down-wide-narrow':'arrow-up-narrow-wide',12)+' '+(State.duracaoSortDir==='desc'?'Maior duração':'Menor duração')+'</button>'+
+          '<span class="badge muted">dias em auditoria</span>'+(filterLabel?' <span class="badge warn" style="font-size:10px;margin-left:4px">'+esc(filterLabel)+'</span>':'')+
+        '</span>';
       dBars.innerHTML='';
-      if(!fStats.length){
+      if(!eStats.length){
         dBars.innerHTML='<div style="padding:18px 0;text-align:center;color:var(--muted);font-size:13px">Sem guias no filtro selecionado.</div>';
         lcIcons(); return;
       }
-      fStats.forEach(function(fs){
-        var barPct=Math.round((fs.avg/rfMax)*100);
-        var slaPct2=Math.round((fs.sla/rfMax)*100);
+      eStats.forEach(function(es){
+        var barPct=Math.round((es.avg/rfMax)*100);
+        var slaPct2=Math.round((es.sla/rfMax)*100);
         var gradFrom,gradTo;
-        if(fs.avg<=fs.sla*0.6){gradFrom='#86efac';gradTo='var(--g-500)';}
-        else if(fs.avg<=fs.sla){gradFrom='#fde68a';gradTo='#d4a017';}
-        else if(fs.avg<=fs.sla*1.4){gradFrom='#fcd34d';gradTo='#d97706';}
+        if(es.avg<=es.sla*0.6){gradFrom='#86efac';gradTo='var(--g-500)';}
+        else if(es.avg<=es.sla){gradFrom='#fde68a';gradTo='#d4a017';}
+        else if(es.avg<=es.sla*1.4){gradFrom='#fcd34d';gradTo='#d97706';}
         else{gradFrom='#fca5a5';gradTo='var(--danger)';}
-        var stIco=fs.avg<=fs.sla?ico('check-circle-2',11):ico('alert-triangle',11);
-        var stClr=fs.avg<=fs.sla?'var(--g-600)':'var(--danger)';
-        var sn=fs.nome.length>28?fs.nome.slice(0,26)+'…':fs.nome;
-        var tip=fs.nome+' — '+fs.count+' guia(s) · média '+fs.avg.toFixed(1)+' d · máx '+fs.max+' d · SLA: '+fs.sla+' d · '+fs.acimaSLA+' acima do SLA';
-        var row=el('div',{class:'bar-row dur-row',title:tip});
+        var stClr=es.avg<=es.sla?'var(--g-600)':'var(--danger)';
+        var sn=es.nome.length>62?es.nome.slice(0,60)+'…':es.nome;
+        var tip=es.nome+'\n'+
+          'Parametrização: '+es.count+' etapa(s)\n'+
+          'Prazo: '+es.sla.toFixed(1)+' d\n'+
+          'Média: '+es.avg.toFixed(1)+' d\n'+
+          'Acima do prazo: '+es.acimaSLA;
+        var row=el('div',{class:'bar-row dur-row','data-tip':tip});
         row.innerHTML=
-          '<div class="dur-name" title="'+esc(fs.nome)+'">'+esc(sn)+'</div>'+
+          '<div class="dur-name">'+esc(sn)+'</div>'+
           '<div class="dur-track">'+
             '<div class="dur-fill" style="width:'+barPct+'%;background:linear-gradient(90deg,'+gradFrom+','+gradTo+')"></div>'+
-            '<div class="dur-sla-line" style="left:'+slaPct2+'%" title="SLA: '+fs.sla+' dias"></div>'+
+            '<div class="dur-sla-line" style="left:'+slaPct2+'%"></div>'+
           '</div>'+
-          '<div class="dur-meta" style="color:'+stClr+'">'+fs.avg.toFixed(1)+'d '+stIco+'</div>';
+          '<div class="dur-meta" style="color:'+stClr+'">'+es.avg.toFixed(1)+'d</div>';
         dBars.appendChild(row);
       });
+      var duracaoSortBtn=pdH3.querySelector('#duracaoSortBtn');
+      if(duracaoSortBtn) duracaoSortBtn.onclick=function(){ State.duracaoSortDir=State.duracaoSortDir==='desc'?'asc':'desc'; buildDurBars(_lastDurArgs[0],_lastDurArgs[1]); };
       lcIcons();
     }
 
@@ -1148,7 +1179,7 @@
     bottomRow.appendChild(pd);
     wrap.appendChild(bottomRow);
 
-    wrap.appendChild(el('div',{style:'margin-top:8px;font-size:12px;color:var(--muted)'},ico('lightbulb')+' Dica: dê duplo clique em uma barra de status ou fluxo para abrir a relação filtrada de guias.'));
+    wrap.appendChild(el('div',{style:'margin-top:8px;font-size:12px;color:var(--muted)'},ico('lightbulb')+' Dica: clique em uma barra de status ou fluxo para abrir a relação filtrada de guias.'));
 
     return wrap;
   }
@@ -1835,19 +1866,15 @@
     var wrap=el('div');
 
     // Ordem das colunas seguindo a sequência dos fluxos
-    var KB_ORDER=['Em análise','Aguardando complemento','Aguardando documentação','Em junta médica','Cotação de OPME','Analisada','Em correção pelo prestador','Liberada','Negada','Encerrada','Sem parametrização'];
+    var KB_ORDER=['Em análise','Aguardando complemento','Em junta médica','Cotação de OPME','Analisada','Liberada','Negada'];
     var KB_CFG={
       'Em análise':             {ico:'clock',           cor:'#4a7fa5'},
       'Aguardando complemento': {ico:'hourglass',       cor:'#b07a1a'},
-      'Aguardando documentação':{ico:'file-clock',      cor:'#c08030'},
       'Em junta médica':        {ico:'users',           cor:'#6b57b0'},
       'Cotação de OPME':        {ico:'tag',             cor:'#0e7490'},
       'Analisada':              {ico:'check-circle',    cor:'#2faa66'},
-      'Em correção pelo prestador':{ico:'pencil',       cor:'#8b6830'},
       'Liberada':               {ico:'badge-check',     cor:'#0a8a43'},
       'Negada':                 {ico:'x-circle',        cor:'#b91c1c'},
-      'Encerrada':              {ico:'archive',         cor:'#6b7280'},
-      'Sem parametrização':     {ico:'alert-triangle',  cor:'#9b6020'},
     };
 
     // Aplica filtro de período do Kanban (independente do filtro da view Guias)
@@ -1896,10 +1923,9 @@
     // ── Barra de filtros adicionais — dropdowns ───────────────────────
     var KB_SHORT={
       'Em análise':'Análise','Aguardando complemento':'Ag. complemento',
-      'Aguardando documentação':'Ag. documentação','Em junta médica':'Junta médica',
+      'Em junta médica':'Junta médica',
       'Cotação de OPME':'Cotação OPME','Analisada':'Analisada',
-      'Em correção pelo prestador':'Correção','Liberada':'Liberada',
-      'Negada':'Negada','Encerrada':'Encerrada','Sem parametrização':'Sem param.'
+      'Liberada':'Liberada','Negada':'Negada'
     };
     var hasKF=kf.colunas.length||kf.uti||kf.regime||kf.tipo;
 
@@ -2093,14 +2119,79 @@
     var fluxos=MOCK.FLUXOS;
     var subBar=el('div',{class:'cfg-sub-tab-bar'});
     var subContent=el('div',{class:'cfg-sub-content'});
-    // Busca de fluxos — full-width no flex-wrap, filtro nos botões abaixo
-    var srchFluxo=el('input',{class:'param-search cfg-sub-search',type:'text',placeholder:'Buscar fluxo...'});
-    subBar.appendChild(srchFluxo);
+
+    // Índice etapa(subfluxo) → fluxos que a contêm, para apontar duplicidade
+    var etapaIndex={};
+    fluxos.forEach(function(f){
+      f.etapas.forEach(function(nome,idx){
+        if(!etapaIndex[nome]) etapaIndex[nome]=[];
+        etapaIndex[nome].push({fid:f.id,fnome:f.nome,idx:idx});
+      });
+    });
+
+    // Busca de fluxos e subfluxos — full-width no flex-wrap, filtro nos botões abaixo
+    var srchWrap=el('div',{style:'position:relative;width:100%'});
+    var srchFluxo=el('input',{class:'param-search cfg-sub-search',type:'text',placeholder:'Buscar fluxo ou subfluxo...'});
+    var srchResults=el('div',{class:'fluxo-search-results',style:'display:none'});
+    srchWrap.appendChild(srchFluxo);
+    srchWrap.appendChild(srchResults);
+    subBar.appendChild(srchWrap);
     fluxos.forEach(function(f,i){
       var btn=el('button',{class:'cfg-sub-tab'+(i===0?' active':''),'data-fid':f.id},f.id);
       btn.title=f.nome;
       subBar.appendChild(btn);
     });
+
+    function renderSearchResults(q){
+      if(!q){ srchResults.style.display='none'; srchResults.innerHTML=''; return; }
+      var fluxoMatches=fluxos.filter(function(f){
+        return f.id.toLowerCase().indexOf(q)>=0||f.nome.toLowerCase().indexOf(q)>=0;
+      });
+      var etapaMatches=Object.keys(etapaIndex).filter(function(nome){
+        return nome.toLowerCase().indexOf(q)>=0;
+      });
+      if(!fluxoMatches.length&&!etapaMatches.length){
+        srchResults.innerHTML='<div class="fsr-empty">Nenhum fluxo ou subfluxo encontrado.</div>';
+        srchResults.style.display='block';
+        return;
+      }
+      var html='';
+      if(fluxoMatches.length){
+        html+='<div class="fsr-group-lbl">Fluxos</div>';
+        fluxoMatches.forEach(function(f){
+          html+='<div class="fsr-item" data-go-fid="'+esc(f.id)+'">'+ico('git-branch',12)+' <b>'+esc(f.id)+'</b> — '+esc(f.nome)+'</div>';
+        });
+      }
+      if(etapaMatches.length){
+        html+='<div class="fsr-group-lbl">Subfluxos (etapas)</div>';
+        etapaMatches.forEach(function(nome){
+          var owners=etapaIndex[nome];
+          var multi=owners.length>1;
+          html+='<div class="fsr-item fsr-etapa">'+
+            '<div class="fsr-etapa-nome">'+ico('layers',12)+' '+esc(nome)+(multi?' <span class="badge warn" style="font-size:9.5px">em '+owners.length+' fluxos</span>':'')+'</div>'+
+            '<div class="fsr-etapa-owners">'+
+              owners.map(function(o){
+                return '<span class="fsr-owner-tag" data-go-fid="'+esc(o.fid)+'" data-go-idx="'+o.idx+'">'+esc(o.fid)+' · '+esc(o.fnome)+'</span>';
+              }).join('')+
+            '</div>'+
+          '</div>';
+        });
+      }
+      srchResults.innerHTML=html;
+      srchResults.style.display='block';
+      $$('.fsr-item[data-go-fid], .fsr-owner-tag',srchResults).forEach(function(node){
+        node.onclick=function(e){
+          e.stopPropagation();
+          var fid=node.getAttribute('data-go-fid');
+          var idxAttr=node.getAttribute('data-go-idx');
+          showFluxo(fid, idxAttr!==null?parseInt(idxAttr,10):null);
+          srchResults.style.display='none';
+          srchFluxo.value='';
+          $$('.cfg-sub-tab',subBar).forEach(function(b){ b.style.display=''; });
+        };
+      });
+    }
+
     srchFluxo.oninput=function(){
       var q=srchFluxo.value.trim().toLowerCase();
       $$('.cfg-sub-tab',subBar).forEach(function(b){
@@ -2108,11 +2199,15 @@
         var fn=''; for(var i=0;i<fluxos.length;i++){ if(fluxos[i].id===fid){ fn=fluxos[i].nome; break; } }
         b.style.display=(!q||fid.toLowerCase().indexOf(q)>=0||fn.toLowerCase().indexOf(q)>=0)?'':'none';
       });
+      renderSearchResults(q);
     };
+    document.addEventListener('click',function(e){
+      if(!srchWrap.contains(e.target)) srchResults.style.display='none';
+    });
     container.appendChild(subBar);
     container.appendChild(subContent);
 
-    function showFluxo(fid){
+    function showFluxo(fid, highlightIdx){
       $$('.cfg-sub-tab',subBar).forEach(function(b){ b.classList.toggle('active',b.getAttribute('data-fid')===fid); });
       var f=null; for(var i=0;i<fluxos.length;i++){ if(fluxos[i].id===fid){ f=fluxos[i]; break; } }
       if(!f){ subContent.innerHTML=''; return; }
@@ -2587,6 +2682,15 @@
           localStorage.setItem('regula_etapa_instr',JSON.stringify(State.etapaInstrucoes));
           toast('Instruções do fluxo '+fid+' salvas','ok');
         };
+        if(highlightIdx!=null){
+          var items=vincPanel.querySelectorAll('.fluxo-etapa-item');
+          var target=items[highlightIdx];
+          if(target){
+            target.scrollIntoView({block:'center'});
+            target.classList.add('fe-highlight');
+            setTimeout(function(){ target.classList.remove('fe-highlight'); },2200);
+          }
+        }
       },0);
       lcIcons();
     }
