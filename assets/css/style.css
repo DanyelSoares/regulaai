@@ -325,7 +325,7 @@ body.pl--blurring .pl--blur-target{filter:blur(5px)}
 .dur-stat-sub{font-size:10.5px;color:var(--muted)}
 .dur-sla-ref{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:5px;padding:4px 0 0}
 .cfg-table{width:100%;border-collapse:collapse;font-size:13px}
-.cfg-table thead th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:600;padding:0 10px 8px;border-bottom:1.5px solid var(--g-100)}
+.cfg-table thead th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:600;padding:12px 10px 10px;border-bottom:1.5px solid var(--g-100)}
 .cfg-table tbody tr{border-bottom:1px solid var(--g-50)}
 .cfg-table tbody tr:last-child{border-bottom:none}
 .cfg-table tbody td{padding:9px 10px;color:var(--ink-2);vertical-align:middle}

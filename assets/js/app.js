@@ -8,15 +8,16 @@
       urgencia:         10,
       uti:              8,
       opme:             7,
-      semAnexos:        7,
       prazoVencido:     7,
-      semDut:           5,
       aderenciaCrit:    8,
       aderenciaBaixa:   3,
       altaComplexidade: 3,
-      oncologia:        5
+      oncologia:        5,
+      intCirurgica:     6,
+      intClinica:       4,
+      ambulatorial:     2
     },
-    // Teto = soma simples dos pesos acima (10+8+7+7+7+5+8+3+3+5) = 63 pontos
+    // Teto = soma simples dos pesos acima = 75 pontos
     limiares: { baixo: 7, medio: 15, alto: 23 }
   };
 
@@ -61,6 +62,11 @@
     guiasPagina: 1,
     filtros: { q:'', status:'', fluxo:'', origem:'', risco:'', benef:'', prest:'', tipo:'', congenere:'', solicitante:'', opme:'', uti:'', regimeAte:'', especialidade:'', dataDeEmissao:'', dataAteEmissao:'', sortCol:'', sortDir:'' },
     kanbanPeriodo: { de:'', ate:'' },
+    dashboardPeriodo: (function(){
+      var hj=new Date(), de=new Date(); de.setDate(hj.getDate()-30);
+      function iso(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+      return { de:iso(hj), ate:iso(de) };
+    })(),
     kanbanFiltros: { colunas:[], uti:'', regime:'', tipo:'' },
     fluxoSLAConfig: JSON.parse(localStorage.getItem('regula_fluxo_sla')||'null') || {},
     fluxoWeights: JSON.parse(localStorage.getItem('regula_fluxo_weights')||'null') || {},
@@ -162,7 +168,7 @@
     // Linha principal: sempre Todos | Enfermeiros | Auditor
     var mainBar=el('div',{class:'visao-bar'});
     mainBar.innerHTML=
-      '<span class="visao-bar-lbl">'+ico('telescope',13)+' <span style="font-size:12px;font-weight:600;color:var(--g-700)">Visualizar:</span></span>'+
+      '<span class="visao-bar-lbl"><span style="font-size:12px;font-weight:600;color:var(--g-700)">Visualizar:</span></span>'+
       '<span class="visao-bar-btns">'+
         '<button class="visao-btn'+(State.visaoPerfil===''?' active':'')+'" data-v="">'+
           ico('users',12)+' Todos ('+totalTodos+')</button>'+
@@ -351,15 +357,18 @@
     add('Regime de urgência',          g.regime==='Urgência',                                       p.urgencia);
     add('Internação em UTI',           g.uti,                                                        p.uti);
     add('OPME presente',               g.opme,                                                       p.opme);
-    add('Sem documentação anexada',    !g.anexos,                                                    p.semAnexos);
     add('Prazo de auditoria vencido',  g.prazoVencido,                                               p.prazoVencido);
-    var temDutObrig=g.procedimentos.some(function(p2){return p2.dut;});
-    add('DUT não comprovada',          !g.dut && temDutObrig,                                        p.semDut);
     var ad=guiaAderencia(g);
     add('Aderência crítica (< 50%)',   ad<50,                                                        p.aderenciaCrit);
     add('Aderência baixa (50–69%)',    ad>=50 && ad<70,                                              p.aderenciaBaixa);
     add('Fluxo alta complexidade',     g.fluxo.id==='F2'||g.fluxo.id==='F5',                         p.altaComplexidade);
     add('Fluxo oncologia / imunobiológico', g.fluxo.id==='F8',                                       p.oncologia);
+    var _isIntCir=g.tipo==='Cirurgia'||g.tipo==='Cirurgia neuro'||g.tipo==='Cirurgia ortopédica';
+    var _isIntClin=g.natureza==='Internação'&&!_isIntCir&&!g.uti;
+    var _isAmb=g.natureza==='Ambulatorial'||(!g.uti&&!_isIntCir&&!_isIntClin&&g.diariasTaxas.length===0);
+    add('Internação cirúrgica',        _isIntCir,   p.intCirurgica);
+    add('Internação clínica',          _isIntClin,  p.intClinica);
+    add('Ambulatorial',                _isAmb,      p.ambulatorial);
     return {score:score, itens:itens, aderencia:ad};
   }
   function calcRiscoScore(g){ return calcRiscoDetalhe(g).score; }
@@ -378,7 +387,8 @@
   }
 
   /* === Date Range Picker === */
-  function makeDateRangePicker(container, initDe, initAte, onChange){
+  function makeDateRangePicker(container, initDe, initAte, onChange, opts){
+    opts=opts||{};
     var _de=initDe||'', _ate=initAte||'', _step=0, _hover='';
     var now=new Date(), _vy=now.getFullYear(), _vm=now.getMonth();
     var MESES=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
@@ -418,7 +428,8 @@
     }
 
     function updateTrigger(){
-      trigEl.innerHTML=ico('calendar-range',13)+' '+(_de?br(_de)+(_ate?' – '+br(_ate):'…'):'<span style="color:var(--muted)">Período</span>');
+      var ic=opts.hideIcon?'':ico('calendar-range',13)+' ';
+      trigEl.innerHTML=ic+(_de?br(_de)+(_ate?' – '+br(_ate):'…'):'<span style="color:var(--muted)">'+(opts.placeholder||'Período')+'</span>');
       trigEl.className='drp-trigger'+(_de||_ate?' active':'');
       lcIcons();
     }
@@ -758,11 +769,26 @@
 
   function viewDashboard(){
     var wrap=el('div');
-    var guias=guiasVisiveis();
+    var dp=State.dashboardPeriodo;
+    var dpLo=(dp.de&&dp.ate)?(dp.de<dp.ate?dp.de:dp.ate):(dp.de||dp.ate);
+    var dpHi=(dp.de&&dp.ate)?(dp.de<dp.ate?dp.ate:dp.de):(dp.de||dp.ate);
+    var guias=guiasVisiveis().filter(function(g){
+      if(dpLo&&g.dataEmissao<dpLo) return false;
+      if(dpHi&&g.dataEmissao>dpHi) return false;
+      return true;
+    });
     var tituloExtra='';
     if(State.perfil==='gestor' && State.visaoPerfil) tituloExtra=' <span class="badge info">Visão: '+State.visaoPerfil+'</span>';
     var hdr=el('div',{class:'page-title'},'<div><h1>Dashboard Executivo'+tituloExtra+'</h1><p>Visão consolidada de auditoria assistencial e indicadores operacionais.</p></div>');
+    var dpWrap=el('div',{id:'dashPeriodoWrap',style:'display:flex;align-items:center'});
+    hdr.appendChild(dpWrap);
     wrap.appendChild(hdr);
+    makeDateRangePicker(
+      dpWrap,
+      dp.de, dp.ate,
+      function(de,ate){ State.dashboardPeriodo={de:de,ate:ate}; render(); },
+      {hideIcon:true}
+    );
 
     // Banner de contexto de perfil
     if(State.perfil!=='gestor'){
@@ -1223,7 +1249,7 @@
       var mxSLA=eStats.reduce(function(m,es){return Math.max(m,es.sla);},5);
       var rfMax=Math.max(mxAvg,mxSLA)*1.35;
 
-      pdH3.innerHTML='<span>Duração dos subfluxos '+ico('clock',13)+'</span>'+
+      pdH3.innerHTML='<span>Duração dos subfluxos</span>'+
         '<span style="display:flex;align-items:center;gap:8px">'+
           '<button class="sort-toggle" id="duracaoSortBtn" title="Alternar ordenação">'+ico(State.duracaoSortDir==='desc'?'arrow-down-wide-narrow':'arrow-up-narrow-wide',12)+' '+(State.duracaoSortDir==='desc'?'Maior duração':'Menor duração')+'</button>'+
           (filterLabel?'<span class="badge warn" style="font-size:10px;margin-left:4px">'+esc(filterLabel)+'</span>':'')+
@@ -3379,7 +3405,7 @@
         '<button class="btn ghost" id="lClear">'+ico('x',12)+' Limpar</button>';
       wrap.appendChild(filt);
 
-      var COLS=[{key:'ts',label:'Data/Hora'},{key:'user',label:'Usuário'},{key:'perf',label:'Perfil'},{key:'acao',label:'Ação'},{key:'ref',label:'Referência'}];
+      var COLS=[{key:'ts',label:'Data/Hora'},{key:'user',label:'Usuário'},{key:'perf',label:'Perfil'},{key:'acao',label:'Ação'},{key:'guia',label:'Guia'}];
       var tbl=el('table');
       var thead='<thead><tr>';
       COLS.forEach(function(c){
@@ -3396,7 +3422,8 @@
         if(lf.q && (l.user+' '+l.acao+' '+l.ref).toLowerCase().indexOf(lf.q)<0) return false;
         return true;
       });
-      var sfn={ts:function(l){return l.ts;},user:function(l){return l.user;},perf:function(l){return l.perfil;},acao:function(l){return l.acao;},ref:function(l){return l.ref;}};
+      function logGuia(l){ var m=(l.ref||'').match(/^\d{6,}/); return m?m[0]:'—'; }
+      var sfn={ts:function(l){return l.ts;},user:function(l){return l.user;},perf:function(l){return l.perfil;},acao:function(l){return l.acao;},guia:function(l){return logGuia(l);}};
       if(sfn[lf.sortCol]){var _sf=sfn[lf.sortCol],_sd=lf.sortDir==='asc'?1:-1;rows=rows.slice().sort(function(a,b){var av=_sf(a),bv=_sf(b);return av<bv?-_sd:av>bv?_sd:0;});}
       var totalRows=rows.length;
       var totalPages=Math.max(1,Math.ceil(totalRows/LOG_PER_PAGE));
@@ -3409,11 +3436,11 @@
       } else {
         pageRows.forEach(function(l,i){
           tb.appendChild(el('tr',{class:i%2===0?'log-row-a':'log-row-b'},
-            '<td style="white-space:nowrap;color:var(--muted);font-size:11.5px">'+esc(l.ts)+'</td>'+
+            '<td style="white-space:nowrap;color:var(--muted);font-size:11.5px;width:130px">'+esc(l.ts)+'</td>'+
             '<td style="font-weight:500">'+esc(l.user)+'</td>'+
             '<td>'+perfilBadge(l.perfil)+'</td>'+
             '<td>'+esc(l.acao)+'</td>'+
-            '<td style="color:var(--g-700);font-size:12px">'+esc(l.ref)+'</td>'
+            '<td style="color:var(--g-700);font-size:12px;font-weight:600">'+esc(logGuia(l))+'</td>'
           ));
         });
       }
@@ -3469,7 +3496,7 @@
         '<button class="btn ghost" id="lClear2">'+ico('x',12)+' Limpar</button>';
       wrap.appendChild(filt2);
 
-      var COLS2=[{key:'ts',label:'Data/Hora'},{key:'user',label:'Origem'},{key:'tipo',label:'Tipo'},{key:'acao',label:'Ação'},{key:'ref',label:'Referência'}];
+      var COLS2=[{key:'ts',label:'Data/Hora'},{key:'user',label:'Origem'},{key:'tipo',label:'Tipo'},{key:'acao',label:'Ação'},{key:'guia',label:'Guia'}];
       var tbl2=el('table');
       var thead2='<thead><tr>';
       COLS2.forEach(function(c){
@@ -3486,7 +3513,7 @@
         if(lf2.q && (l.user+' '+l.acao+' '+l.ref).toLowerCase().indexOf(lf2.q)<0) return false;
         return true;
       });
-      var sfn2={ts:function(l){return l.ts;},user:function(l){return l.user;},tipo:function(l){return l.tipo;},acao:function(l){return l.acao;},ref:function(l){return l.ref;}};
+      var sfn2={ts:function(l){return l.ts;},user:function(l){return l.user;},tipo:function(l){return l.tipo;},acao:function(l){return l.acao;},guia:function(l){return logGuia(l);}};
       if(sfn2[lf2.sortCol]){var _sf2=sfn2[lf2.sortCol],_sd2=lf2.sortDir==='asc'?1:-1;rows2=rows2.slice().sort(function(a,b){var av=_sf2(a),bv=_sf2(b);return av<bv?-_sd2:av>bv?_sd2:0;});}
       var total2=rows2.length;
       var totalPages2=Math.max(1,Math.ceil(total2/LOG_PER_PAGE));
@@ -3499,11 +3526,11 @@
       } else {
         pageRows2.forEach(function(l,i){
           tb2.appendChild(el('tr',{class:i%2===0?'log-row-a':'log-row-b'},
-            '<td style="white-space:nowrap;color:var(--muted);font-size:11.5px">'+esc(l.ts)+'</td>'+
+            '<td style="white-space:nowrap;color:var(--muted);font-size:11.5px;width:130px">'+esc(l.ts)+'</td>'+
             '<td style="font-weight:500">'+esc(l.user)+'</td>'+
             '<td>'+tipoBadge(l.tipo)+'</td>'+
             '<td>'+esc(l.acao)+'</td>'+
-            '<td style="color:var(--g-700);font-size:12px">'+esc(l.ref)+'</td>'
+            '<td style="color:var(--g-700);font-size:12px;font-weight:600">'+esc(logGuia(l))+'</td>'
           ));
         });
       }
@@ -3570,16 +3597,16 @@
     var LEVEL_COLOR={edit:'var(--g-600)',view:'#64748b',none:'var(--g-200)'};
     var LEVEL_LABEL={edit:'Acesso total',view:'Somente leitura',none:'Sem acesso'};
     var t=el('table',{style:'width:100%;border-collapse:collapse'});
-    var thRow='<thead><tr><th style="text-align:left;padding:0 12px 22px 0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Permissão</th>';
+    var thRow='<thead><tr><th style="text-align:left;padding:14px 12px 22px 16px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Permissão</th>';
     PERM_PROFILES.forEach(function(p){
-      thRow+='<th style="text-align:center;padding:0 8px 22px;width:100px"><span style="display:inline-block;background:'+profileColors[p]+';color:#fff;border-radius:20px;padding:4px 14px;font-size:11.5px;font-weight:700;letter-spacing:.2px">'+p.charAt(0).toUpperCase()+p.slice(1)+'</span></th>';
+      thRow+='<th style="text-align:center;padding:14px 8px 22px;width:100px"><span style="display:inline-block;background:'+profileColors[p]+';color:#fff;border-radius:20px;padding:4px 14px;font-size:11.5px;font-weight:700;letter-spacing:.2px">'+p.charAt(0).toUpperCase()+p.slice(1)+'</span></th>';
     });
     thRow+='</tr></thead>';
     t.innerHTML=thRow;
     var tb=el('tbody');
     PERM_LIST.forEach(function(perm,idx){
       var tr=el('tr',{style:'border-top:'+(idx===0?'none':'1px solid var(--g-50)')});
-      var labelCell='<td style="padding:16px 12px 16px 0;vertical-align:top">'+
+      var labelCell='<td style="padding:16px 12px 16px 16px;vertical-align:top">'+
         '<div style="font-size:13px;font-weight:600;color:var(--ink)">'+esc(perm.label)+'</div>'+
         '<div style="font-size:11.5px;color:var(--muted);margin-top:3px;line-height:1.5">'+esc(perm.desc)+'</div>'+
         '</td>';
@@ -3670,13 +3697,12 @@
       {key:'urgencia',         label:'Regime de urgência',              desc:'Guia com regime Urgência/Emergência'},
       {key:'uti',              label:'Internação em UTI',               desc:'Guia inclui diária de UTI'},
       {key:'opme',             label:'OPME presente',                   desc:'Material especial (órtese, prótese, etc.)'},
-      {key:'semAnexos',        label:'Sem documentação anexada',        desc:'Nenhum arquivo enviado pelo prestador'},
       {key:'prazoVencido',     label:'Prazo de auditoria vencido',      desc:'Guia ultrapassou o prazo de análise'},
-      {key:'semDut',           label:'DUT não comprovada',              desc:'Procedimento exige DUT mas não foi anexada'},
-      {key:'aderenciaCrit',    label:'Aderência crítica (< 50%)',       desc:'IA indica aderência regulatória abaixo de 50%'},
-      {key:'aderenciaBaixa',   label:'Aderência baixa (50–69%)',        desc:'IA indica aderência entre 50% e 69%'},
       {key:'altaComplexidade', label:'Fluxo alta complexidade',         desc:'Fluxo F2 (Alta Complexidade) ou F5 (Neuro/Buco/Cardio)'},
-      {key:'oncologia',        label:'Fluxo oncologia / imunobiológico',desc:'Fluxo F8 — medicamentos de alto custo'}
+      {key:'oncologia',        label:'Fluxo oncologia / imunobiológico',desc:'Fluxo F8 — medicamentos de alto custo'},
+      {key:'intCirurgica',     label:'Internação cirúrgica',            desc:'Guia com tipo de cirurgia (geral, neuro ou ortopédica)'},
+      {key:'intClinica',       label:'Internação clínica',              desc:'Internação sem procedimento cirúrgico e sem UTI'},
+      {key:'ambulatorial',     label:'Ambulatorial',                    desc:'Atendimento ambulatorial sem diárias ou internação'}
     ];
 
     function renderRisco(){
@@ -3700,13 +3726,27 @@
 
       // ── Sub-abas ──
       var rstBar=el('div',{style:'display:flex;gap:0;border-bottom:1.5px solid var(--g-100);margin:10px 0 0'});
-      [['config',ico('sliders-horizontal',13)+' Configuração'],['manual',ico('book-open',13)+' Manual de uso']].forEach(function(pair){
+      [['limiares',ico('sliders-horizontal',13)+' Limiares'],['previa',ico('table-2',13)+' Prévia']].forEach(function(pair){
         var b=el('button',{'data-rst':pair[0],style:'padding:9px 18px;font-size:12.5px;font-weight:600;border:none;border-bottom:2px solid transparent;background:none;cursor:pointer;color:var(--muted);display:flex;align-items:center;gap:6px'},pair[1]);
         rstBar.appendChild(b);
       });
       rp.appendChild(rstBar);
       var rstContent=el('div');
       rp.appendChild(rstContent);
+
+      // Estado compartilhado entre abas (lê inputs onde existirem)
+      function getTmpCfg(){
+        var tmpCfg={ativo:cfg.ativo,pesos:{},limiares:{}};
+        FATORES.forEach(function(f){
+          var inp=rp.querySelector('[data-key="'+f.key+'"]');
+          tmpCfg.pesos[f.key]=inp?(+inp.value||0):(cfg.pesos[f.key]||0);
+        });
+        ['baixo','medio','alto'].forEach(function(k){
+          var inp=rp.querySelector('.risco-lim[data-key="'+k+'"]');
+          tmpCfg.limiares[k]=inp?(+inp.value||0):(cfg.limiares[k]||0);
+        });
+        return tmpCfg;
+      }
 
       function showRst(tab){
         $$('[data-rst]',rstBar).forEach(function(b){
@@ -3715,26 +3755,16 @@
         });
         rstContent.innerHTML='';
 
-        if(tab==='config'){
-          var secF=el('div',{class:'risco-section'});
-          secF.innerHTML='<h4>'+ico('list-checks',13)+' Fatores e pesos (pontos)</h4>';
-          var tFat=el('table',{class:'risco-table'});
-          tFat.innerHTML='<thead><tr><th>Fator</th><th>Descrição</th><th style="width:90px;text-align:center">Pontos</th></tr></thead>';
-          var tbFat=el('tbody');
-          FATORES.forEach(function(f){
-            var tr=el('tr');
-            tr.innerHTML='<td><b>'+esc(f.label)+'</b></td><td style="color:var(--muted);font-size:12px">'+esc(f.desc)+'</td>'+
-              '<td style="text-align:center"><input class="risco-pts" type="number" min="0" max="10" data-key="'+f.key+'" value="'+(cfg.pesos[f.key]||0)+'" /></td>';
-            tbFat.appendChild(tr);
-          });
-          tFat.appendChild(tbFat); var _tfWrap=el('div',{class:'table-wrap'}); _tfWrap.appendChild(tFat); secF.appendChild(_tfWrap); rstContent.appendChild(secF);
-
+        if(tab==='limiares'){
+          // ── Limiares ─────────────────────────────────────────────────
           var _somaPesos=0; FATORES.forEach(function(f){ _somaPesos+=(cfg.pesos[f.key]||0); });
           var secL=el('div',{class:'risco-section'});
           secL.innerHTML='<h4>'+ico('sliders-horizontal',13)+' Limiares por nível (pontuação máxima)</h4>'+
-            '<p style="font-size:12px;color:var(--muted);margin:0 0 10px">Pontuação <b>até</b> o limiar = nível correspondente. Acima do Alto = Crítico. '+
-            'Soma atual de todos os pesos da tabela acima: <b>'+_somaPesos+' pontos</b> '+
-            '<span style="color:var(--muted)">(se todos os '+FATORES.length+' fatores estivessem com peso máximo de 10, o total chegaria a '+(FATORES.length*10)+').</span></p>';
+            '<p style="font-size:12px;color:var(--muted);margin:0 0 14px">Pontuação <b>até</b> o limiar = nível correspondente. Acima do Alto = Crítico. '+
+            'Soma atual dos pesos configurados: <b><span class="risco-teto-val">'+_somaPesos+'</span> pontos</b>.</p>'+
+            '<div style="background:var(--g-50);border:1.5px solid var(--g-100);border-radius:8px;padding:12px 16px;margin-bottom:14px;font-size:12.5px;line-height:1.65;color:var(--ink)">'+
+              '<b>'+ico('triangle-alert',12)+' Regra obrigatória:</b> os limiares devem ser crescentes — <b>Baixo &lt; Médio &lt; Alto</b>. O sistema bloqueia o salvamento se essa ordem não for respeitada.'+
+            '</div>';
           var limGrid=el('div',{class:'risco-lim-grid'});
           [{key:'baixo',label:'Baixo',cls:'baixo',icon:'circle-check'},{key:'medio',label:'Médio',cls:'medio',icon:'circle-alert'},{key:'alto',label:'Alto',cls:'alto',icon:'triangle-alert'}].forEach(function(l){
             var card=el('div',{class:'risco-lim-card'});
@@ -3749,144 +3779,91 @@
           limGrid.appendChild(cardCrit);
           secL.appendChild(limGrid); rstContent.appendChild(secL);
 
-          var secP=el('div',{class:'risco-section'});
-          secP.innerHTML='<h4>'+ico('table-2',13)+' Prévia — classificação das guias com os pesos atuais</h4>'+
-            '<p style="font-size:12px;color:var(--muted);margin:-4px 0 10px;display:flex;align-items:center;gap:5px">'+ico('flask-conical',12)+' <b>Exemplo visual</b> — simula como as guias seriam classificadas com os pesos atuais, antes de salvar.</p>';
-          var previa=el('div',{id:'riscoPrevia'});
-          function renderPrevia(){
-            var tmpCfg={ativo:true,pesos:{},limiares:{}};
-            FATORES.forEach(function(f){ tmpCfg.pesos[f.key]=+rp.querySelector('[data-key="'+f.key+'"]').value||0; });
-            ['baixo','medio','alto'].forEach(function(k){ tmpCfg.limiares[k]=+rp.querySelector('.risco-lim[data-key="'+k+'"]').value||0; });
-            var prev=State.riscoConfig; State.riscoConfig=tmpCfg;
-            var rows=State.guias.map(function(g){ return {g:g,score:calcRiscoScore(g),nivel:calcRisco(g)}; });
-            State.riscoConfig=prev;
-            var tP=el('table',{class:'risco-table'});
-            tP.innerHTML='<thead><tr><th>Guia</th><th>Tipo</th><th>Fatores ativos</th><th style="text-align:center">Pontuação</th><th>Nível calculado</th><th>Nível atual</th></tr></thead>';
-            var tbP=el('tbody');
-            rows.forEach(function(r){
-              var ativos=FATORES.filter(function(f){return (tmpCfg.pesos[f.key]||0)>0&&(
-                (f.key==='urgencia'&&r.g.regime==='Urgência')||(f.key==='uti'&&r.g.uti)||(f.key==='opme'&&r.g.opme)||
-                (f.key==='semAnexos'&&!r.g.anexos)||(f.key==='prazoVencido'&&r.g.prazoVencido)||(f.key==='semDut'&&!r.g.dut&&r.g.procedimentos.some(function(p2){return p2.dut;}))||
-                (f.key==='aderenciaCrit'&&guiaAderencia(r.g)<50)||(f.key==='aderenciaBaixa'&&guiaAderencia(r.g)>=50&&guiaAderencia(r.g)<70)||
-                (f.key==='altaComplexidade'&&(r.g.fluxo.id==='F2'||r.g.fluxo.id==='F5'))||(f.key==='oncologia'&&r.g.fluxo.id==='F8')
-              );}).map(function(f){return '<span class="badge muted" style="margin:1px 2px;font-size:10.5px">'+f.label+' (+'+tmpCfg.pesos[f.key]+')</span>';}).join('');
-              var tr=el('tr');
-              tr.innerHTML='<td><b>'+esc(r.g.numero)+'</b></td><td>'+esc(r.g.tipo)+'</td><td>'+(ativos||'<span style="color:var(--muted);font-size:11px">nenhum</span>')+'</td>'+
-                '<td style="text-align:center;font-weight:700;font-size:15px">'+r.score+'</td>'+
-                '<td>'+riskPill(r.nivel)+'</td><td>'+riskPill(r.g.risco)+'</td>';
-              tbP.appendChild(tr);
-            });
-            tP.appendChild(tbP); var _tpWrap=el('div',{class:'table-wrap'}); _tpWrap.appendChild(tP); previa.innerHTML=''; previa.appendChild(_tpWrap);
-          }
-          secP.appendChild(previa); rstContent.appendChild(secP);
+          var footL=el('div',{class:'risco-foot'});
+          footL.innerHTML='<button class="btn-animated" id="limSalvar">'+ico('save',14)+' Salvar limiares</button>';
+          rstContent.appendChild(footL);
 
-          var foot=el('div',{class:'risco-foot'});
-          foot.innerHTML='<button class="btn ghost" id="riscoReset">'+ico('rotate-ccw',13)+' Restaurar padrões</button>'+
-            '<button class="btn-animated" id="riscoSalvar">'+ico('save',14)+' Salvar e aplicar</button>';
-          rstContent.appendChild(foot);
-
-          function syncTeto(){
-            var soma=0; $$('.risco-pts',rp).forEach(function(inp){ soma+=(+inp.value||0); });
-            $$('.risco-lim',rp).forEach(function(inp){ inp.setAttribute('max',soma); });
-            var tetoEl=secL.querySelector('.risco-teto-val');
-            if(tetoEl) tetoEl.textContent=soma;
-          }
-          var _tetoSpan=secL.querySelector('p');
-          if(_tetoSpan) _tetoSpan.innerHTML=_tetoSpan.innerHTML.replace('<b>'+_somaPesos+' pontos</b>','<b><span class="risco-teto-val">'+_somaPesos+'</span> pontos</b>');
           setTimeout(function(){
-            renderPrevia();
-            $$('.risco-pts,.risco-lim',rp).forEach(function(inp){ inp.oninput=function(){ renderPrevia(); syncTeto(); }; });
-            $('#riscoAtivo').onchange=function(){
-              var on=this.checked, tag=$('#modoTag');
-              if(tag){ tag.textContent=on?'Automático':'Manual'; tag.className='badge '+(on?'':'muted'); }
-            };
-            $('#riscoReset').onclick=function(){
-              FATORES.forEach(function(f){ var i=rp.querySelector('[data-key="'+f.key+'"]'); if(i) i.value=DEFAULT_RISCO_CFG.pesos[f.key]; });
-              ['baixo','medio','alto'].forEach(function(k){ var i=rp.querySelector('.risco-lim[data-key="'+k+'"]'); if(i) i.value=DEFAULT_RISCO_CFG.limiares[k]; });
-              $('#riscoAtivo').checked=DEFAULT_RISCO_CFG.ativo;
-              var tag=$('#modoTag'); if(tag){ tag.textContent='Automático'; tag.className='badge'; }
-              renderPrevia(); toast('Padrões restaurados','ok');
-            };
-            $('#riscoSalvar').onclick=function(){
-              var novoCfg={ativo:$('#riscoAtivo').checked,pesos:{},limiares:{}};
-              FATORES.forEach(function(f){ novoCfg.pesos[f.key]=+rp.querySelector('[data-key="'+f.key+'"]').value||0; });
+            $('#limSalvar').onclick=function(){
+              var novoCfg=JSON.parse(JSON.stringify(cfg));
               ['baixo','medio','alto'].forEach(function(k){ novoCfg.limiares[k]=+rp.querySelector('.risco-lim[data-key="'+k+'"]').value||0; });
               if(novoCfg.limiares.baixo>=novoCfg.limiares.medio||novoCfg.limiares.medio>=novoCfg.limiares.alto){
                 toast('Limiares devem ser crescentes: Baixo < Médio < Alto','err'); return;
               }
               State.riscoConfig=novoCfg; localStorage.setItem('regula_risco_cfg',JSON.stringify(novoCfg));
-              aplicarRiscos(); toast('Régua de risco salva e aplicada a todas as guias','ok'); render();
+              aplicarRiscos(); toast('Limiares salvos e aplicados','ok'); render();
             };
           },0);
 
         } else {
-          // ── Manual de uso ──────────────────────────────────────────────────
-          var mWrap=el('div',{style:'padding:4px 0'});
+          // ── Prévia — distribuição das guias pelos níveis de risco atuais ──
+          var lim=cfg.limiares;
+          var niveis=['baixo','medio','alto','critico'];
+          var nivelLabel={baixo:'Baixo',medio:'Médio',alto:'Alto',critico:'Crítico'};
+          var nivelCor={baixo:'#16a34a',medio:'#a16207',alto:'#ea580c',critico:'#b91c1c'};
+          var nivelCls={baixo:'baixo',medio:'medio',alto:'alto',critico:'critico'};
+          var dist={baixo:[],medio:[],alto:[],critico:[]};
+          State.guias.forEach(function(g){ dist[calcRisco(g)].push(g); });
+          var total=State.guias.length;
 
-          // Seção 1: Fatores
-          var mF=el('div',{class:'risco-section'});
-          mF.innerHTML='<h4>'+ico('list-checks',13)+' Fatores e pesos — Como pontuar</h4>'+
-            '<p style="font-size:12.5px;color:var(--ink);line-height:1.6;margin:0 0 12px">Cada fator representa uma característica da guia que eleva a complexidade da auditoria. Atribua pontos proporcionais ao impacto regulatório de cada condição. Valores mais altos = maior prioridade para revisão.</p>'+
-            '<table class="risco-table">'+
-              '<thead><tr><th style="width:22%">Fator</th><th>Quando pontuar <b>alto</b></th><th>Quando pontuar <b>baixo / zero</b></th></tr></thead>'+
-              '<tbody>'+
-                '<tr><td><b>Regime de urgência</b></td><td>Guias U/E exigem análise imediata e têm menor documentação prévia. <span style="color:var(--g-600);font-weight:600">Recomendado: 8–12 pts.</span></td><td>Se urgências são raras na base ou já têm fluxo exclusivo.</td></tr>'+
-                '<tr><td><b>Internação em UTI</b></td><td>Eleva custo e risco assistencial drasticamente. <span style="color:var(--g-600);font-weight:600">Recomendado: 8–15 pts.</span></td><td>Zero se o perfil de guias é predominantemente ambulatorial.</td></tr>'+
-                '<tr><td><b>OPME presente</b></td><td>Alto risco de irregularidade e superfaturamento. <span style="color:var(--g-600);font-weight:600">Recomendado: 10–15 pts.</span></td><td>Reduzir se já existe fluxo dedicado de cotação OPME.</td></tr>'+
-                '<tr><td><b>Sem documentação</b></td><td>Ausência de anexos é forte indício de erro ou fraude. <span style="color:var(--g-600);font-weight:600">Recomendado: 10–15 pts.</span></td><td>Pode ser reduzido se o prazo de envio ainda está em aberto.</td></tr>'+
-                '<tr><td><b>Prazo vencido</b></td><td>Guia em atraso eleva risco operacional. <span style="color:var(--g-600);font-weight:600">Recomendado: 5–10 pts.</span></td><td>Baixo se a operadora tem SLA flexível ou controla prazos separadamente.</td></tr>'+
-                '<tr><td><b>DUT não comprovada</b></td><td>Procedimento com DUT obrigatória sem evidência é motivo direto de glosa. <span style="color:var(--g-600);font-weight:600">Recomendado: 10–20 pts.</span></td><td>Zero apenas se procedimentos da base raramente exigem DUT.</td></tr>'+
-                '<tr><td><b>Aderência crítica (&lt;50%)</b></td><td>IA indica não conformidade grave — encaminhar para revisão médica. <span style="color:var(--g-600);font-weight:600">Recomendado: 15–20 pts.</span></td><td>Não é indicado zerar: é o principal indicador da plataforma.</td></tr>'+
-                '<tr><td><b>Aderência baixa (50–69%)</b></td><td>Conformidade parcial — requer verificação de documentação. <span style="color:var(--g-600);font-weight:600">Recomendado: 8–12 pts.</span></td><td>Reduzir se a maioria das guias cai nessa faixa (evitar excesso de alertas).</td></tr>'+
-                '<tr><td><b>Alta complexidade</b></td><td>Fluxos F2/F5 envolvem procedimentos de alto custo. <span style="color:var(--g-600);font-weight:600">Recomendado: 5–10 pts.</span></td><td>Zero se esses fluxos já são auditados por equipe dedicada.</td></tr>'+
-                '<tr><td><b>Oncologia / imunobiológico</b></td><td>Alto custo e protocolo ANS rigoroso — toda guia F8 deve passar por auditoria médica. <span style="color:var(--g-600);font-weight:600">Recomendado: 8–15 pts.</span></td><td>Não é recomendado zerar este fator.</td></tr>'+
-              '</tbody>'+
-            '</table>';
-          mWrap.appendChild(mF);
+          var secP=el('div',{class:'risco-section'});
+          secP.innerHTML='<h4>'+ico('bar-chart-2',13)+' Prévia — distribuição das guias pelos limiares atuais</h4>'+
+            '<p style="font-size:12px;color:var(--muted);margin:-4px 0 16px">Distribuição real das guias com os limiares salvos. Ajuste os limiares e salve para ver o impacto aqui.</p>';
 
-          // Seção 2: Limiares
-          var mL=el('div',{class:'risco-section'});
-          mL.innerHTML='<h4>'+ico('sliders-horizontal',13)+' Limiares — Como definir as faixas</h4>'+
-            '<p style="font-size:12.5px;color:var(--ink);line-height:1.6;margin:0 0 10px">Os limiares definem até qual pontuação uma guia é Baixo, Médio ou Alto. Acima do limiar Alto → automaticamente <b>Crítico</b>.</p>'+
-            '<div style="background:var(--g-50);border:1.5px solid var(--g-100);border-radius:8px;padding:12px 16px;margin-bottom:14px;font-size:12.5px;line-height:1.65;color:var(--ink)">'+
-              '<b>'+ico('triangle-alert',12)+' Regra obrigatória:</b> os limiares devem ser crescentes — <b>Baixo &lt; Médio &lt; Alto</b>. O sistema bloqueia o salvamento se essa ordem não for respeitada.'+
-            '</div>'+
-            '<table class="risco-table">'+
-              '<thead><tr><th>Nível</th><th>Orientação de faixa</th><th>Exemplo típico</th></tr></thead>'+
-              '<tbody>'+
-                '<tr><td><b style="color:#16a34a">Baixo</b></td><td>Guias com poucos ou nenhum fator de risco. Define o teto da zona de segurança — guias que não precisam de ação imediata.</td><td>Limiar = 10 pts</td></tr>'+
-                '<tr><td><b style="color:#a16207">Médio</b></td><td>1–2 fatores moderados. Exige triagem de enfermeira mas não necessariamente revisão médica.</td><td>Limiar = 20 pts</td></tr>'+
-                '<tr><td><b style="color:#ea580c">Alto</b></td><td>Múltiplos fatores ou fatores graves combinados (ex.: OPME + sem DUT). Exige revisão médica.</td><td>Limiar = 30 pts</td></tr>'+
-                '<tr><td><b style="color:#b91c1c">Crítico</b></td><td>Acima do limiar Alto. Prioridade máxima — auditoria especializada ou junta médica obrigatória.</td><td>Acima de 30 pts (automático)</td></tr>'+
-              '</tbody>'+
-            '</table>'+
-            '<p style="font-size:11.5px;color:var(--muted);margin-top:10px;line-height:1.6">'+ico('lightbulb',11)+' Dica: comece com os valores padrão, observe a distribuição na aba <b>Configuração → Prévia</b> e ajuste os limiares até que guias críticas representem entre 10% e 20% do total.</p>';
-          mWrap.appendChild(mL);
+          // Cards de resumo
+          var distGrid=el('div',{style:'display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px'});
+          niveis.forEach(function(n){
+            var qtd=dist[n].length;
+            var pct=total?Math.round(qtd/total*100):0;
+            var card=el('div',{style:'background:#fff;border:1.5px solid var(--g-100);border-radius:10px;padding:14px 16px;text-align:center'});
+            card.innerHTML='<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:'+nivelCor[n]+';margin-bottom:6px">'+nivelLabel[n]+'</div>'+
+              '<div style="font-size:28px;font-weight:800;color:var(--ink);line-height:1">'+qtd+'</div>'+
+              '<div style="font-size:11px;color:var(--muted);margin-top:4px">'+pct+'% do total</div>'+
+              '<div style="margin-top:8px;height:4px;background:var(--g-100);border-radius:4px"><div style="height:100%;border-radius:4px;background:'+nivelCor[n]+';width:'+pct+'%"></div></div>';
+            distGrid.appendChild(card);
+          });
+          secP.appendChild(distGrid);
 
-          // Seção 3: Prévia
-          var mP=el('div',{class:'risco-section'});
-          mP.innerHTML='<h4>'+ico('table-2',13)+' Prévia — como interpretar</h4>'+
-            '<div style="background:#eff6ff;border:1.5px solid #bfdbfe;border-radius:8px;padding:12px 16px;margin-bottom:14px;font-size:12.5px;line-height:1.65;color:#1e3a5f">'+
-              ico('info',13)+' A <b>Prévia</b> é um <b>exemplo visual simulado</b>. Ela mostra como as guias cadastradas seriam classificadas <i>se os pesos e limiares definidos fossem salvos neste momento</i>. Nenhuma guia é alterada até você clicar em <b>"Salvar e aplicar"</b>.'+
-            '</div>'+
-            '<table class="risco-table">'+
-              '<thead><tr><th style="width:22%">Coluna</th><th>O que significa</th></tr></thead>'+
-              '<tbody>'+
-                '<tr><td><b>Fatores ativos</b></td><td>Fatores presentes nessa guia que contribuem com pontos — apenas fatores com peso &gt; 0 são listados.</td></tr>'+
-                '<tr><td><b>Pontuação</b></td><td>Soma dos pontos de todos os fatores ativos, calculada com os valores digitados no formulário de configuração.</td></tr>'+
-                '<tr><td><b>Nível calculado</b></td><td>Classificação resultante com os limiares atuais do formulário — o que seria aplicado ao salvar.</td></tr>'+
-                '<tr><td><b>Nível atual</b></td><td>Classificação real da guia no sistema, conforme o último salvamento de pesos.</td></tr>'+
-              '</tbody>'+
-            '</table>';
-          mWrap.appendChild(mP);
-          rstContent.appendChild(mWrap);
+          // Referência dos limiares ativos
+          var limRef=el('div',{style:'background:var(--g-50);border:1px solid var(--g-100);border-radius:8px;padding:10px 16px;font-size:12px;color:var(--ink-2);margin-bottom:16px;display:flex;gap:20px;flex-wrap:wrap'});
+          limRef.innerHTML='<b>Limiares ativos:</b>'+
+            ' <span>Baixo ≤ <b>'+lim.baixo+'</b></span>'+
+            ' · <span>Médio ≤ <b>'+lim.medio+'</b></span>'+
+            ' · <span>Alto ≤ <b>'+lim.alto+'</b></span>'+
+            ' · <span>Crítico <b>> '+lim.alto+'</b></span>';
+          secP.appendChild(limRef);
+
+          // Tabela com lista de guias por nível
+          niveis.forEach(function(n){
+            if(!dist[n].length) return;
+            var grp=el('div',{style:'margin-bottom:16px'});
+            grp.innerHTML='<div style="font-size:11.5px;font-weight:700;color:'+nivelCor[n]+';text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">'+
+              ico('circle',10)+' '+nivelLabel[n]+' ('+dist[n].length+')</div>';
+            var tG=el('table',{class:'risco-table'});
+            tG.innerHTML='<thead><tr><th>Guia</th><th>Beneficiário</th><th>Tipo</th><th>Fluxo</th><th>Score</th></tr></thead>';
+            var tbG=el('tbody');
+            dist[n].forEach(function(g){
+              var score=calcRiscoScore(g);
+              var tr=el('tr');
+              tr.innerHTML='<td><b>'+esc(g.numero)+'</b></td>'+
+                '<td>'+esc(g.beneficiario.nome)+'</td>'+
+                '<td>'+esc(g.tipo)+'</td>'+
+                '<td>'+esc(g.fluxo.nome)+'</td>'+
+                '<td style="text-align:center;font-weight:700">'+score+'</td>';
+              tbG.appendChild(tr);
+            });
+            tG.appendChild(tbG);
+            var _gWrap=el('div',{class:'table-wrap'}); _gWrap.appendChild(tG); grp.appendChild(_gWrap);
+            secP.appendChild(grp);
+          });
+          rstContent.appendChild(secP);
         }
       }
 
       $$('[data-rst]',rstBar).forEach(function(b){
         b.onclick=function(){ showRst(b.getAttribute('data-rst')); };
       });
-      showRst('config');
+      showRst('limiares');
       cfgContent.appendChild(rp);
     }
 
@@ -3922,17 +3899,36 @@
       '</tr>';
       tbl.appendChild(thead);
 
+      var REGIME_OPTS=['Todos','Eletivo','Urgência'];
+      var REGIME_CLS={Todos:'muted',Eletivo:'info',Urgência:'warn'};
+      var editable=State.perfil==='gestor';
       var tbody=el('tbody');
       var inputs={};
       MOCK.FLUXOS.forEach(function(f){
         var defs=FLUXO_SLA_DEFAULTS[f.id]||{prazo:5};
         var saved=State.fluxoSLAConfig[f.id];
         var prazoAtual=(saved&&saved.prazo>0)?saved.prazo:defs.prazo;
+        var regimeAtual=(saved&&saved.regime)||f.regime||'Todos';
         var tr=el('tr');
         var tdFluxo=el('td');
         tdFluxo.innerHTML='<span class="badge muted" style="font-size:10px;margin-right:6px">'+esc(f.id)+'</span>'+esc(f.nome);
         var tdRegime=el('td');
-        tdRegime.innerHTML='<span class="badge muted" style="font-size:10px">'+esc(f.regime)+'</span>';
+        function buildRegimeBadge(r){
+          return '<span class="badge '+REGIME_CLS[r]+'" style="font-size:11px;'+(editable?'cursor:pointer;user-select:none':'')+'" data-regime-fid="'+esc(f.id)+'" title="'+(editable?'Clique para alterar':r)+'">'+esc(r)+'</span>';
+        }
+        tdRegime.innerHTML=buildRegimeBadge(regimeAtual);
+        if(editable){
+          tdRegime.querySelector('[data-regime-fid]').onclick=function(){
+            var cur=(State.fluxoSLAConfig[f.id]&&State.fluxoSLAConfig[f.id].regime)||f.regime||'Todos';
+            var next=REGIME_OPTS[(REGIME_OPTS.indexOf(cur)+1)%REGIME_OPTS.length];
+            if(!State.fluxoSLAConfig[f.id]) State.fluxoSLAConfig[f.id]={};
+            State.fluxoSLAConfig[f.id].regime=next;
+            try{ localStorage.setItem('regula_fluxo_sla',JSON.stringify(State.fluxoSLAConfig)); }catch(e){}
+            tdRegime.innerHTML=buildRegimeBadge(next);
+            if(editable) tdRegime.querySelector('[data-regime-fid]').onclick=arguments.callee;
+            toast('Regime de '+f.nome+' alterado para '+next,'ok');
+          };
+        }
         var tdPrazo=el('td',{style:'text-align:center'});
         var inp=document.createElement('input');
         inp.type='number'; inp.min='1'; inp.max='60'; inp.value=prazoAtual;
@@ -3943,6 +3939,17 @@
         inputs[f.id]=inp;
       });
       tbl.appendChild(tbody);
+      var regimeLegRow=el('tr',{style:'border-top:1.5px solid var(--g-100)'});
+      regimeLegRow.innerHTML='<td colspan="3" style="padding:16px 10px 8px">'+
+        '<div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap">'+
+          '<span style="font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px">Legenda:</span>'+
+          '<span style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--ink-2)"><span class="badge muted" style="font-size:10px">Todos</span> Eletivo e Urgência</span>'+
+          '<span style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--ink-2)"><span class="badge info" style="font-size:10px">Eletivo</span> Somente guias eletivas</span>'+
+          '<span style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--ink-2)"><span class="badge warn" style="font-size:10px">Urgência</span> Somente guias de urgência</span>'+
+          (editable?'<span style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--g-700);font-weight:600;margin-left:auto">'+ico('mouse-pointer-click',13)+' Clique no regime para alterar</span>':'')+
+        '</div>'+
+      '</td>';
+      tbl.querySelector('tbody').appendChild(regimeLegRow);
       var _cfgTblWrap=el('div',{class:'table-wrap'});
       _cfgTblWrap.appendChild(tbl);
       sec.appendChild(_cfgTblWrap);
