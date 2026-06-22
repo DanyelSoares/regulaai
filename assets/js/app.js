@@ -3833,15 +3833,22 @@
             ' · <span>Crítico <b>> '+lim.alto+'</b></span>';
           secP.appendChild(limRef);
 
-          // Tabela com lista de guias por nível
+          // Tabela única com linhas de grupo para alinhar colunas
+          var tG=el('table',{class:'risco-table'});
+          tG.innerHTML='<thead><tr>'+
+            '<th style="width:110px">Guia</th>'+
+            '<th>Beneficiário</th>'+
+            '<th style="width:160px">Tipo</th>'+
+            '<th>Fluxo</th>'+
+            '<th style="width:70px;text-align:center">Score</th>'+
+          '</tr></thead>';
+          var tbG=el('tbody');
           niveis.forEach(function(n){
             if(!dist[n].length) return;
-            var grp=el('div',{style:'margin-bottom:16px'});
-            grp.innerHTML='<div style="font-size:11.5px;font-weight:700;color:'+nivelCor[n]+';text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">'+
-              ico('circle',10)+' '+nivelLabel[n]+' ('+dist[n].length+')</div>';
-            var tG=el('table',{class:'risco-table'});
-            tG.innerHTML='<thead><tr><th>Guia</th><th>Beneficiário</th><th>Tipo</th><th>Fluxo</th><th>Score</th></tr></thead>';
-            var tbG=el('tbody');
+            var trGrp=el('tr');
+            trGrp.innerHTML='<td colspan="5" style="background:var(--g-50);padding:7px 10px;font-size:11px;font-weight:700;color:'+nivelCor[n]+';text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid var(--g-200)">'+
+              nivelLabel[n]+' ('+dist[n].length+')</td>';
+            tbG.appendChild(trGrp);
             dist[n].forEach(function(g){
               var score=calcRiscoScore(g);
               var tr=el('tr');
@@ -3852,10 +3859,9 @@
                 '<td style="text-align:center;font-weight:700">'+score+'</td>';
               tbG.appendChild(tr);
             });
-            tG.appendChild(tbG);
-            var _gWrap=el('div',{class:'table-wrap'}); _gWrap.appendChild(tG); grp.appendChild(_gWrap);
-            secP.appendChild(grp);
           });
+          tG.appendChild(tbG);
+          var _gWrap=el('div',{class:'table-wrap'}); _gWrap.appendChild(tG); secP.appendChild(_gWrap);
           rstContent.appendChild(secP);
         }
       }
