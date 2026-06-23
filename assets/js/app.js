@@ -5960,7 +5960,8 @@
       chatRoot.classList.add('chat-open');
       chatRoot.classList.remove('chat-minimized');
       syncBodyState();
-      chatInp.focus();
+      // No mobile não foca de imediato (o teclado cobriria o painel pequeno)
+      if(window.innerWidth>640) chatInp.focus();
     }
 
     // Botão minimizar
