@@ -4812,6 +4812,13 @@
       a.onclick=function(){ State.manualSec=s.id; render(); var b=document.querySelector('.manual-body'); if(b) b.scrollTop=0; };
       nav.appendChild(a);
     });
+    // No mobile a nav é horizontal: rola o chip ativo para a vista após render
+    setTimeout(function(){
+      if(window.innerWidth>640) return;
+      var navEl=document.querySelector('.manual-nav');
+      var act=document.querySelector('.manual-nav-item.active');
+      if(navEl && act) navEl.scrollLeft=act.offsetLeft-navEl.clientWidth/2+act.offsetWidth/2;
+    },0);
     var btnPrint=el('button',{class:'manual-print-btn'});
     btnPrint.innerHTML=ico('printer',13)+' Imprimir / Exportar PDF';
     btnPrint.onclick=function(){ window.print(); };

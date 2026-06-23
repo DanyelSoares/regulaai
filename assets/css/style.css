@@ -958,6 +958,25 @@ tbody tr:hover{background:#f7fbf8;cursor:pointer}
   .main{padding-bottom:60px}
   .view{padding:12px;overflow-x:hidden;max-width:100vw}
 
+  /* ─── Manual do Usuário: nav vira barra horizontal de chips ─── */
+  .manual-wrap{display:flex!important;flex-direction:column;height:auto;overflow:visible}
+  .manual-nav{
+    flex-direction:row;flex-wrap:nowrap;gap:7px;
+    height:auto;width:100%;overflow-x:auto;overflow-y:hidden;
+    padding:10px 12px;border-right:none;border-bottom:1px solid var(--line);
+    -webkit-overflow-scrolling:touch;scrollbar-width:none;
+    position:sticky;top:56px;z-index:3;background:#fff;
+  }
+  .manual-nav::-webkit-scrollbar{display:none}
+  .manual-nav-title{display:none}
+  .manual-nav-item{
+    flex:0 0 auto;white-space:nowrap;padding:8px 13px;border-radius:20px;
+    border:1px solid var(--g-200);background:#fff;font-size:12.5px;color:var(--g-700);
+  }
+  .manual-nav-item.active{background:var(--g-600);color:#fff;font-weight:700;border-color:var(--g-600)}
+  .manual-print-btn{flex:0 0 auto;margin-top:0;white-space:nowrap;padding:8px 13px;border-radius:20px}
+  .manual-body{height:auto;overflow:visible;padding:16px 14px}
+
   /* Topbar compacto */
   .topbar{padding:0 12px;min-height:50px}
   .topbar-clock{display:none}
