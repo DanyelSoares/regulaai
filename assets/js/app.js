@@ -5714,7 +5714,7 @@
       ico('bot',15)+' <span>Assistente RegulaAI</span>'+
       '<span id="chatStatusBadge" class="manual-chat-status '+(geminiKey?'online':'offline')+'">'+(geminiKey?'Online':'Offline')+'</span>'+
       '<button class="manual-chat-maxbtn" id="chatMaxBtn" title="Expandir">'+ico('maximize-2',14)+'</button>'+
-      '<button class="manual-chat-maxbtn" id="chatCloseBtn" title="Minimizar" style="margin-left:2px">'+ico('x',14)+'</button>';
+      '<button class="manual-chat-maxbtn" id="chatMinBtn" title="Minimizar" style="margin-left:2px">'+ico('chevron-down',14)+'</button>';
     chatRoot.appendChild(chatHd);
 
     var chatLog=el('div',{class:'manual-chat-log'});
@@ -5801,15 +5801,42 @@
       chatInp.focus();
     };
 
-    chatHd.querySelector('#chatCloseBtn').onclick=function(){
-      chatRoot.classList.remove('chat-open');
+    // Minimizar: mantém só o header visível no canto inferior direito
+    chatHd.querySelector('#chatMinBtn').onclick=function(){
+      chatRoot.classList.add('chat-open');
+      chatRoot.classList.toggle('chat-minimized');
+      var isMin=chatRoot.classList.contains('chat-minimized');
+      this.innerHTML=ico(isMin?'chevron-up':'chevron-down',14);
+      this.title=isMin?'Restaurar':'Minimizar';
+    };
+
+    // Clicar na barrinha (header) quando minimizado reabre
+    chatHd.onclick=function(e){
+      if(!chatRoot.classList.contains('chat-minimized')) return;
+      if(e.target.closest('button')) return;
+      chatRoot.classList.remove('chat-minimized');
+      chatHd.querySelector('#chatMinBtn').innerHTML=ico('chevron-down',14);
+      chatHd.querySelector('#chatMinBtn').title='Minimizar';
+      chatInp.focus();
     };
 
     var toggleBtn=$('#chatToggleBtn');
     if(toggleBtn){
       toggleBtn.onclick=function(){
-        chatRoot.classList.toggle('chat-open');
-        if(chatRoot.classList.contains('chat-open')) chatInp.focus();
+        var isOpen=chatRoot.classList.contains('chat-open');
+        if(isOpen && !chatRoot.classList.contains('chat-minimized')){
+          // já aberto e expandido: minimiza
+          chatRoot.classList.add('chat-minimized');
+          chatHd.querySelector('#chatMinBtn').innerHTML=ico('chevron-up',14);
+          chatHd.querySelector('#chatMinBtn').title='Restaurar';
+        } else {
+          // fechado ou minimizado: abre/restaura
+          chatRoot.classList.add('chat-open');
+          chatRoot.classList.remove('chat-minimized');
+          chatHd.querySelector('#chatMinBtn').innerHTML=ico('chevron-down',14);
+          chatHd.querySelector('#chatMinBtn').title='Minimizar';
+          chatInp.focus();
+        }
       };
     }
   })();
