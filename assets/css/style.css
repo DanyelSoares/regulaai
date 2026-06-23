@@ -961,7 +961,7 @@ tbody tr:hover{background:#f7fbf8;cursor:pointer}
   /* ─── Manual do Usuário: nav = barra horizontal de chips no topo ───
      Não é fixa: rola junto com a página, sumindo e liberando o conteúdo.
      Para trocar de seção, basta rolar de volta ao topo. */
-  .manual-wrap{display:block!important;height:auto;overflow:visible}
+  .manual-wrap{display:block!important;height:auto!important;overflow:visible!important}
   .manual-nav{
     display:flex!important;flex-direction:row!important;flex-wrap:nowrap!important;gap:7px;
     height:auto!important;width:100%;overflow-x:auto;overflow-y:hidden;
@@ -977,7 +977,7 @@ tbody tr:hover{background:#f7fbf8;cursor:pointer}
   }
   .manual-nav-item.active{background:var(--g-600);color:#fff;font-weight:700;border-color:var(--g-600)}
   .manual-print-btn{flex:0 0 auto!important;margin-top:0;white-space:nowrap;padding:8px 13px;border-radius:20px}
-  .manual-body{height:auto;overflow:visible;padding:16px 14px}
+  .manual-body{height:auto!important;overflow:visible!important;padding:16px 14px}
 
   /* Topbar compacto */
   .topbar{padding:0 12px;min-height:50px}
