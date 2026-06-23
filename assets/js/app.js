@@ -756,18 +756,15 @@
 
   /* === Views === */
   function render(){
-    // Antes de limpar o DOM, resgata o chat singleton para fora do view
-    var chatRoot=$('#chatRoot');
-    if(chatRoot && chatRoot.parentElement && chatRoot.parentElement.id!=='chatRoot'){
-      document.body.appendChild(chatRoot);
-      chatRoot.style.display='none';
-    }
     var v=$('#view'); v.innerHTML='';
     var isManual=State.route==='manual';
     v.style.padding=isManual?'0':'';
     v.style.maxWidth=isManual?'none':'';
-    v.style.overflow=isManual?'hidden':'';
-    v.style.height=isManual?'calc(100vh - 56px)':'';
+    v.style.overflow='';
+    v.style.height='';
+    // mostra/oculta chat fixo conforme rota
+    var cr=$('#chatRoot');
+    if(cr) cr.style.display=isManual?'flex':'none';
     if(State.route==='dashboard') v.appendChild(viewDashboard());
     else if(State.route==='guias') v.appendChild(viewGuias());
     else if(State.route==='kanban') v.appendChild(viewKanban());
@@ -4029,9 +4026,9 @@
         '<div style="margin-bottom:18px">'+
           '<label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">Modelo Gemini</label>'+
           '<select id="cfgGeminiModel" style="padding:8px 12px;border:1.5px solid var(--g-200);border-radius:8px;font-size:13px">'+
-            '<option value="gemini-2.0-flash">gemini-2.0-flash (Recomendado)</option>'+
-            '<option value="gemini-1.5-flash">gemini-1.5-flash</option>'+
-            '<option value="gemini-1.5-pro">gemini-1.5-pro (mais lento, mais detalhado)</option>'+
+            '<option value="gemini-2.5-flash">gemini-2.5-flash (Recomendado)</option>'+
+            '<option value="gemini-2.5-pro">gemini-2.5-pro (mais detalhado)</option>'+
+            '<option value="gemini-2.0-flash-lite">gemini-2.0-flash-lite (mais rápido)</option>'+
           '</select>'+
         '</div>'+
         '<button id="cfgGeminiSave" class="btn-primary" style="padding:9px 22px">'+ico('save',13)+' Salvar configuração</button>'+
@@ -4046,7 +4043,7 @@
       var inp=sec.querySelector('#cfgGeminiKey');
       var sel=sec.querySelector('#cfgGeminiModel');
       var saved=localStorage.getItem('regula_gemini_key')||'';
-      var savedModel=localStorage.getItem('regula_gemini_model')||'gemini-2.0-flash';
+      var savedModel=localStorage.getItem('regula_gemini_model')||'gemini-2.5-flash';
       if(saved) inp.value=saved;
       sel.value=savedModel;
 
@@ -5539,14 +5536,7 @@
         ]);
     }
 
-    var manualMain=el('div',{class:'manual-main',id:'manualMain'});
-    manualMain.appendChild(body);
-    wrap.appendChild(manualMain);
-    // encaixa o chat singleton após o DOM estar montado
-    requestAnimationFrame(function(){
-      var cp=$('#chatRoot');
-      if(cp){ cp.style.display=''; manualMain.appendChild(cp); }
-    });
+    wrap.appendChild(body);
     return wrap;
 
     function manualHdr(title,sub){
@@ -5702,7 +5692,7 @@
     if(!chatRoot) return;
 
     var geminiKey=localStorage.getItem('regula_gemini_key')||'';
-    var geminiModel=localStorage.getItem('regula_gemini_model')||'gemini-2.0-flash';
+    var geminiModel=localStorage.getItem('regula_gemini_model')||'gemini-2.5-flash';
     var chatHistory=[];
     var isMax=false;
 
@@ -5760,7 +5750,7 @@
 
       // Relê chave a cada envio (pode ter sido salva em Configurações)
       geminiKey=localStorage.getItem('regula_gemini_key')||'';
-      geminiModel=localStorage.getItem('regula_gemini_model')||'gemini-2.0-flash';
+      geminiModel=localStorage.getItem('regula_gemini_model')||'gemini-2.5-flash';
       var badge=$('#chatStatusBadge');
       if(badge){ badge.className='manual-chat-status '+(geminiKey?'online':'offline'); badge.textContent=geminiKey?'Online':'Offline'; }
 
@@ -5807,8 +5797,9 @@
 
     chatHd.querySelector('#chatMaxBtn').onclick=function(){
       isMax=!isMax;
-      var main=$('#manualMain');
-      if(main) main.classList.toggle('chat-max',isMax);
+      chatRoot.classList.toggle('chat-max',isMax);
+      var mb=document.querySelector('.manual-body');
+      if(mb) mb.classList.toggle('chat-max',isMax);
       this.innerHTML=ico(isMax?'minimize-2':'maximize-2',14);
       this.title=isMax?'Restaurar':'Maximizar';
       chatInp.focus();
