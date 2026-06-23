@@ -5926,6 +5926,7 @@
       chatRoot.classList.toggle('chat-max2',maxLevel===2);
       this.innerHTML=ico(maxLevel===2?'minimize-2':'maximize-2',14);
       this.title=maxLevel===0?'Expandir':(maxLevel===1?'Expandir mais':'Restaurar');
+      lcIcons();
       chatInp.focus();
     };
 
