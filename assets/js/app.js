@@ -602,6 +602,7 @@
   /* === Sidebar / nav === */
   function bindNav(){
     $$('.nav-item').forEach(function(a){
+      if(a.id==='chatToggleBtn') return; // tratado pelo initChat
       a.onclick=function(){
         State.route=a.getAttribute('data-route');
         $$('.nav-item').forEach(function(x){x.classList.remove('active')});
