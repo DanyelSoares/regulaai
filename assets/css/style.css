@@ -1047,6 +1047,10 @@ tbody tr:hover{background:#f7fbf8;cursor:pointer}
   /* Painéis e grids */
   .panels,.g2,.g3{grid-template-columns:1fr!important}
 
+  /* Limiares por nível: 2x2 em vez de 4 colunas espremidas (Alto/Crítico ficavam cortados) */
+  .risco-lim-grid{grid-template-columns:1fr 1fr!important;gap:10px}
+  .risco-lim-card{padding:12px 13px;gap:10px}
+
   /* Rankings/duração: encurta colunas pra caber sem rolagem horizontal, com mais respiro de leitura */
   .bars{gap:2px}
   .bar-row{
