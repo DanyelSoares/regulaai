@@ -5728,7 +5728,8 @@
       RAI_AVATAR+
       '<div class="rai-hd-info"><span class="rai-hd-name">RAI</span><span class="rai-hd-sub">Regulação + AI</span></div>'+
       '<button class="manual-chat-maxbtn chat-hd-btn" id="chatMaxBtn" title="Expandir">'+ico('maximize-2',14)+'</button>'+
-      '<button class="manual-chat-maxbtn chat-hd-btn" id="chatMinBtn" title="Minimizar" style="margin-left:2px">'+ico('chevron-down',14)+'</button>';
+      '<button class="manual-chat-maxbtn chat-hd-btn" id="chatMinBtn" title="Minimizar" style="margin-left:2px">'+ico('chevron-down',14)+'</button>'+
+      '<button class="manual-chat-maxbtn chat-hd-btn" id="chatCloseBtn" title="Fechar" style="margin-left:2px">'+ico('x',14)+'</button>';
     chatRoot.appendChild(chatHd);
     lcIcons();
 
@@ -5830,6 +5831,11 @@
     chatHd.querySelector('#chatMinBtn').onclick=function(e){
       e.stopPropagation();
       chatMinimize();
+    };
+
+    chatHd.querySelector('#chatCloseBtn').onclick=function(e){
+      e.stopPropagation();
+      chatRoot.classList.remove('chat-open','chat-minimized','chat-max');
     };
 
     // Clicar em qualquer lugar do header quando minimizado restaura
