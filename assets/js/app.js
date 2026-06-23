@@ -5694,8 +5694,8 @@
     var chatHistory=[];
     var isMax=false;
 
-    var SYSTEM_CONTEXT='Você é o Assistente do RegulaAI Saúde, uma plataforma de auditoria assistencial para operadoras de saúde. '+
-      'Responda em português, de forma objetiva e técnica. '+
+    var SYSTEM_CONTEXT='Você é a RAI — Regulação + AI — assistente de inteligência artificial do RegulaAI Saúde, plataforma de auditoria assistencial para operadoras de saúde. '+
+      'Apresente-se sempre como RAI. Responda em português, de forma objetiva, técnica e acolhedora. '+
       'Conhecimento do sistema: '+
       '1) GUIAS: cada guia possui número, tipo (internação/ambulatorial), regime, natureza, fluxo, status (triagem/análise/complemento/parecer/concluída). '+
       '2) ADERÊNCIA: calculada pela IA com critérios ponderados por pesos configuráveis. O TETO é dinâmico — soma apenas critérios aplicáveis à guia específica (ex.: DUT só entra se a guia tem procedimentos com DUT obrigatória; pacotes só se vinculados). '+
@@ -5709,19 +5709,34 @@
     // Monta estrutura uma única vez
     chatRoot.className='manual-chat-panel';
 
-    var chatHd=el('div',{class:'manual-chat-hd'});
+    // Avatar SVG da RAI (silhueta robótica feminina estilizada)
+    var RAI_AVATAR='<svg class="rai-avatar-svg" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">'+
+      '<circle cx="18" cy="18" r="18" fill="#0f3d22"/>'+
+      '<ellipse cx="18" cy="13" rx="6" ry="7" fill="#1a5c38"/>'+
+      '<rect x="12" y="20" width="12" height="9" rx="3" fill="#1a5c38"/>'+
+      '<rect x="8" y="21" width="3" height="6" rx="1.5" fill="#1a5c38"/>'+
+      '<rect x="25" y="21" width="3" height="6" rx="1.5" fill="#1a5c38"/>'+
+      '<circle cx="15" cy="12" r="1.5" fill="#4ade80"/>'+
+      '<circle cx="21" cy="12" r="1.5" fill="#4ade80"/>'+
+      '<rect x="15" y="16" width="6" height="1.5" rx=".75" fill="#4ade80"/>'+
+      '<rect x="16" y="7" width="4" height="2" rx="1" fill="#2d8f57"/>'+
+      '<text x="18" y="27" text-anchor="middle" font-size="5" font-weight="700" fill="#4ade80" font-family="sans-serif">RAI</text>'+
+      '</svg>';
+
+    var chatHd=el('div',{class:'manual-chat-hd rai-chat-hd'});
     chatHd.innerHTML=
-      ico('bot',15)+' <span>Assistente RegulaAI</span>'+
+      RAI_AVATAR+
+      '<div class="rai-hd-info"><span class="rai-hd-name">RAI</span><span class="rai-hd-sub">Regulação + AI</span></div>'+
       '<button class="manual-chat-maxbtn chat-hd-btn" id="chatMaxBtn" title="Expandir">'+ico('maximize-2',14)+'</button>'+
       '<button class="manual-chat-maxbtn chat-hd-btn" id="chatMinBtn" title="Minimizar" style="margin-left:2px">'+ico('chevron-down',14)+'</button>';
     chatRoot.appendChild(chatHd);
-    lcIcons(); // renderiza ícones dos botões do header do chat
+    lcIcons();
 
     var chatLog=el('div',{class:'manual-chat-log'});
     chatRoot.appendChild(chatLog);
 
     var chatFoot=el('div',{class:'manual-chat-foot'});
-    var chatInp=el('textarea',{class:'manual-chat-inp',placeholder:'Digite sua dúvida...',rows:'1'});
+    var chatInp=el('textarea',{class:'manual-chat-inp',placeholder:'Digite sua mensagem...',rows:'1'});
     var chatSend=el('button',{class:'manual-chat-send',title:'Enviar'});
     chatSend.innerHTML=ico('send',15);
     chatFoot.appendChild(chatInp);
@@ -5730,14 +5745,16 @@
 
     function addMsg(role,text){
       var d=el('div',{class:'mchat-msg mchat-'+role});
-      if(role==='bot') d.innerHTML='<div class="mchat-avatar">'+ico('bot',13)+'</div><div class="mchat-bubble">'+text.replace(/\n/g,'<br>')+'</div>';
+      if(role==='bot') d.innerHTML=
+        '<div class="mchat-avatar rai-msg-avatar">'+RAI_AVATAR+'</div>'+
+        '<div class="mchat-bubble-wrap"><span class="mchat-sender">RAI</span><div class="mchat-bubble">'+text.replace(/\n/g,'<br>')+'</div></div>';
       else d.innerHTML='<div class="mchat-bubble">'+esc(text)+'</div>';
       chatLog.appendChild(d);
       chatLog.scrollTop=chatLog.scrollHeight;
     }
 
-    addMsg('bot','Olá! Sou o Assistente RegulaAI. Posso ajudar com dúvidas sobre o sistema, critérios de aderência, pontuações e uso da plataforma. Como posso ajudar?');
-    if(!geminiKey) addMsg('bot','⚠️ Chave de API do Gemini não configurada. Acesse <b>Configurações → Assistente IA</b> para inserir sua chave.');
+    addMsg('bot','Olá! Sou a RAI — Regulação + AI. Estou aqui para ajudar com dúvidas sobre o sistema, critérios de aderência, pontuações e uso da plataforma. Como posso te ajudar hoje?');
+    if(!geminiKey) addMsg('bot','⚠️ Chave de API do Gemini não configurada. Acesse <b>Configurações → Assistente</b> para inserir sua chave.');
 
     async function sendChat(){
       var q=chatInp.value.trim();
@@ -5756,7 +5773,7 @@
       }
 
       var typing=el('div',{class:'mchat-msg mchat-bot'});
-      typing.innerHTML='<div class="mchat-avatar">'+ico('bot',13)+'</div><div class="mchat-bubble mchat-typing"><span></span><span></span><span></span></div>';
+      typing.innerHTML='<div class="mchat-avatar rai-msg-avatar">'+RAI_AVATAR+'</div><div class="mchat-bubble-wrap"><span class="mchat-sender">RAI</span><div class="mchat-bubble mchat-typing"><span></span><span></span><span></span></div></div>';
       chatLog.appendChild(typing);
       chatLog.scrollTop=chatLog.scrollHeight;
 
