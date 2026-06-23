@@ -1298,7 +1298,7 @@ tbody tr:hover{background:#f7fbf8;cursor:pointer}
 .manual-print-btn:hover{background:var(--g-50)}
 .manual-body{padding:28px 36px;display:flex;flex-direction:column;gap:20px;overflow-y:auto;height:100%}
 /* Chat panel — fixo no body, visível só no Manual */
-.manual-chat-panel{position:fixed;top:56px;right:0;width:340px;height:calc(100vh - 56px);display:none;flex-direction:column;border-left:1px solid var(--line);background:#fff;z-index:55;box-shadow:-4px 0 18px rgba(0,0,0,.1);transition:width .25s}
+.manual-chat-panel{position:fixed;top:80px;right:0;width:340px;height:calc(100vh - 80px);display:none;flex-direction:column;border-left:1px solid var(--line);background:#fff;z-index:55;box-shadow:-4px 0 18px rgba(0,0,0,.1);transition:width .25s}
 .manual-chat-panel.chat-open{display:flex}
 .manual-chat-panel.chat-max{width:520px}
 .manual-chat-panel.chat-minimized{top:auto;bottom:0;height:auto;border-left:none;border-top:1px solid var(--line);border-radius:10px 10px 0 0;box-shadow:0 -2px 12px rgba(0,0,0,.12);cursor:pointer;z-index:35;width:260px}
