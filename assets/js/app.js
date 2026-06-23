@@ -5712,16 +5712,38 @@
 
     // Avatar SVG da RAI (silhueta robótica feminina estilizada)
     var RAI_AVATAR='<svg class="rai-avatar-svg" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">'+
-      '<circle cx="18" cy="18" r="18" fill="#0f3d22"/>'+
-      '<ellipse cx="18" cy="13" rx="6" ry="7" fill="#1a5c38"/>'+
-      '<rect x="12" y="20" width="12" height="9" rx="3" fill="#1a5c38"/>'+
-      '<rect x="8" y="21" width="3" height="6" rx="1.5" fill="#1a5c38"/>'+
-      '<rect x="25" y="21" width="3" height="6" rx="1.5" fill="#1a5c38"/>'+
-      '<circle cx="15" cy="12" r="1.5" fill="#4ade80"/>'+
-      '<circle cx="21" cy="12" r="1.5" fill="#4ade80"/>'+
-      '<rect x="15" y="16" width="6" height="1.5" rx=".75" fill="#4ade80"/>'+
-      '<rect x="16" y="7" width="4" height="2" rx="1" fill="#2d8f57"/>'+
-      '<text x="18" y="27" text-anchor="middle" font-size="5" font-weight="700" fill="#4ade80" font-family="sans-serif">RAI</text>'+
+      /* fundo circular */
+      '<circle cx="18" cy="18" r="18" fill="#071a0e"/>'+
+      /* brilho de fundo sutil */
+      '<radialGradient id="rg" cx="50%" cy="40%" r="55%"><stop offset="0%" stop-color="#1a5c38" stop-opacity=".7"/><stop offset="100%" stop-color="#071a0e" stop-opacity="0"/></radialGradient>'+
+      '<circle cx="18" cy="15" r="16" fill="url(#rg)"/>'+
+      /* antena */
+      '<line x1="18" y1="5" x2="18" y2="9" stroke="#4ade80" stroke-width="1.2" stroke-linecap="round"/>'+
+      '<circle cx="18" cy="4.2" r="1.5" fill="#4ade80" opacity=".9"/>'+
+      /* cabeça robótica — formato levemente arredondado */
+      '<rect x="10" y="9" width="16" height="14" rx="4" fill="#0f3d22"/>'+
+      '<rect x="10" y="9" width="16" height="14" rx="4" fill="none" stroke="#2d8f57" stroke-width=".8"/>'+
+      /* orelhas / laterais */
+      '<rect x="7.5" y="12" width="2.5" height="5" rx="1.2" fill="#0f3d22" stroke="#2d8f57" stroke-width=".6"/>'+
+      '<rect x="26" y="12" width="2.5" height="5" rx="1.2" fill="#0f3d22" stroke="#2d8f57" stroke-width=".6"/>'+
+      /* olhos — elípticos brilhantes femininos */
+      '<ellipse cx="14.5" cy="14.5" rx="2.2" ry="1.8" fill="#4ade80" opacity=".15"/>'+
+      '<ellipse cx="21.5" cy="14.5" rx="2.2" ry="1.8" fill="#4ade80" opacity=".15"/>'+
+      '<ellipse cx="14.5" cy="14.5" rx="1.5" ry="1.3" fill="#4ade80"/>'+
+      '<ellipse cx="21.5" cy="14.5" rx="1.5" ry="1.3" fill="#4ade80"/>'+
+      '<circle cx="15" cy="14" r=".5" fill="#fff" opacity=".8"/>'+
+      '<circle cx="22" cy="14" r=".5" fill="#fff" opacity=".8"/>'+
+      /* nariz pontual */
+      '<circle cx="18" cy="17" r=".6" fill="#2d8f57"/>'+
+      /* boca — sorriso suave */
+      '<path d="M15.5 19.2 Q18 21 20.5 19.2" stroke="#4ade80" stroke-width="1" stroke-linecap="round" fill="none"/>'+
+      /* pescoço */
+      '<rect x="16" y="23" width="4" height="2.5" rx="1" fill="#0f3d22" stroke="#2d8f57" stroke-width=".6"/>'+
+      /* corpo / ombros */
+      '<rect x="11" y="25.5" width="14" height="5" rx="2.5" fill="#0f3d22" stroke="#2d8f57" stroke-width=".7"/>'+
+      /* detalhe peito — ícone coração/AI */
+      '<circle cx="18" cy="28" r="1.4" fill="none" stroke="#4ade80" stroke-width=".8"/>'+
+      '<circle cx="18" cy="28" r=".5" fill="#4ade80"/>'+
       '</svg>';
 
     var chatHd=el('div',{class:'manual-chat-hd rai-chat-hd'});
