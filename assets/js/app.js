@@ -762,14 +762,6 @@
     v.style.maxWidth=isManual?'none':'';
     v.style.overflow='';
     v.style.height='';
-    // botão toggle: visível só no manual
-    var ctb=$('#chatToggleBtn');
-    if(ctb) ctb.classList.toggle('visible', isManual);
-    // se saiu do manual, fecha o painel
-    if(!isManual){
-      var cr=$('#chatRoot');
-      if(cr) cr.classList.remove('chat-open');
-    }
     if(State.route==='dashboard') v.appendChild(viewDashboard());
     else if(State.route==='guias') v.appendChild(viewGuias());
     else if(State.route==='kanban') v.appendChild(viewKanban());
