@@ -5936,14 +5936,23 @@
       if(chatRoot.classList.contains('hist-open')) startNew(); else openHist();
     };
 
+    // Marca no body quando o chat está aberto e expandido (não minimizado)
+    // — usado no mobile para ocultar o FAB de perfil que ficaria por cima.
+    function syncBodyState(){
+      var aberto=chatRoot.classList.contains('chat-open') && !chatRoot.classList.contains('chat-minimized');
+      document.body.classList.toggle('chat-fullopen',aberto);
+    }
+
     function chatMinimize(){
       closeHist();
       chatRoot.classList.add('chat-open');
       chatRoot.classList.add('chat-minimized');
+      syncBodyState();
     }
     function chatRestore(){
       chatRoot.classList.add('chat-open');
       chatRoot.classList.remove('chat-minimized');
+      syncBodyState();
       chatInp.focus();
     }
 
@@ -5956,6 +5965,7 @@
     chatHd.querySelector('#chatCloseBtn').onclick=function(e){
       e.stopPropagation();
       chatRoot.classList.remove('chat-open','chat-minimized','chat-max','chat-max2','hist-open');
+      syncBodyState();
     };
 
     // Clicar em qualquer lugar do header quando minimizado restaura

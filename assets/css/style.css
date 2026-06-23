@@ -1061,6 +1061,25 @@ tbody tr:hover{background:#f7fbf8;cursor:pointer}
     transition:opacity .2s ease;
   }
   .bars-scroll-wrap.at-bottom::after{opacity:0}
+
+  /* ─── Chat da RAI no celular ───
+     Topbar ~56px; bottom nav = 60px. O painel ocupa o vão entre eles. */
+  .manual-chat-panel,
+  .manual-chat-panel.chat-max,
+  .manual-chat-panel.chat-max2{
+    top:56px;height:calc(100vh - 56px - 60px);
+    width:94vw;max-width:none;right:3vw;
+    border-left:1px solid var(--line);border-radius:12px 12px 0 0;
+  }
+  /* Minimizado: barrinha acima do FAB de perfil (que fica em bottom:72px) */
+  .manual-chat-panel.chat-minimized{
+    top:auto;bottom:132px;right:12px;height:auto;
+    width:auto;max-width:none;border-radius:10px;
+  }
+  /* Painel de histórico ocupa todo o painel do chat */
+  .mchat-hist{border-radius:12px 12px 0 0}
+  /* Com o chat aberto, oculta o FAB de perfil que ficaria por cima */
+  body.chat-fullopen .fab-wrap{display:none!important}
 }
 
 /* ═══════════════════════════════════════════
@@ -1426,9 +1445,13 @@ tbody tr:hover{background:#f7fbf8;cursor:pointer}
   .manual-box{break-inside:avoid;margin-bottom:16px}
 }
 @media(max-width:900px){
-  .manual-chat-panel{display:none!important}
   .manual-wrap,.manual-wrap.chat-max{padding-right:0!important}
   .manual-body{padding:16px!important}
+  /* Chat da RAI (tablet): painel flutuante adaptado à largura */
+  .manual-chat-panel,
+  .manual-chat-panel.chat-max,
+  .manual-chat-panel.chat-max2{width:min(92vw,460px)}
+  .manual-chat-panel.chat-minimized{width:auto;max-width:none}
 }
 
 /* Barra de visão de perfil (Gestor) e banner de contexto */
