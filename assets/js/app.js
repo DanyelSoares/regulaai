@@ -5693,7 +5693,7 @@
     var geminiModel=localStorage.getItem('regula_gemini_model')||'gemini-2.5-flash';
     var chatHistory=[];
     var maxLevel=0;            // 0=normal, 1=largo, 2=muito largo
-    var WELCOME='Olá! Sou a RAI, sua assistente virtual. Estou aqui para ajudar com dúvidas sobre o sistema, critérios de aderência, pontuações e uso da plataforma. Como posso te ajudar hoje?';
+    var WELCOME='Olá! Sou a RAI, sua assistente virtual. Estou aqui para ajudar com dúvidas sobre o sistema. Como posso te ajudar hoje?';
 
     /* === Persistência de sessões de chat === */
     var sessions=JSON.parse(localStorage.getItem('regula_chat_sessions')||'[]');
