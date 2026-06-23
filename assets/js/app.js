@@ -756,6 +756,12 @@
 
   /* === Views === */
   function render(){
+    // Antes de limpar o DOM, resgata o chat singleton para fora do view
+    var chatRoot=$('#chatRoot');
+    if(chatRoot && chatRoot.parentElement && chatRoot.parentElement.id!=='chatRoot'){
+      document.body.appendChild(chatRoot);
+      chatRoot.style.display='none';
+    }
     var v=$('#view'); v.innerHTML='';
     var isManual=State.route==='manual';
     v.style.padding=isManual?'0':'';
@@ -4817,123 +4823,6 @@
     nav.appendChild(btnPrint);
     wrap.appendChild(nav);
 
-    // ── Painel de chat ────────────────────────────────────────────────
-    var chatPanel=el('div',{class:'manual-chat-panel'});
-    var geminiKey=localStorage.getItem('regula_gemini_key')||'';
-    var geminiModel=localStorage.getItem('regula_gemini_model')||'gemini-2.0-flash';
-
-    var chatHd=el('div',{class:'manual-chat-hd'});
-    var isMax=false;
-    chatHd.innerHTML=ico('bot',15)+' <span>Assistente RegulaAI</span>'+
-      '<span class="manual-chat-status '+(geminiKey?'online':'offline')+'">'+(geminiKey?'Online':'Offline')+'</span>'+
-      '<button class="manual-chat-maxbtn" id="chatMaxBtn" title="Maximizar">'+ ico('maximize-2',14)+'</button>';
-    chatPanel.appendChild(chatHd);
-
-    var chatLog=el('div',{class:'manual-chat-log'});
-
-    var SYSTEM_CONTEXT='Você é o Assistente do RegulaAI Saúde, uma plataforma de auditoria assistencial para operadoras de saúde. '+
-      'Responda em português, de forma objetiva e técnica. '+
-      'Conhecimento do sistema: '+
-      '1) GUIAS: cada guia possui número, tipo (internação/ambulatorial), regime, natureza, fluxo, status (triagem/análise/complemento/parecer/concluída). '+
-      '2) ADERÊNCIA: calculada pela IA com critérios ponderados por pesos configuráveis. O TETO é dinâmico — soma apenas critérios aplicáveis à guia específica (ex.: DUT só entra se a guia tem procedimentos com DUT obrigatória; pacotes só se vinculados). '+
-      '3) CRITÉRIOS DE ADERÊNCIA: Documental (documentação anexada), DUT (Diretriz de Utilização), Procedimentos vinculados, Pacotes, Mat/Med, Diárias/Taxas, Contratual/Histórico. '+
-      '4) PESOS: configuráveis em Parametrização → cada aba (Procedimentos, Pacotes, Mat/Med, Diárias/Taxas) tem campo Peso de 0 a 10. '+
-      '5) REPROCESSAR: reanalisa a guia passando itens desmarcados pelo auditor, observações e parecer da operadora como contexto de aprendizado. '+
-      '6) PERFIS: Gestor (acesso total), Auditor (análise e parecer), Enfermeiro (triagem e complemento). '+
-      '7) FLUXOS: F1-Eletivo, F2-Alta Complexidade, F3-Oncologia, etc. '+
-      'Se não souber algo específico do sistema, oriente o usuário a consultar o manual ou contatar o administrador.';
-
-    function addMsg(role, text){
-      var d=el('div',{class:'mchat-msg mchat-'+role});
-      if(role==='bot') d.innerHTML='<div class="mchat-avatar">'+ico('bot',13)+'</div><div class="mchat-bubble">'+text.replace(/\n/g,'<br>')+'</div>';
-      else d.innerHTML='<div class="mchat-bubble">'+esc(text)+'</div>';
-      chatLog.appendChild(d);
-      chatLog.scrollTop=chatLog.scrollHeight;
-    }
-
-    addMsg('bot','Olá! Sou o Assistente RegulaAI. Posso ajudar com dúvidas sobre o sistema, critérios de aderência, pontuações e uso da plataforma. Como posso ajudar?');
-
-    if(!geminiKey){
-      addMsg('bot','⚠️ Chave de API do Gemini não configurada. Acesse <b>Configurações → Assistente IA</b> para inserir sua chave e ativar o assistente.');
-    }
-
-    chatPanel.appendChild(chatLog);
-
-    var chatFoot=el('div',{class:'manual-chat-foot'});
-    var chatInp=el('textarea',{class:'manual-chat-inp',placeholder:'Digite sua dúvida...',rows:'1'});
-    var chatSend=el('button',{class:'manual-chat-send',title:'Enviar'});
-    chatSend.innerHTML=ico('send',15);
-    chatFoot.appendChild(chatInp);
-    chatFoot.appendChild(chatSend);
-    chatPanel.appendChild(chatFoot);
-
-    var chatHistory=[];
-
-    async function sendChat(){
-      var q=chatInp.value.trim();
-      if(!q) return;
-      chatInp.value='';
-      chatInp.style.height='auto';
-      addMsg('user',q);
-
-      if(!geminiKey){
-        addMsg('bot','⚠️ Configure a chave de API em <b>Configurações → Assistente IA</b> para receber respostas da IA.');
-        return;
-      }
-
-      var typing=el('div',{class:'mchat-msg mchat-bot'});
-      typing.innerHTML='<div class="mchat-avatar">'+ico('bot',13)+'</div><div class="mchat-bubble mchat-typing"><span></span><span></span><span></span></div>';
-      chatLog.appendChild(typing);
-      chatLog.scrollTop=chatLog.scrollHeight;
-
-      chatHistory.push({role:'user',parts:[{text:q}]});
-
-      try{
-        var payload={
-          system_instruction:{parts:[{text:SYSTEM_CONTEXT}]},
-          contents:chatHistory
-        };
-        var resp=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+geminiModel+':generateContent?key='+geminiKey,{
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body:JSON.stringify(payload)
-        });
-        var data=await resp.json();
-        typing.remove();
-        if(data.candidates&&data.candidates[0]){
-          var answer=data.candidates[0].content.parts[0].text;
-          chatHistory.push({role:'model',parts:[{text:answer}]});
-          addMsg('bot',answer);
-        } else if(data.error){
-          addMsg('bot','❌ Erro da API: '+data.error.message);
-        } else {
-          addMsg('bot','Não consegui obter resposta. Tente novamente.');
-        }
-      }catch(err){
-        typing.remove();
-        addMsg('bot','❌ Erro de conexão: '+err.message);
-      }
-    }
-
-    chatSend.onclick=sendChat;
-    chatInp.addEventListener('keydown',function(e){
-      if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); sendChat(); }
-    });
-    chatInp.addEventListener('input',function(){
-      this.style.height='auto';
-      this.style.height=Math.min(this.scrollHeight,120)+'px';
-    });
-
-    // Maximizar / restaurar chat
-    chatHd.querySelector('#chatMaxBtn').onclick=function(){
-      isMax=!isMax;
-      var main=chatPanel.parentElement;
-      if(main){ main.classList.toggle('chat-max',isMax); }
-      this.innerHTML=ico(isMax?'minimize-2':'maximize-2',14);
-      this.title=isMax?'Restaurar':'Maximizar';
-      chatInp.focus();
-    };
-
     // Conteúdo principal
     var body=el('div',{class:'manual-body'});
     var sec=State.manualSec;
@@ -5650,10 +5539,14 @@
         ]);
     }
 
-    var manualMain=el('div',{class:'manual-main'});
+    var manualMain=el('div',{class:'manual-main',id:'manualMain'});
     manualMain.appendChild(body);
-    manualMain.appendChild(chatPanel);
     wrap.appendChild(manualMain);
+    // encaixa o chat singleton após o DOM estar montado
+    requestAnimationFrame(function(){
+      var cp=$('#chatRoot');
+      if(cp){ cp.style.display=''; manualMain.appendChild(cp); }
+    });
     return wrap;
 
     function manualHdr(title,sub){
@@ -5802,6 +5695,125 @@
     var btn=document.getElementById('logoutBtn');
     if(btn) btn.onclick=function(){ if(confirm('Deseja sair da plataforma?')) authLogout(); };
   }
+
+  /* === Chat Singleton === */
+  (function initChat(){
+    var chatRoot=$('#chatRoot');
+    if(!chatRoot) return;
+
+    var geminiKey=localStorage.getItem('regula_gemini_key')||'';
+    var geminiModel=localStorage.getItem('regula_gemini_model')||'gemini-2.0-flash';
+    var chatHistory=[];
+    var isMax=false;
+
+    var SYSTEM_CONTEXT='Você é o Assistente do RegulaAI Saúde, uma plataforma de auditoria assistencial para operadoras de saúde. '+
+      'Responda em português, de forma objetiva e técnica. '+
+      'Conhecimento do sistema: '+
+      '1) GUIAS: cada guia possui número, tipo (internação/ambulatorial), regime, natureza, fluxo, status (triagem/análise/complemento/parecer/concluída). '+
+      '2) ADERÊNCIA: calculada pela IA com critérios ponderados por pesos configuráveis. O TETO é dinâmico — soma apenas critérios aplicáveis à guia específica (ex.: DUT só entra se a guia tem procedimentos com DUT obrigatória; pacotes só se vinculados). '+
+      '3) CRITÉRIOS DE ADERÊNCIA: Documental (documentação anexada), DUT (Diretriz de Utilização), Procedimentos vinculados, Pacotes, Mat/Med, Diárias/Taxas, Contratual/Histórico. '+
+      '4) PESOS: configuráveis em Parametrização → cada aba (Procedimentos, Pacotes, Mat/Med, Diárias/Taxas) tem campo Peso de 0 a 10. '+
+      '5) REPROCESSAR: reanalisa a guia passando itens desmarcados pelo auditor, observações e parecer da operadora como contexto de aprendizado. '+
+      '6) PERFIS: Gestor (acesso total), Auditor (análise e parecer), Enfermeiro (triagem e complemento). '+
+      '7) FLUXOS: F1-Eletivo, F2-Alta Complexidade, F3-Oncologia, etc. '+
+      'Se não souber algo específico do sistema, oriente o usuário a consultar o manual ou contatar o administrador.';
+
+    // Monta estrutura uma única vez
+    chatRoot.className='manual-chat-panel';
+    chatRoot.style.display='none';
+
+    var chatHd=el('div',{class:'manual-chat-hd'});
+    chatHd.innerHTML=
+      ico('bot',15)+' <span>Assistente RegulaAI</span>'+
+      '<span id="chatStatusBadge" class="manual-chat-status '+(geminiKey?'online':'offline')+'">'+(geminiKey?'Online':'Offline')+'</span>'+
+      '<button class="manual-chat-maxbtn" id="chatMaxBtn" title="Maximizar">'+ico('maximize-2',14)+'</button>';
+    chatRoot.appendChild(chatHd);
+
+    var chatLog=el('div',{class:'manual-chat-log'});
+    chatRoot.appendChild(chatLog);
+
+    var chatFoot=el('div',{class:'manual-chat-foot'});
+    var chatInp=el('textarea',{class:'manual-chat-inp',placeholder:'Digite sua dúvida...',rows:'1'});
+    var chatSend=el('button',{class:'manual-chat-send',title:'Enviar'});
+    chatSend.innerHTML=ico('send',15);
+    chatFoot.appendChild(chatInp);
+    chatFoot.appendChild(chatSend);
+    chatRoot.appendChild(chatFoot);
+
+    function addMsg(role,text){
+      var d=el('div',{class:'mchat-msg mchat-'+role});
+      if(role==='bot') d.innerHTML='<div class="mchat-avatar">'+ico('bot',13)+'</div><div class="mchat-bubble">'+text.replace(/\n/g,'<br>')+'</div>';
+      else d.innerHTML='<div class="mchat-bubble">'+esc(text)+'</div>';
+      chatLog.appendChild(d);
+      chatLog.scrollTop=chatLog.scrollHeight;
+    }
+
+    addMsg('bot','Olá! Sou o Assistente RegulaAI. Posso ajudar com dúvidas sobre o sistema, critérios de aderência, pontuações e uso da plataforma. Como posso ajudar?');
+    if(!geminiKey) addMsg('bot','⚠️ Chave de API do Gemini não configurada. Acesse <b>Configurações → Assistente IA</b> para inserir sua chave.');
+
+    async function sendChat(){
+      var q=chatInp.value.trim();
+      if(!q) return;
+      chatInp.value='';
+      chatInp.style.height='auto';
+      addMsg('user',q);
+
+      // Relê chave a cada envio (pode ter sido salva em Configurações)
+      geminiKey=localStorage.getItem('regula_gemini_key')||'';
+      geminiModel=localStorage.getItem('regula_gemini_model')||'gemini-2.0-flash';
+      var badge=$('#chatStatusBadge');
+      if(badge){ badge.className='manual-chat-status '+(geminiKey?'online':'offline'); badge.textContent=geminiKey?'Online':'Offline'; }
+
+      if(!geminiKey){
+        addMsg('bot','⚠️ Configure a chave em <b>Configurações → Assistente IA</b>.');
+        return;
+      }
+
+      var typing=el('div',{class:'mchat-msg mchat-bot'});
+      typing.innerHTML='<div class="mchat-avatar">'+ico('bot',13)+'</div><div class="mchat-bubble mchat-typing"><span></span><span></span><span></span></div>';
+      chatLog.appendChild(typing);
+      chatLog.scrollTop=chatLog.scrollHeight;
+
+      chatHistory.push({role:'user',parts:[{text:q}]});
+
+      try{
+        var payload={system_instruction:{parts:[{text:SYSTEM_CONTEXT}]},contents:chatHistory};
+        var resp=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+geminiModel+':generateContent?key='+geminiKey,{
+          method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)
+        });
+        var data=await resp.json();
+        typing.remove();
+        if(data.candidates&&data.candidates[0]){
+          var answer=data.candidates[0].content.parts[0].text;
+          chatHistory.push({role:'model',parts:[{text:answer}]});
+          addMsg('bot',answer);
+        } else {
+          addMsg('bot','❌ '+(data.error?data.error.message:'Sem resposta. Tente novamente.'));
+        }
+      }catch(err){
+        typing.remove();
+        addMsg('bot','❌ Erro de conexão: '+err.message);
+      }
+    }
+
+    chatSend.onclick=sendChat;
+    chatInp.addEventListener('keydown',function(e){
+      if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); sendChat(); }
+    });
+    chatInp.addEventListener('input',function(){
+      this.style.height='auto';
+      this.style.height=Math.min(this.scrollHeight,120)+'px';
+    });
+
+    chatHd.querySelector('#chatMaxBtn').onclick=function(){
+      isMax=!isMax;
+      var main=$('#manualMain');
+      if(main) main.classList.toggle('chat-max',isMax);
+      this.innerHTML=ico(isMax?'minimize-2':'maximize-2',14);
+      this.title=isMax?'Restaurar':'Maximizar';
+      chatInp.focus();
+    };
+  })();
 
   /* === Init === */
   aplicarRiscos();
