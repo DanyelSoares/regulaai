@@ -757,6 +757,11 @@
   /* === Views === */
   function render(){
     var v=$('#view'); v.innerHTML='';
+    var isManual=State.route==='manual';
+    v.style.padding=isManual?'0':'';
+    v.style.maxWidth=isManual?'none':'';
+    v.style.overflow=isManual?'hidden':'';
+    v.style.height=isManual?'calc(100vh - 56px)':'';
     if(State.route==='dashboard') v.appendChild(viewDashboard());
     else if(State.route==='guias') v.appendChild(viewGuias());
     else if(State.route==='kanban') v.appendChild(viewKanban());
@@ -4818,8 +4823,10 @@
     var geminiModel=localStorage.getItem('regula_gemini_model')||'gemini-2.0-flash';
 
     var chatHd=el('div',{class:'manual-chat-hd'});
+    var isMax=false;
     chatHd.innerHTML=ico('bot',15)+' <span>Assistente RegulaAI</span>'+
-      '<span class="manual-chat-status '+(geminiKey?'online':'offline')+'">'+(geminiKey?'Online':'Offline')+'</span>';
+      '<span class="manual-chat-status '+(geminiKey?'online':'offline')+'">'+(geminiKey?'Online':'Offline')+'</span>'+
+      '<button class="manual-chat-maxbtn" id="chatMaxBtn" title="Maximizar">'+ ico('maximize-2',14)+'</button>';
     chatPanel.appendChild(chatHd);
 
     var chatLog=el('div',{class:'manual-chat-log'});
@@ -4916,6 +4923,16 @@
       this.style.height='auto';
       this.style.height=Math.min(this.scrollHeight,120)+'px';
     });
+
+    // Maximizar / restaurar chat
+    chatHd.querySelector('#chatMaxBtn').onclick=function(){
+      isMax=!isMax;
+      var main=chatPanel.parentElement;
+      if(main){ main.classList.toggle('chat-max',isMax); }
+      this.innerHTML=ico(isMax?'minimize-2':'maximize-2',14);
+      this.title=isMax?'Restaurar':'Maximizar';
+      chatInp.focus();
+    };
 
     // Conteúdo principal
     var body=el('div',{class:'manual-body'});
