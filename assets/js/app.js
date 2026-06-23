@@ -5711,39 +5711,68 @@
     chatRoot.className='manual-chat-panel';
 
     // Avatar SVG da RAI (silhueta robótica feminina estilizada)
-    var RAI_AVATAR='<svg class="rai-avatar-svg" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">'+
-      /* fundo circular */
-      '<circle cx="18" cy="18" r="18" fill="#071a0e"/>'+
-      /* brilho de fundo sutil */
-      '<radialGradient id="rg" cx="50%" cy="40%" r="55%"><stop offset="0%" stop-color="#1a5c38" stop-opacity=".7"/><stop offset="100%" stop-color="#071a0e" stop-opacity="0"/></radialGradient>'+
-      '<circle cx="18" cy="15" r="16" fill="url(#rg)"/>'+
-      /* antena */
-      '<line x1="18" y1="5" x2="18" y2="9" stroke="#4ade80" stroke-width="1.2" stroke-linecap="round"/>'+
-      '<circle cx="18" cy="4.2" r="1.5" fill="#4ade80" opacity=".9"/>'+
-      /* cabeça robótica — formato levemente arredondado */
-      '<rect x="10" y="9" width="16" height="14" rx="4" fill="#0f3d22"/>'+
-      '<rect x="10" y="9" width="16" height="14" rx="4" fill="none" stroke="#2d8f57" stroke-width=".8"/>'+
-      /* orelhas / laterais */
-      '<rect x="7.5" y="12" width="2.5" height="5" rx="1.2" fill="#0f3d22" stroke="#2d8f57" stroke-width=".6"/>'+
-      '<rect x="26" y="12" width="2.5" height="5" rx="1.2" fill="#0f3d22" stroke="#2d8f57" stroke-width=".6"/>'+
-      /* olhos — elípticos brilhantes femininos */
-      '<ellipse cx="14.5" cy="14.5" rx="2.2" ry="1.8" fill="#4ade80" opacity=".15"/>'+
-      '<ellipse cx="21.5" cy="14.5" rx="2.2" ry="1.8" fill="#4ade80" opacity=".15"/>'+
-      '<ellipse cx="14.5" cy="14.5" rx="1.5" ry="1.3" fill="#4ade80"/>'+
-      '<ellipse cx="21.5" cy="14.5" rx="1.5" ry="1.3" fill="#4ade80"/>'+
-      '<circle cx="15" cy="14" r=".5" fill="#fff" opacity=".8"/>'+
-      '<circle cx="22" cy="14" r=".5" fill="#fff" opacity=".8"/>'+
-      /* nariz pontual */
-      '<circle cx="18" cy="17" r=".6" fill="#2d8f57"/>'+
-      /* boca — sorriso suave */
-      '<path d="M15.5 19.2 Q18 21 20.5 19.2" stroke="#4ade80" stroke-width="1" stroke-linecap="round" fill="none"/>'+
+    var RAI_AVATAR='<svg class="rai-avatar-svg" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">'+
+      '<defs>'+
+        '<radialGradient id="bgGrad" cx="50%" cy="45%" r="55%">'+
+          '<stop offset="0%" stop-color="#0d3320"/>'+
+          '<stop offset="100%" stop-color="#040e08"/>'+
+        '</radialGradient>'+
+        '<radialGradient id="skinGrad" cx="50%" cy="35%" r="60%">'+
+          '<stop offset="0%" stop-color="#c8d8c4"/>'+
+          '<stop offset="100%" stop-color="#8aab94"/>'+
+        '</radialGradient>'+
+        '<radialGradient id="eyeGlow" cx="50%" cy="50%" r="50%">'+
+          '<stop offset="0%" stop-color="#7fffc4"/>'+
+          '<stop offset="100%" stop-color="#22c55e"/>'+
+        '</radialGradient>'+
+        '<clipPath id="circ"><circle cx="20" cy="20" r="20"/></clipPath>'+
+      '</defs>'+
+      /* fundo */
+      '<circle cx="20" cy="20" r="20" fill="url(#bgGrad)"/>'+
+      /* brilho de fundo */
+      '<ellipse cx="20" cy="22" rx="14" ry="12" fill="#0f3d22" opacity=".5"/>'+
+      /* cabelo curto escuro — parte superior */
+      '<ellipse cx="20" cy="11" rx="8.5" ry="6" fill="#1a1a2e"/>'+
+      '<ellipse cx="20" cy="9.5" rx="7.5" ry="4.5" fill="#12121e"/>'+
+      /* laterais do cabelo */
+      '<ellipse cx="12.5" cy="14" rx="3" ry="5" fill="#12121e"/>'+
+      '<ellipse cx="27.5" cy="14" rx="3" ry="5" fill="#12121e"/>'+
+      /* rosto — tom pele clara esverdeada (humanoide) */
+      '<ellipse cx="20" cy="18" rx="7.5" ry="8.5" fill="url(#skinGrad)"/>'+
+      /* traço de armadura/implante na têmpora esquerda */
+      '<path d="M13 15 Q12 17 12.5 19" stroke="#c8a84b" stroke-width=".7" stroke-linecap="round" fill="none"/>'+
+      /* traço de armadura/implante na têmpora direita */
+      '<path d="M27 15 Q28 17 27.5 19" stroke="#c8a84b" stroke-width=".7" stroke-linecap="round" fill="none"/>'+
+      /* sobrancelhas finas — traço feminino */
+      '<path d="M14.5 13.5 Q16.5 12.8 18 13.2" stroke="#2a2a3a" stroke-width=".8" stroke-linecap="round" fill="none"/>'+
+      '<path d="M22 13.2 Q23.5 12.8 25.5 13.5" stroke="#2a2a3a" stroke-width=".8" stroke-linecap="round" fill="none"/>'+
+      /* olhos verdes brilhantes */
+      '<ellipse cx="16.2" cy="16.5" rx="2.2" ry="1.8" fill="#0a1a0f"/>'+
+      '<ellipse cx="23.8" cy="16.5" rx="2.2" ry="1.8" fill="#0a1a0f"/>'+
+      '<ellipse cx="16.2" cy="16.5" rx="1.6" ry="1.3" fill="url(#eyeGlow)"/>'+
+      '<ellipse cx="23.8" cy="16.5" rx="1.6" ry="1.3" fill="url(#eyeGlow)"/>'+
+      /* brilho do olho */
+      '<circle cx="16.8" cy="15.9" r=".55" fill="#fff" opacity=".9"/>'+
+      '<circle cx="24.4" cy="15.9" r=".55" fill="#fff" opacity=".9"/>'+
+      /* nariz sutil */
+      '<path d="M19.2 19.5 Q20 20.5 20.8 19.5" stroke="#8aab94" stroke-width=".6" stroke-linecap="round" fill="none" opacity=".6"/>'+
+      /* lábios — traço feminino suave */
+      '<path d="M16.5 22 Q18 23.2 20 22.8 Q22 23.2 23.5 22" stroke="#b87a7a" stroke-width=".9" stroke-linecap="round" fill="none"/>'+
+      '<path d="M17.5 22.3 Q20 23.8 22.5 22.3" stroke="#c47a7a" stroke-width=".6" stroke-linecap="round" fill="none" opacity=".5"/>'+
       /* pescoço */
-      '<rect x="16" y="23" width="4" height="2.5" rx="1" fill="#0f3d22" stroke="#2d8f57" stroke-width=".6"/>'+
-      /* corpo / ombros */
-      '<rect x="11" y="25.5" width="14" height="5" rx="2.5" fill="#0f3d22" stroke="#2d8f57" stroke-width=".7"/>'+
-      /* detalhe peito — ícone coração/AI */
-      '<circle cx="18" cy="28" r="1.4" fill="none" stroke="#4ade80" stroke-width=".8"/>'+
-      '<circle cx="18" cy="28" r=".5" fill="#4ade80"/>'+
+      '<rect x="17" y="26" width="6" height="4" rx="1.5" fill="#7a9c86"/>'+
+      /* detalhe pescoço — linhas de armadura */
+      '<line x1="18.5" y1="26.5" x2="18.5" y2="29.5" stroke="#c8a84b" stroke-width=".4" opacity=".7"/>'+
+      '<line x1="21.5" y1="26.5" x2="21.5" y2="29.5" stroke="#c8a84b" stroke-width=".4" opacity=".7"/>'+
+      /* ombros / peito — armadura branca */
+      '<path d="M10 40 Q10 31 14 30 L20 29 L26 30 Q30 31 30 40 Z" fill="#d8e8dc"/>'+
+      /* detalhe central do peito — logo RAI brilhante */
+      '<rect x="17" y="32" width="6" height="4" rx="1" fill="#071a0e"/>'+
+      '<text x="20" y="35.2" text-anchor="middle" font-size="3.2" font-weight="800" fill="#4ade80" font-family="sans-serif" letter-spacing=".3">RAI</text>'+
+      /* brilho central no peito */
+      '<ellipse cx="20" cy="34" rx="3.5" ry="2.5" fill="none" stroke="#4ade80" stroke-width=".4" opacity=".6"/>'+
+      /* linha dourada central da armadura */
+      '<line x1="20" y1="30" x2="20" y2="32" stroke="#c8a84b" stroke-width=".6" opacity=".8"/>'+
       '</svg>';
 
     var chatHd=el('div',{class:'manual-chat-hd rai-chat-hd'});
