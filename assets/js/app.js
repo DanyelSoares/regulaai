@@ -5712,9 +5712,8 @@
     var chatHd=el('div',{class:'manual-chat-hd'});
     chatHd.innerHTML=
       ico('bot',15)+' <span>Assistente RegulaAI</span>'+
-      '<span id="chatStatusBadge" class="manual-chat-status '+(geminiKey?'online':'offline')+'">'+(geminiKey?'Online':'Offline')+'</span>'+
-      '<button class="manual-chat-maxbtn" id="chatMaxBtn" title="Expandir">'+ico('maximize-2',14)+'</button>'+
-      '<button class="manual-chat-maxbtn" id="chatMinBtn" title="Minimizar" style="margin-left:2px">'+ico('chevron-down',14)+'</button>';
+      '<button class="manual-chat-maxbtn chat-hd-btn" id="chatMaxBtn" title="Expandir">'+ico('maximize-2',14)+'</button>'+
+      '<button class="manual-chat-maxbtn chat-hd-btn" id="chatMinBtn" title="Minimizar" style="margin-left:2px">'+ico('chevron-down',14)+'</button>';
     chatRoot.appendChild(chatHd);
     lcIcons(); // renderiza ícones dos botões do header do chat
 
@@ -5750,8 +5749,6 @@
       // Relê chave a cada envio (pode ter sido salva em Configurações)
       geminiKey=localStorage.getItem('regula_gemini_key')||'';
       geminiModel=localStorage.getItem('regula_gemini_model')||'gemini-2.5-flash';
-      var badge=$('#chatStatusBadge');
-      if(badge){ badge.className='manual-chat-status '+(geminiKey?'online':'offline'); badge.textContent=geminiKey?'Online':'Offline'; }
 
       if(!geminiKey){
         addMsg('bot','⚠️ Configure a chave em <b>Configurações → Assistente IA</b>.');
@@ -5802,41 +5799,34 @@
       chatInp.focus();
     };
 
-    // Minimizar: mantém só o header visível no canto inferior direito
-    chatHd.querySelector('#chatMinBtn').onclick=function(){
+    function chatMinimize(){
       chatRoot.classList.add('chat-open');
-      chatRoot.classList.toggle('chat-minimized');
-      var isMin=chatRoot.classList.contains('chat-minimized');
-      this.innerHTML=ico(isMin?'chevron-up':'chevron-down',14);
-      this.title=isMin?'Restaurar':'Minimizar';
+      chatRoot.classList.add('chat-minimized');
+    }
+    function chatRestore(){
+      chatRoot.classList.add('chat-open');
+      chatRoot.classList.remove('chat-minimized');
+      chatInp.focus();
+    }
+
+    // Botão minimizar
+    chatHd.querySelector('#chatMinBtn').onclick=function(e){
+      e.stopPropagation();
+      chatMinimize();
     };
 
-    // Clicar na barrinha (header) quando minimizado reabre
-    chatHd.onclick=function(e){
-      if(!chatRoot.classList.contains('chat-minimized')) return;
-      if(e.target.closest('button')) return;
-      chatRoot.classList.remove('chat-minimized');
-      chatHd.querySelector('#chatMinBtn').innerHTML=ico('chevron-down',14);
-      chatHd.querySelector('#chatMinBtn').title='Minimizar';
-      chatInp.focus();
+    // Clicar em qualquer lugar do header quando minimizado restaura
+    chatHd.onclick=function(){
+      if(chatRoot.classList.contains('chat-minimized')) chatRestore();
     };
 
     var toggleBtn=$('#chatToggleBtn');
     if(toggleBtn){
       toggleBtn.onclick=function(){
-        var isOpen=chatRoot.classList.contains('chat-open');
-        if(isOpen && !chatRoot.classList.contains('chat-minimized')){
-          // já aberto e expandido: minimiza
-          chatRoot.classList.add('chat-minimized');
-          chatHd.querySelector('#chatMinBtn').innerHTML=ico('chevron-up',14);
-          chatHd.querySelector('#chatMinBtn').title='Restaurar';
+        if(!chatRoot.classList.contains('chat-open') || chatRoot.classList.contains('chat-minimized')){
+          chatRestore();
         } else {
-          // fechado ou minimizado: abre/restaura
-          chatRoot.classList.add('chat-open');
-          chatRoot.classList.remove('chat-minimized');
-          chatHd.querySelector('#chatMinBtn').innerHTML=ico('chevron-down',14);
-          chatHd.querySelector('#chatMinBtn').title='Minimizar';
-          chatInp.focus();
+          chatMinimize();
         }
       };
     }
