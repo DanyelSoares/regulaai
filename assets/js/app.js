@@ -4012,48 +4012,109 @@
     // ── Aba: Assistente IA ───────────────────────────────────────────
     function renderIA(){
       cfgContent.innerHTML='';
+
+      // Modelos por provedor
+      var MODELOS={
+        gemini:[
+          {v:'gemini-2.5-flash',  t:'gemini-2.5-flash (Recomendado)'},
+          {v:'gemini-2.5-pro',    t:'gemini-2.5-pro (mais detalhado)'},
+          {v:'gemini-2.0-flash-lite', t:'gemini-2.0-flash-lite (mais rápido)'}
+        ],
+        claude:[
+          {v:'claude-sonnet-4-6',  t:'claude-sonnet-4-6 (Recomendado)'},
+          {v:'claude-opus-4-8',    t:'claude-opus-4-8 (mais avançado)'},
+          {v:'claude-haiku-4-5-20251001', t:'claude-haiku-4-5 (mais rápido)'}
+        ],
+        openai:[
+          {v:'gpt-4o',      t:'gpt-4o (Recomendado)'},
+          {v:'gpt-4o-mini', t:'gpt-4o-mini (mais rápido/barato)'},
+          {v:'gpt-4-turbo', t:'gpt-4-turbo'}
+        ]
+      };
+      var DEFAULTS={gemini:'gemini-2.5-flash',claude:'claude-sonnet-4-6',openai:'gpt-4o'};
+      var PROV_LABEL={gemini:'Google Gemini',claude:'Anthropic (Claude)',openai:'OpenAI'};
+      var KEY_HINT={
+        gemini:'Cole aqui sua chave AIza...',
+        claude:'Cole aqui sua chave sk-ant-...',
+        openai:'Cole aqui sua chave sk-...'
+      };
+      var OBTER={
+        gemini:'📌 Chave gratuita em <b>aistudio.google.com</b> → "Get API Key". O plano gratuito permite ~1.500 req/dia no modelo flash.',
+        claude:'📌 Obtenha sua chave em <b>console.anthropic.com</b> → "API Keys". A chamada é feita direto do navegador.',
+        openai:'📌 Obtenha sua chave em <b>platform.openai.com/api-keys</b>. Requer créditos na conta OpenAI.'
+      };
+
+      var provedor=localStorage.getItem('regula_ia_provider')||'gemini';
+
       var sec=el('div',{class:'panel',style:'padding:20px'});
       sec.innerHTML=
         '<h3 style="margin:0 0 4px">'+ico('bot',16)+' Assistente IA — Configuração</h3>'+
-        '<p style="margin:0 0 18px;font-size:13px;color:var(--muted)">Configure a chave de API do Gemini para ativar o chatbot de suporte no Manual.</p>'+
+        '<p style="margin:0 0 18px;font-size:13px;color:var(--muted)">Escolha o provedor de IA e informe a chave de API correspondente para ativar a RAI. A chave fica <b>apenas no seu navegador</b>.</p>'+
+        '<div style="margin-bottom:16px">'+
+          '<label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">Provedor de IA</label>'+
+          '<div class="ia-prov-row" id="iaProvRow">'+
+            ['gemini','claude','openai'].map(function(p){
+              return '<button type="button" class="ia-prov-btn'+(p===provedor?' active':'')+'" data-prov="'+p+'">'+PROV_LABEL[p]+'</button>';
+            }).join('')+
+          '</div>'+
+        '</div>'+
         '<div style="margin-bottom:14px">'+
-          '<label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">Chave de API do Google Gemini</label>'+
-          '<input id="cfgGeminiKey" type="password" placeholder="Cole aqui sua chave AIza..." style="width:100%;max-width:480px;padding:9px 12px;border:1.5px solid var(--g-200);border-radius:8px;font-size:13px;font-family:monospace"/>'+
-          '<p style="font-size:12px;color:var(--muted);margin:6px 0 0">A chave é armazenada <b>apenas no seu navegador</b> (localStorage). Nunca é enviada ao servidor ou ao código-fonte.</p>'+
+          '<label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">Chave de API — <span id="iaKeyProvLbl">'+PROV_LABEL[provedor]+'</span></label>'+
+          '<input id="cfgIaKey" type="password" placeholder="'+KEY_HINT[provedor]+'" style="width:100%;max-width:480px;padding:9px 12px;border:1.5px solid var(--g-200);border-radius:8px;font-size:13px;font-family:monospace"/>'+
+          '<p style="font-size:12px;color:var(--muted);margin:6px 0 0">Cada provedor guarda sua própria chave. Nunca é enviada ao servidor ou ao código-fonte.</p>'+
         '</div>'+
         '<div style="margin-bottom:18px">'+
-          '<label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">Modelo Gemini</label>'+
-          '<select id="cfgGeminiModel" style="padding:8px 12px;border:1.5px solid var(--g-200);border-radius:8px;font-size:13px">'+
-            '<option value="gemini-2.5-flash">gemini-2.5-flash (Recomendado)</option>'+
-            '<option value="gemini-2.5-pro">gemini-2.5-pro (mais detalhado)</option>'+
-            '<option value="gemini-2.0-flash-lite">gemini-2.0-flash-lite (mais rápido)</option>'+
-          '</select>'+
+          '<label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">Modelo</label>'+
+          '<select id="cfgIaModel" style="padding:8px 12px;border:1.5px solid var(--g-200);border-radius:8px;font-size:13px;min-width:280px"></select>'+
         '</div>'+
-        '<button id="cfgGeminiSave" class="btn-primary" style="padding:9px 22px">'+ico('save',13)+' Salvar configuração</button>'+
-        '<span id="cfgGeminiMsg" style="margin-left:12px;font-size:12.5px;color:var(--ok);opacity:0;transition:opacity .3s"></span>'+
+        '<button id="cfgIaSave" class="btn-primary" style="padding:9px 22px">'+ico('save',13)+' Salvar configuração</button>'+
+        '<span id="cfgIaMsg" style="margin-left:12px;font-size:12.5px;color:var(--ok);opacity:0;transition:opacity .3s"></span>'+
         '<div style="margin-top:22px;padding-top:18px;border-top:1px solid var(--g-100)">'+
-          '<p style="font-size:12.5px;color:var(--muted);margin:0">'+
-            '📌 Obtenha sua chave gratuita em <b>aistudio.google.com</b> → "Get API Key". O plano gratuito permite até 1.500 requisições/dia com o modelo flash.'+
-          '</p>'+
+          '<p id="iaObterTxt" style="font-size:12.5px;color:var(--muted);margin:0">'+OBTER[provedor]+'</p>'+
         '</div>';
       cfgContent.appendChild(sec);
 
-      var inp=sec.querySelector('#cfgGeminiKey');
-      var sel=sec.querySelector('#cfgGeminiModel');
-      var saved=localStorage.getItem('regula_gemini_key')||'';
-      var savedModel=localStorage.getItem('regula_gemini_model')||'gemini-2.5-flash';
-      if(saved) inp.value=saved;
-      sel.value=savedModel;
+      var inpKey=sec.querySelector('#cfgIaKey');
+      var selModel=sec.querySelector('#cfgIaModel');
+      var keyLbl=sec.querySelector('#iaKeyProvLbl');
+      var obterTxt=sec.querySelector('#iaObterTxt');
 
-      sec.querySelector('#cfgGeminiSave').onclick=function(){
-        var k=inp.value.trim();
-        if(k) localStorage.setItem('regula_gemini_key',k);
-        else localStorage.removeItem('regula_gemini_key');
-        localStorage.setItem('regula_gemini_model',sel.value);
-        var msg=sec.querySelector('#cfgGeminiMsg');
+      // Preenche modelo + chave conforme o provedor selecionado
+      function carregaProvedor(p){
+        provedor=p;
+        // modelos
+        var savedModel=localStorage.getItem('regula_ia_model_'+p)||DEFAULTS[p];
+        selModel.innerHTML=MODELOS[p].map(function(m){ return '<option value="'+m.v+'">'+m.t+'</option>'; }).join('');
+        selModel.value=savedModel;
+        // chave
+        inpKey.value=localStorage.getItem('regula_ia_key_'+p)||'';
+        inpKey.placeholder=KEY_HINT[p];
+        keyLbl.textContent=PROV_LABEL[p];
+        obterTxt.innerHTML=OBTER[p];
+        // botões ativos
+        $$('.ia-prov-btn',sec).forEach(function(b){ b.classList.toggle('active',b.getAttribute('data-prov')===p); });
+      }
+      carregaProvedor(provedor);
+
+      $$('.ia-prov-btn',sec).forEach(function(b){
+        b.onclick=function(){ carregaProvedor(b.getAttribute('data-prov')); };
+      });
+
+      sec.querySelector('#cfgIaSave').onclick=function(){
+        var k=inpKey.value.trim();
+        if(k) localStorage.setItem('regula_ia_key_'+provedor,k);
+        else localStorage.removeItem('regula_ia_key_'+provedor);
+        localStorage.setItem('regula_ia_model_'+provedor,selModel.value);
+        localStorage.setItem('regula_ia_provider',provedor);
+        // Compatibilidade: mantém as chaves antigas do Gemini sincronizadas
+        if(provedor==='gemini'){
+          if(k) localStorage.setItem('regula_gemini_key',k); else localStorage.removeItem('regula_gemini_key');
+          localStorage.setItem('regula_gemini_model',selModel.value);
+        }
+        var msg=sec.querySelector('#cfgIaMsg');
         msg.textContent='Salvo!'; msg.style.opacity='1';
         setTimeout(function(){ msg.style.opacity='0'; },2500);
-        toast('Configuração do Assistente IA salva','ok');
+        toast('Configuração do Assistente IA salva ('+PROV_LABEL[provedor]+')','ok');
       };
       lcIcons();
     }
@@ -5696,8 +5757,17 @@
     var chatRoot=$('#chatRoot');
     if(!chatRoot) return;
 
-    var geminiKey=localStorage.getItem('regula_gemini_key')||'';
-    var geminiModel=localStorage.getItem('regula_gemini_model')||'gemini-2.5-flash';
+    // Migração: chave antiga do Gemini → novo esquema por provedor
+    (function migraIA(){
+      var antigaKey=localStorage.getItem('regula_gemini_key');
+      if(antigaKey && !localStorage.getItem('regula_ia_key_gemini')){
+        localStorage.setItem('regula_ia_key_gemini',antigaKey);
+        var antigoModel=localStorage.getItem('regula_gemini_model')||'gemini-2.5-flash';
+        localStorage.setItem('regula_ia_model_gemini',antigoModel);
+        if(!localStorage.getItem('regula_ia_provider')) localStorage.setItem('regula_ia_provider','gemini');
+      }
+    })();
+
     var chatHistory=[];
     var maxLevel=0;            // 0=normal, 1=largo, 2=muito largo
     var WELCOME='Olá! Sou a RAI, sua assistente virtual. Estou aqui para ajudar com dúvidas sobre o sistema. Como posso te ajudar hoje?';
@@ -5789,7 +5859,7 @@
     function renderLog(){
       chatLog.innerHTML='';
       addMsg('bot',WELCOME);
-      if(!geminiKey) addMsg('bot','⚠️ Chave de API do Gemini não configurada. Acesse <b>Configurações → Assistente</b> para inserir sua chave.');
+      if(!getIaCfg().key) addMsg('bot','⚠️ Nenhuma chave de API configurada. Acesse <b>Configurações → Assistente</b> para escolher o provedor (Gemini, Claude ou OpenAI) e inserir sua chave.');
       for(var i=0;i<chatHistory.length;i++){
         addMsg(chatHistory[i].role==='user'?'user':'bot', chatHistory[i].parts[0].text);
       }
@@ -5873,6 +5943,59 @@
     newSession();
     renderLog();
 
+    // Configuração de IA ativa (provedor + chave + modelo)
+    function getIaCfg(){
+      var prov=localStorage.getItem('regula_ia_provider')||'gemini';
+      var DEF={gemini:'gemini-2.5-flash',claude:'claude-sonnet-4-6',openai:'gpt-4o'};
+      var key=localStorage.getItem('regula_ia_key_'+prov)||'';
+      // fallback p/ chave antiga do Gemini
+      if(!key && prov==='gemini') key=localStorage.getItem('regula_gemini_key')||'';
+      var model=localStorage.getItem('regula_ia_model_'+prov)||DEF[prov];
+      return {prov:prov,key:key,model:model};
+    }
+
+    // Chama a API do provedor selecionado; history no formato canônico Gemini
+    // ({role:'user'|'model', parts:[{text}]}). Retorna o texto da resposta.
+    async function callIA(cfg,history){
+      if(cfg.prov==='claude'){
+        var msgs=history.map(function(m){ return {role:m.role==='model'?'assistant':'user',content:m.parts[0].text}; });
+        var r=await fetch('https://api.anthropic.com/v1/messages',{
+          method:'POST',
+          headers:{
+            'Content-Type':'application/json',
+            'x-api-key':cfg.key,
+            'anthropic-version':'2023-06-01',
+            'anthropic-dangerous-direct-browser-access':'true'
+          },
+          body:JSON.stringify({model:cfg.model,max_tokens:1024,system:SYSTEM_CONTEXT,messages:msgs})
+        });
+        var d=await r.json();
+        if(d.content&&d.content[0]&&d.content[0].text) return {ok:true,text:d.content[0].text};
+        return {ok:false,text:(d.error&&d.error.message)||'Sem resposta do Claude.'};
+      }
+      if(cfg.prov==='openai'){
+        var omsgs=[{role:'system',content:SYSTEM_CONTEXT}].concat(history.map(function(m){
+          return {role:m.role==='model'?'assistant':'user',content:m.parts[0].text};
+        }));
+        var ro=await fetch('https://api.openai.com/v1/chat/completions',{
+          method:'POST',
+          headers:{'Content-Type':'application/json','Authorization':'Bearer '+cfg.key},
+          body:JSON.stringify({model:cfg.model,messages:omsgs})
+        });
+        var dao=await ro.json();
+        if(dao.choices&&dao.choices[0]&&dao.choices[0].message) return {ok:true,text:dao.choices[0].message.content};
+        return {ok:false,text:(dao.error&&dao.error.message)||'Sem resposta do OpenAI.'};
+      }
+      // Gemini (padrão)
+      var rg=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+cfg.model+':generateContent?key='+cfg.key,{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({system_instruction:{parts:[{text:SYSTEM_CONTEXT}]},contents:history})
+      });
+      var dg=await rg.json();
+      if(dg.candidates&&dg.candidates[0]) return {ok:true,text:dg.candidates[0].content.parts[0].text};
+      return {ok:false,text:(dg.error&&dg.error.message)||'Sem resposta. Tente novamente.'};
+    }
+
     async function sendChat(){
       var q=chatInp.value.trim();
       if(!q) return;
@@ -5880,12 +6003,9 @@
       chatInp.style.height='auto';
       addMsg('user',q);
 
-      // Relê chave a cada envio (pode ter sido salva em Configurações)
-      geminiKey=localStorage.getItem('regula_gemini_key')||'';
-      geminiModel=localStorage.getItem('regula_gemini_model')||'gemini-2.5-flash';
-
-      if(!geminiKey){
-        addMsg('bot','⚠️ Configure a chave em <b>Configurações → Assistente IA</b>.');
+      var cfg=getIaCfg();
+      if(!cfg.key){
+        addMsg('bot','⚠️ Configure o provedor e a chave de API em <b>Configurações → Assistente</b>.');
         return;
       }
 
@@ -5897,18 +6017,13 @@
       chatHistory.push({role:'user',parts:[{text:q}]});
 
       try{
-        var payload={system_instruction:{parts:[{text:SYSTEM_CONTEXT}]},contents:chatHistory};
-        var resp=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+geminiModel+':generateContent?key='+geminiKey,{
-          method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)
-        });
-        var data=await resp.json();
+        var res=await callIA(cfg,chatHistory);
         typing.remove();
-        if(data.candidates&&data.candidates[0]){
-          var answer=data.candidates[0].content.parts[0].text;
-          chatHistory.push({role:'model',parts:[{text:answer}]});
-          addMsg('bot',answer);
+        if(res.ok){
+          chatHistory.push({role:'model',parts:[{text:res.text}]});
+          addMsg('bot',res.text);
         } else {
-          addMsg('bot','❌ '+(data.error?data.error.message:'Sem resposta. Tente novamente.'));
+          addMsg('bot','❌ '+res.text);
         }
         saveCurrent();
       }catch(err){

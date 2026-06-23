@@ -1230,6 +1230,12 @@ tbody tr:hover{background:#f7fbf8;cursor:pointer}
 .risco-lim:focus{outline:none;border-color:var(--g-500);box-shadow:0 0 0 3px rgba(47,170,102,.12)}
 .risco-foot{display:flex;justify-content:flex-end;align-items:center;gap:10px;padding-top:16px;border-top:1px solid var(--line);margin-top:8px}
 
+/* Seletor de provedor de IA */
+.ia-prov-row{display:inline-flex;gap:8px;flex-wrap:wrap}
+.ia-prov-btn{padding:9px 18px;border:1.5px solid var(--g-200);background:#fff;color:var(--g-700);font-size:13px;font-weight:600;border-radius:9px;cursor:pointer;transition:background .12s,border-color .12s,color .12s}
+.ia-prov-btn:hover{background:var(--g-50);border-color:var(--g-400)}
+.ia-prov-btn.active{background:var(--g-600);color:#fff;border-color:var(--g-600)}
+
 /* Logs */
 .log-period-wrap{display:flex;align-items:center;gap:6px;flex-shrink:0}
 .log-period-lbl{font-size:12px;font-weight:600;color:var(--g-700);white-space:nowrap}
