@@ -1307,10 +1307,11 @@ tbody tr:hover{background:#f7fbf8;cursor:pointer}
 .manual-chat-panel.chat-minimized .manual-chat-hd{border-radius:10px 10px 0 0;padding:8px 14px;cursor:pointer;background:rgba(15,61,34,.75);backdrop-filter:blur(8px)}
 .manual-chat-panel.chat-minimized .rai-hd-name{font-size:12px}
 .manual-chat-panel.chat-minimized .rai-hd-sub{display:none}
-.manual-chat-panel.chat-minimized .rai-avatar-img{width:28px;height:28px}
+.manual-chat-panel.chat-minimized .rai-avatar-wrap{width:28px;height:28px}
 .manual-chat-panel.chat-minimized .chat-hd-btn{display:none}
 .manual-chat-hd{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid rgba(255,255,255,.08);font-size:13.5px;font-weight:700;color:#fff;background:linear-gradient(135deg,#0a2e18 0%,#0f3d22 60%,#1a5c38 100%)}
-.rai-avatar-img{width:38px;height:38px;flex-shrink:0;border-radius:50%;object-fit:cover;object-position:center 12%;border:1.5px solid #2d8f57;box-shadow:0 0 8px rgba(74,222,128,.5),0 0 3px rgba(200,168,75,.25)}
+.rai-avatar-wrap{width:38px;height:38px;flex-shrink:0;border-radius:50%;overflow:hidden;border:1.5px solid #2d8f57;box-shadow:0 0 8px rgba(74,222,128,.5),0 0 3px rgba(200,168,75,.25);background:#071a0e}
+.rai-avatar-img{width:100%;height:100%;object-fit:cover;object-position:48% 8%;image-rendering:high-quality;display:block}
 .rai-hd-info{display:flex;flex-direction:column;gap:1px;flex:1;min-width:0}
 .rai-hd-name{font-size:14px;font-weight:800;color:#4ade80;letter-spacing:.5px}
 .rai-hd-sub{font-size:10.5px;font-weight:400;color:rgba(255,255,255,.55);letter-spacing:.2px}
@@ -1319,7 +1320,7 @@ tbody tr:hover{background:#f7fbf8;cursor:pointer}
 /* Mensagens da RAI */
 .mchat-bubble-wrap{display:flex;flex-direction:column;gap:2px;max-width:calc(100% - 38px)}
 .mchat-sender{font-size:10.5px;font-weight:700;color:#1a5c38;letter-spacing:.3px}
-.rai-msg-avatar .rai-avatar-img{width:30px;height:30px}
+.rai-msg-avatar .rai-avatar-wrap{width:30px;height:30px}
 .rai-msg-avatar{width:30px;height:30px;min-width:30px;background:none}
 /* Minimizado: header escuro */
 .manual-chat-panel.chat-minimized .manual-chat-hd{background:linear-gradient(135deg,#0a2e18 0%,#0f3d22 100%)}

@@ -5711,7 +5711,7 @@
     chatRoot.className='manual-chat-panel';
 
     // Avatar SVG da RAI (silhueta robótica feminina estilizada)
-    var RAI_AVATAR='<img class="rai-avatar-img" src="img/imagem%202.png" alt="RAI" />';
+    var RAI_AVATAR='<div class="rai-avatar-wrap"><img class="rai-avatar-img" src="img/imagem%202.png" alt="RAI" /></div>';
 
     var chatHd=el('div',{class:'manual-chat-hd rai-chat-hd'});
     chatHd.innerHTML=
