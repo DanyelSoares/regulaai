@@ -129,7 +129,30 @@
       pareceresMatMed: pPar(guia.matmed,'de Mat/Med'),
       pareceresDiariasTaxas: pPar(guia.diariasTaxas,'de diária/taxa'),
       avisoLegal: 'Parecer gerado por IA como apoio à auditoria. Decisão final exclusiva da operadora.',
-      justificativaCalculo: 'aderencia = '+cumpridos.toFixed(1)+' / '+total.toFixed(1)+' × 100 = '+perc+'%'
+      justificativaCalculo: (function(){
+        var linhas=[];
+        linhas.push('Critérios avaliados nesta guia:');
+        linhas.push('');
+        if(guia.anexos) linhas.push('  Documental            '+pesos.documental+' / '+pesos.documental+' pts');
+        else             linhas.push('  Documental            0 / '+pesos.documental+' pts  (ausente)');
+        if(temDUT)       linhas.push('  DUT                   '+(guia.dut?pesos.dut:0)+' / '+pesos.dut+' pts'+(guia.dut?'':'  (não comprovada)'));
+        else             linhas.push('  DUT                   —  (não aplicável a esta guia)');
+        if(guia.procedimentos.length){ var pp=pesos.procedimento+itemExtra.procedimento; linhas.push('  Procedimentos         '+Math.round(pp*0.9)+' / '+pp+' pts  ('+guia.procedimentos.length+' item'+(guia.procedimentos.length>1?'s':'')+')'); }
+        else linhas.push('  Procedimentos         —  (sem vínculos)');
+        if(guia.pacotes.length){ var pk=pesos.pacote+itemExtra.pacote; linhas.push('  Pacotes               '+pk+' / '+pk+' pts'); }
+        else linhas.push('  Pacotes               —  (não aplicável a esta guia)');
+        if(guia.matmed.length){ var pm=pesos.matmed+itemExtra.matmed; linhas.push('  Mat/Med               '+Math.round(pm*0.8)+' / '+pm+' pts'); }
+        else linhas.push('  Mat/Med               —  (não aplicável a esta guia)');
+        if(guia.diariasTaxas.length){ var pd=pesos.diaria+itemExtra.diaria; linhas.push('  Diárias/Taxas         '+Math.round(pd*0.85)+' / '+pd+' pts'); }
+        else linhas.push('  Diárias/Taxas         —  (não aplicável a esta guia)');
+        linhas.push('  Contratual/Histórico  '+Math.round(pesos.contratual*0.95)+' / '+pesos.contratual+' pts');
+        linhas.push('');
+        linhas.push('  O teto ('+Math.round(total)+' pts) é a soma dos critérios');
+        linhas.push('  aplicáveis a esta guia — varia por guia.');
+        linhas.push('');
+        linhas.push('  '+Math.round(cumpridos)+' / '+Math.round(total)+' pts  →  Aderência: '+perc+'%');
+        return linhas.join('\n');
+      })()
     };
   }
 

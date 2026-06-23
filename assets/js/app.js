@@ -763,6 +763,7 @@
     else if(State.route==='param') v.appendChild(viewParam());
     else if(State.route==='logs') v.appendChild(viewLogs());
     else if(State.route==='config') v.appendChild(viewConfig());
+    else if(State.route==='manual') v.appendChild(viewManual());
     lcIcons();
     atualizarBreadcrumb && atualizarBreadcrumb();
   }
@@ -2544,7 +2545,7 @@
               return '<td style="padding:5px 8px"><select class="vinc-proc-sel" data-field="'+esc(s.key)+'" data-vkey="'+esc(vkey)+'" data-cod="'+esc(r.cod)+'" style="'+selStyle+'">'+optHtml+'</select></td>';
             }).join('');
             trv.innerHTML=staticCols+procSelCols+
-              '<td style="text-align:center"><input type="number" class="vinc-peso" min="0" max="100" data-vkey="'+vkey+'" data-cod="'+esc(r.cod)+'" value="'+peso+'" style="width:52px;text-align:center;border:1.5px solid var(--g-200);border-radius:6px;padding:3px 5px;font-size:12px"></td>'+
+              '<td style="text-align:center"><input type="number" class="vinc-peso" min="0" max="10" data-vkey="'+vkey+'" data-cod="'+esc(r.cod)+'" value="'+peso+'" style="width:52px;text-align:center;border:1.5px solid var(--g-200);border-radius:6px;padding:3px 5px;font-size:12px"></td>'+
               '<td style="text-align:center"><button class="vinc-status-btn '+(status==='ativo'?'active':'')+'" data-vkey="'+vkey+'" data-cod="'+esc(r.cod)+'" data-status="'+status+'" style="font-size:11px;padding:3px 10px;border-radius:12px;border:1.5px solid;cursor:pointer;font-weight:600;background:'+(status==='ativo'?'var(--g-700)':'#fff')+';color:'+(status==='ativo'?'#fff':'var(--muted)')+';border-color:'+(status==='ativo'?'var(--g-700)':'var(--g-200)')+'">'+esc(status==='ativo'?'Ativo':'Inativo')+'</button></td>'+
               '<td style="text-align:center">'+_vincInstrBtn(vkey,r.cod,!!instr)+'</td>';
             tbv.appendChild(trv);
@@ -2612,7 +2613,7 @@
             $$('.vinc-peso',box).forEach(function(inp){
               var k=inp.getAttribute('data-vkey')+'|'+inp.getAttribute('data-cod');
               if(!State.vincConfig[k]) State.vincConfig[k]={};
-              State.vincConfig[k].peso=+inp.value;
+              State.vincConfig[k].peso=Math.min(10,Math.max(0,+inp.value||0));
             });
             $$('.vinc-proc-sel',box).forEach(function(sel){
               var k=sel.getAttribute('data-vkey')+'|'+sel.getAttribute('data-cod');
@@ -2647,12 +2648,14 @@
                   'th{background:#0a8a43;color:#fff;padding:8px 12px;border:1px solid #066b34;font-weight:700;text-align:left}'+
                   'td{padding:7px 12px;border:1px solid #c8e6d4;vertical-align:top}'+
                   'tr:nth-child(even) td{background:#f2faf6}';
-                var header='<tr><th>Código</th><th>Descrição</th>'+(hasOpme?'<th>OPME</th>':'')+'<th>Instrução IA</th></tr>';
+                var header='<tr><th>Código</th><th>Descrição</th>'+(hasOpme?'<th>OPME</th>':'')+'<th>Peso (0-10)</th><th>Instrução IA</th></tr>';
                 var rowsHtml=header;
                 d.forEach(function(r){
                   var cod=String(r.cod);
-                  var instr=(State.vincConfig[vk+'|'+cod]&&State.vincConfig[vk+'|'+cod].instr)||'';
-                  rowsHtml+='<tr><td>'+esc(cod)+'</td><td>'+esc(r.desc||'')+'</td>'+(hasOpme?'<td>'+esc(r.opme?'Sim':'Não')+'</td>':'')+'<td>'+esc(instr)+'</td></tr>';
+                  var cfg=State.vincConfig[vk+'|'+cod]||{};
+                  var instr=cfg.instr||'';
+                  var peso=cfg.peso!=null?cfg.peso:r.peso!=null?r.peso:'';
+                  rowsHtml+='<tr><td>'+esc(cod)+'</td><td>'+esc(r.desc||'')+'</td>'+(hasOpme?'<td>'+esc(r.opme?'Sim':'Não')+'</td>':'')+'<td>'+esc(String(peso))+'</td><td>'+esc(instr)+'</td></tr>';
                 });
                 var html2='<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">'+
                   '<head><meta charset="UTF-8"><style>'+css2+'</style></head>'+
@@ -2702,15 +2705,17 @@
                     });
                   }
                   if(!rows.length){ toast('Arquivo vazio ou inválido','danger'); return; }
-                  // Detect header and instrução IA column index
+                  // Detect header and column indexes
                   var startRow=0;
-                  var instrCol=hasOpme?3:2;
+                  var instrCol=hasOpme?4:3;
+                  var pesoCol=hasOpme?3:2;
                   var firstCell=(rows[0][0]||'').toLowerCase().replace(/[^a-záéíóúãõç]/g,'');
                   if(firstCell==='codigo'||firstCell==='código'||firstCell==='cod'){
                     startRow=1;
                     for(var ci=0;ci<rows[0].length;ci++){
                       var h=(rows[0][ci]||'').toLowerCase();
-                      if(h.indexOf('instr')>=0||h.indexOf('ia')>=0){ instrCol=ci; break; }
+                      if(h.indexOf('peso')>=0){ pesoCol=ci; }
+                      if(h.indexOf('instr')>=0||h.indexOf('ia')>=0){ instrCol=ci; }
                     }
                   }
                   // Build lookup map from existing data
@@ -2719,11 +2724,15 @@
                   var parsed=rows.slice(startRow).filter(function(r){return r[0]&&r[0].length>0;}).map(function(r){
                     var cod=(r[0]||'').trim();
                     var instr=(r[instrCol]||'').trim();
+                    var pesoRaw=(r[pesoCol]||'').trim();
+                    var peso=pesoRaw!==''?Math.min(10,Math.max(0,parseFloat(pesoRaw.replace(',','.'))||0)):null;
                     var realCod=codMap[cod.toLowerCase()];
-                    return {cod:cod,realCod:realCod,instr:instr,found:!!realCod};
+                    return {cod:cod,realCod:realCod,instr:instr,peso:peso,found:!!realCod};
                   });
                   if(!parsed.length){ toast('Nenhum item encontrado no arquivo','danger'); return; }
                   var withInstr=parsed.filter(function(r){return r.found&&r.instr;});
+                  var withPeso=parsed.filter(function(r){return r.found&&r.peso!=null;});
+                  var toImport=parsed.filter(function(r){return r.found&&(r.instr||r.peso!=null);});
                   var notFound=parsed.filter(function(r){return !r.found;}).length;
                   // Preview modal
                   var prevRows=parsed.slice(0,8);
@@ -2731,36 +2740,43 @@
                     '<thead><tr style="background:var(--g-700);color:#fff">'+
                     '<th style="padding:6px 10px;text-align:left">Código</th>'+
                     '<th style="padding:6px 10px;text-align:left">Situação</th>'+
+                    '<th style="padding:6px 10px;text-align:center">Peso</th>'+
                     '<th style="padding:6px 10px;text-align:left">Instrução IA</th>'+
                     '</tr></thead><tbody>'+
                     prevRows.map(function(r,i){
                       return '<tr style="background:'+(r.found?i%2===0?'#f6fdf8':'#fff':'#fff7ed')+'">'+
                         '<td style="padding:5px 10px;border:1px solid var(--g-100);font-weight:600;color:'+(r.found?'inherit':'#ea580c')+'">'+esc(r.cod)+'</td>'+
                         '<td style="padding:5px 10px;border:1px solid var(--g-100)">'+(r.found?'<span style="color:var(--g-600)">'+ico('check',11)+' Encontrado</span>':'<span style="color:#ea580c">'+ico('x',11)+' Não encontrado</span>')+'</td>'+
+                        '<td style="padding:5px 10px;border:1px solid var(--g-100);text-align:center;font-weight:600;color:var(--g-700)">'+(r.peso!=null?r.peso:'—')+'</td>'+
                         '<td style="padding:5px 10px;border:1px solid var(--g-100);color:var(--muted)">'+esc(r.instr?(r.instr.length>50?r.instr.slice(0,50)+'…':r.instr):'—')+'</td>'+
                         '</tr>';
                     }).join('')+
                     '</tbody></table>'+(parsed.length>8?'<div style="font-size:11px;color:var(--muted);margin-top:6px;text-align:right">+ '+(parsed.length-8)+' linhas não exibidas</div>':'');
                   var resumo='<div style="display:flex;gap:16px;margin-bottom:12px;font-size:12.5px;flex-wrap:wrap">'+
                     '<span>'+ico('file-text',13)+' <b>'+parsed.length+'</b> linhas lidas</span>'+
-                    '<span style="color:var(--g-600)">'+ico('check-circle',13)+' <b>'+withInstr.length+'</b> com instrução a importar</span>'+
+                    '<span style="color:var(--g-600)">'+ico('check-circle',13)+' <b>'+withInstr.length+'</b> com instrução</span>'+
+                    '<span style="color:var(--g-600)">'+ico('hash',13)+' <b>'+withPeso.length+'</b> com peso</span>'+
                     (notFound?'<span style="color:#ea580c">'+ico('alert-circle',13)+' <b>'+notFound+'</b> código(s) não encontrado(s) — ignorados</span>':'')+'</div>'+
-                    (!withInstr.length?'<div style="background:#fff7ed;border:1.5px solid #fcd34d;border-radius:8px;padding:10px 14px;font-size:12.5px;color:#92400e;margin-bottom:10px;display:flex;align-items:center;gap:8px">'+
-                      ico('alert-triangle',14)+' <span>Nenhuma instrução válida encontrada. Verifique se a coluna "Instrução IA" está preenchida e os códigos correspondem.</span></div>':'');
+                    (!toImport.length?'<div style="background:#fff7ed;border:1.5px solid #fcd34d;border-radius:8px;padding:10px 14px;font-size:12.5px;color:#92400e;margin-bottom:10px;display:flex;align-items:center;gap:8px">'+
+                      ico('alert-triangle',14)+' <span>Nenhum dado válido encontrado. Verifique se as colunas "Peso" e/ou "Instrução IA" estão preenchidas e os códigos correspondem.</span></div>':'');
                   var footHtml='<button class="btn ghost" id="vincImpCancel">'+ico('x',13)+' Fechar</button>'+
-                    (withInstr.length?'<button class="btn" id="vincImpConfirm">'+ico('upload',13)+' Importar '+withInstr.length+' instrução(ões)</button>':'');
+                    (toImport.length?'<button class="btn" id="vincImpConfirm">'+ico('upload',13)+' Importar '+toImport.length+' item(ns)</button>':'');
                   var m=modal(ico('upload')+' Importar Instruções IA','Prévia: '+esc(file.name),resumo+tHtml,footHtml);
                   m.querySelector('#vincImpCancel').onclick=function(){ m.closest('.modal-backdrop').remove(); };
                   var confirmBtn=m.querySelector('#vincImpConfirm');
                   if(confirmBtn) confirmBtn.onclick=function(){
-                    withInstr.forEach(function(r){
+                    toImport.forEach(function(r){
                       var k=vk+'|'+r.realCod;
                       if(!State.vincConfig[k]) State.vincConfig[k]={};
-                      State.vincConfig[k].instr=r.instr;
+                      if(r.instr) State.vincConfig[k].instr=r.instr;
+                      if(r.peso!=null) State.vincConfig[k].peso=r.peso;
                     });
                     localStorage.setItem('regula_vinc_cfg',JSON.stringify(State.vincConfig));
                     m.closest('.modal-backdrop').remove();
-                    toast(withInstr.length+' instrução(ões) importada(s) com sucesso','ok');
+                    var msg=(withInstr.length?withInstr.length+' instrução(ões)':'')+
+                      (withInstr.length&&withPeso.length?' e ':'')+
+                      (withPeso.length?withPeso.length+' peso(s)':'')+' importado(s)';
+                    toast(msg,'ok');
                     showVinc(vk);
                   };
                   lcIcons();
@@ -3378,6 +3394,7 @@
     wrap.appendChild(tabBar);
 
     var box=el('div',{class:'table-wrap',style:'border-radius:0 0 10px 10px'});
+    function logGuia(l){ var m=(l.ref||'').match(/^\d{6,}/); return m?m[0]:'—'; }
 
     // ── ABA: Logs de Usuário ─────────────────────────────────────────────────
     if(tab==='usuarios'){
@@ -3422,7 +3439,6 @@
         if(lf.q && (l.user+' '+l.acao+' '+l.ref).toLowerCase().indexOf(lf.q)<0) return false;
         return true;
       });
-      function logGuia(l){ var m=(l.ref||'').match(/^\d{6,}/); return m?m[0]:'—'; }
       var sfn={ts:function(l){return l.ts;},user:function(l){return l.user;},perf:function(l){return l.perfil;},acao:function(l){return l.acao;},guia:function(l){return logGuia(l);}};
       if(sfn[lf.sortCol]){var _sf=sfn[lf.sortCol],_sd=lf.sortDir==='asc'?1:-1;rows=rows.slice().sort(function(a,b){var av=_sf(a),bv=_sf(b);return av<bv?-_sd:av>bv?_sd:0;});}
       var totalRows=rows.length;
@@ -3629,18 +3645,18 @@
     });
     // Legenda dos níveis
     var legRow=el('tr',{style:'border-top:1.5px solid var(--g-100)'});
-    legRow.innerHTML='<td colspan="4" style="padding:12px 0 2px">'+
-      '<div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap">'+
+    legRow.innerHTML='<td colspan="4" style="padding:12px 16px 14px">'+
+      '<div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap;padding-right:56px">'+
         '<span style="font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px">Legenda:</span>'+
         '<span style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--ink-2)">'+ico('check-circle',13)+' <span style="color:var(--g-600);font-weight:600">Acesso total</span></span>'+
         '<span style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--ink-2)">'+ico('eye',13)+' <span style="color:#64748b;font-weight:600">Somente leitura</span></span>'+
         '<span style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--ink-2)">'+ico('minus',13)+' <span style="color:var(--muted)">Sem acesso</span></span>'+
-        (editable?'<span style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--g-700);font-weight:600;margin-left:auto">'+ico('mouse-pointer-click',13)+' Clique numa célula para alterar</span>':'')+
+        (editable?'<span style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--g-700);font-weight:600">'+ico('mouse-pointer-click',13)+' Clique numa célula para alterar</span>':'')+
       '</div>'+
     '</td>';
     tb.appendChild(legRow);
     t.appendChild(tb);
-    var _pmWrap=el('div',{class:'table-wrap'});
+    var _pmWrap=el('div',{class:'table-wrap',style:'padding-bottom:4px'});
     _pmWrap.appendChild(t);
     if(editable){
       $$('.perm-cell-editable',_pmWrap).forEach(function(td){
@@ -4073,16 +4089,45 @@
     setTab(tab||'resumo');
 
     m.querySelector('#reIA').onclick=function(){
+      // coleta feedback persistido (itens desmarcados)
+      var fbKey='regula_ia_fb_'+(g?g.numero:'x');
+      var confirmacoes={};
+      try{ confirmacoes=JSON.parse(localStorage.getItem(fbKey)||'{}'); }catch(e){}
+      // coleta observação do auditor
+      var obsKey='regula_ia_obs_'+(g?g.numero:'x');
+      var obsAuditor='';
+      try{ obsAuditor=localStorage.getItem(obsKey)||''; }catch(e){}
+      // coleta parecer da operadora salvo (obs impressas e internas)
+      var parecerOp=g.parecerOperadora||null;
+
       var _pl=document.getElementById('pageLoader');
       if(_pl) _pl.classList.add('pl--transp');
       document.body.classList.add('pl--blurring');
       showPageLoader();
       setTimeout(function(){
-        g._cache=AI.analisarGuiaComIA(g,{pesos:getFluxoPesos(g.fluxo&&g.fluxo.id)}); ia=g._cache; setTab('ia');
+        g._cache=AI.analisarGuiaComIA(g,{
+          pesos: getFluxoPesos(g.fluxo&&g.fluxo.id),
+          feedbackAuditor: confirmacoes,
+          observacaoAuditor: obsAuditor,
+          parecerOperadora: parecerOp
+        });
+        ia=g._cache;
+        setTab('ia');
         hidePageLoader();
         document.body.classList.remove('pl--blurring');
         setTimeout(function(){ if(_pl) _pl.classList.remove('pl--transp'); },600);
-        toast('Análise reprocessada','ok');
+        // log do reprocessamento com contexto
+        var ts2=new Date().toISOString().slice(0,16).replace('T',' ');
+        var uName=perfilDef[State.perfil]?perfilDef[State.perfil].nome:State.perfil;
+        var ctx=[];
+        if(obsAuditor) ctx.push('com observação do auditor');
+        if(parecerOp) ctx.push('com parecer da operadora');
+        var itensCont=Object.values(confirmacoes).reduce(function(s,arr){return s+(arr.filter?arr.filter(function(v){return v===false;}).length:0);},0);
+        if(itensCont) ctx.push(itensCont+' item(ns) contestado(s)');
+        MOCK.LOGS.unshift({ts:ts2,user:uName,perfil:State.perfil,tipo:'ia',
+          acao:'Análise IA reprocessada'+(ctx.length?' ('+ctx.join(', ')+')':''),
+          ref:'Guia '+(g?g.numero:'')});
+        toast('Análise reprocessada com suas correções','ok');
       },80);
     };
     var pb=m.querySelector('#abrirPar'); if(pb) pb.onclick=function(){ openParecer(g) };
@@ -4470,8 +4515,40 @@
     foot.innerHTML='<div class="hd"><div class="tt">Próxima ação sugerida</div><span class="badge dark">'+esc(ia.proximaAcao)+'</span></div>'+
       '<div class="ai-section"><h5>Regras aplicadas</h5><div>'+ia.regrasAplicadas.map(function(r){return '<span class="badge" style="margin:2px">'+esc(r)+'</span>'}).join('')+'</div></div>'+
       (ia.regrasNaoAvaliadas.length?'<div class="ai-section"><h5>Regras não avaliadas (sem parametrização)</h5><ul class="ai-list">'+ia.regrasNaoAvaliadas.map(function(r){return '<li>'+esc(r)+'</li>'}).join('')+'</ul></div>':'')+
-      '<div class="ai-section"><h5>Justificativa do cálculo</h5><code style="font-size:12px">'+esc(ia.justificativaCalculo)+'</code></div>';
+      '<div class="ai-section"><h5>Justificativa do cálculo</h5><code style="font-size:12px;white-space:pre;display:block;line-height:1.7">'+esc(ia.justificativaCalculo)+'</code></div>';
     d.appendChild(foot);
+
+    // ── campo de observação ao auditor ────────────────────
+    var obsKey='regula_ia_obs_'+(g?g.numero:'x');
+    var obsVal='';
+    try{ obsVal=localStorage.getItem(obsKey)||''; }catch(e){}
+    var obsBox=el('div',{class:'ia-obs-box'});
+    obsBox.innerHTML=
+      '<div class="ia-obs-hd">'+ico('message-square-text',13)+
+        ' <span>Observações para a IA</span>'+
+        '<span class="ia-obs-hint">Descreva inconsistências, contexto clínico ou orientações — serão consideradas no próximo Reprocessar.</span>'+
+      '</div>'+
+      '<textarea id="iaObsInput" class="ia-obs-ta" placeholder="Ex.: Paciente com histórico de comorbidades não listadas, procedimento justificado por laudo em anexo...">'+esc(obsVal)+'</textarea>'+
+      '<div class="ia-obs-foot">'+
+        '<button class="btn sm ghost" id="iaObsSave">'+ico('save',12)+' Salvar observação</button>'+
+        '<span class="ia-obs-saved" id="iaObsSaved" style="display:none">'+ico('check',12)+' Salvo</span>'+
+      '</div>';
+    d.appendChild(obsBox);
+
+    setTimeout(function(){
+      var ta=document.getElementById('iaObsInput');
+      var btn=document.getElementById('iaObsSave');
+      var saved=document.getElementById('iaObsSaved');
+      if(btn&&ta) btn.onclick=function(){
+        try{ localStorage.setItem(obsKey,ta.value); }catch(e){}
+        if(saved){ saved.style.display='inline-flex'; setTimeout(function(){ saved.style.display='none'; },2000); }
+        var ts2=new Date().toISOString().slice(0,16).replace('T',' ');
+        var uName=perfilDef[State.perfil]?perfilDef[State.perfil].nome:State.perfil;
+        MOCK.LOGS.unshift({ts:ts2,user:uName,perfil:State.perfil,tipo:'correcao_ia',
+          acao:'Observação ao Parecer IA registrada',ref:'Guia '+(g?g.numero:'')});
+      };
+    },0);
+
     return d;
   }
 
@@ -4524,17 +4601,32 @@
     m.querySelector('#pCancel').onclick=function(){ m.parentNode.remove(); };
     m.querySelector('#pSalvar').onclick=function(){
       var dec=m.querySelector('#pDec').value;
-      var par={decisao:dec, motivo:m.querySelector('#pMot').value, justificativa:m.querySelector('#pJust').value, obsImp:m.querySelector('#pImp').value, obsInt:m.querySelector('#pInt').value, user:perfilDef[State.perfil].nome, ts:new Date().toISOString().slice(0,16).replace('T',' ')};
+      var obsImp=m.querySelector('#pImp').value;
+      var obsInt=m.querySelector('#pInt').value;
+      var par={decisao:dec, motivo:m.querySelector('#pMot').value, justificativa:m.querySelector('#pJust').value, obsImp:obsImp, obsInt:obsInt, user:perfilDef[State.perfil].nome, ts:new Date().toISOString().slice(0,16).replace('T',' ')};
       g.parecerOperadora=par;
       // Atualiza status
       if(dec==='Aprovação'||dec==='Aprovação com ressalva') g.status='Liberada';
       else if(dec==='Reprovação') g.status='Negada';
       else if(dec==='Solicitar complemento') g.status='Aguardando complemento';
       else if(dec==='Encaminhar para junta médica') g.status='Em junta médica';
-      // Persiste
+      // Persiste parecer
       var sv=JSON.parse(localStorage.getItem('regula_pareceres')||'{}');
       sv[g.numero]=par; localStorage.setItem('regula_pareceres',JSON.stringify(sv));
+      // Persiste feedback da IA — obs impressas e internas alimentam o aprendizado
+      if(obsImp||obsInt){
+        var obsKey='regula_ia_obs_'+g.numero;
+        var obsAnterior='';
+        try{ obsAnterior=localStorage.getItem(obsKey)||''; }catch(e){}
+        var novaObs=obsAnterior;
+        if(obsImp) novaObs+=(novaObs?'\n':'')+'[Parecer — obs. prestador]: '+obsImp;
+        if(obsInt) novaObs+=(novaObs?'\n':'')+'[Parecer — obs. internas]: '+obsInt;
+        try{ localStorage.setItem(obsKey,novaObs); }catch(e){}
+      }
+      // Invalida cache para forçar reanálise com contexto atualizado no próximo Reprocessar
+      g._cache=null;
       MOCK.LOGS.unshift({ts:par.ts,user:par.user,perfil:State.perfil,acao:'Parecer da Operadora emitido',ref:g.numero+' → '+dec});
+      if(obsImp||obsInt) MOCK.LOGS.unshift({ts:par.ts,user:par.user,perfil:State.perfil,tipo:'ia',acao:'Feedback ao modelo IA registrado via Parecer da Operadora',ref:'Guia '+g.numero});
       toast('Parecer salvo · '+g.status,'ok');
       m.parentNode.remove(); render();
     };
@@ -4558,7 +4650,7 @@
   setInterval(atualizarRelogio,1000);
 
   /* === Breadcrumb === */
-  var ROUTE_LABELS={dashboard:'Dashboard',guias:'Guias',kanban:'Kanban',param:'Parametrização',logs:'Logs',config:'Configurações'};
+  var ROUTE_LABELS={dashboard:'Dashboard',guias:'Guias',kanban:'Kanban',param:'Parametrização',logs:'Logs',config:'Configurações',manual:'Manual do Usuário'};
   function atualizarBreadcrumb(){
     var el=$('#topbarRoute'); if(!el) return;
     el.textContent=ROUTE_LABELS[State.route]||State.route;
@@ -4637,7 +4729,910 @@
     for(var i=0;i<ds.length;i++) ds[i].style.display='none';
   });
 
+  /* === Manual do Usuário === */
+  function viewManual(){
+    if(!State.manualSec) State.manualSec='intro';
+    var wrap=el('div',{class:'manual-wrap'});
+
+    var SECS=[
+      {id:'intro',      ico:'book-open',      label:'Introdução'},
+      {id:'login',      ico:'lock',           label:'Login'},
+      {id:'dashboard',  ico:'gauge',          label:'Dashboard'},
+      {id:'guias',      ico:'file-check-2',   label:'Guias'},
+      {id:'kanban',     ico:'kanban',         label:'Kanban'},
+      {id:'param',      ico:'sliders',        label:'Parametrização'},
+      {id:'logs',       ico:'history',        label:'Logs'},
+      {id:'config',     ico:'wrench',         label:'Configurações'},
+      {id:'perfis',     ico:'users',          label:'Perfis de Acesso'},
+    ];
+
+    // Sidebar de navegação
+    var nav=el('nav',{class:'manual-nav'});
+    nav.innerHTML='<div class="manual-nav-title">Conteúdo</div>';
+    SECS.forEach(function(s){
+      var a=el('a',{class:'manual-nav-item'+(State.manualSec===s.id?' active':'')});
+      a.innerHTML=ico(s.ico,13)+' '+s.label;
+      a.onclick=function(){ State.manualSec=s.id; render(); var b=document.querySelector('.manual-body'); if(b) b.scrollTop=0; };
+      nav.appendChild(a);
+    });
+    var btnPrint=el('button',{class:'manual-print-btn'});
+    btnPrint.innerHTML=ico('printer',13)+' Imprimir / Exportar PDF';
+    btnPrint.onclick=function(){ window.print(); };
+    nav.appendChild(btnPrint);
+    wrap.appendChild(nav);
+
+    // Conteúdo principal
+    var body=el('div',{class:'manual-body'});
+    var sec=State.manualSec;
+
+    if(sec==='intro'){
+      body.innerHTML=
+        manualHdr('Introdução ao RegulaAI Saúde','Visão geral da plataforma, perfis de acesso e navegação')+
+        manualBox('O que é o RegulaAI Saúde?',
+          '<p>O <b>RegulaAI Saúde</b> é uma plataforma de auditoria assistencial com apoio de Inteligência Artificial, desenvolvida para operadoras de saúde. Permite o gerenciamento completo do ciclo de auditoria de guias médicas — desde a triagem até o parecer final da operadora.</p>'+
+          '<p>A plataforma integra fluxos assistenciais, regras DUT (Diretrizes de Utilização), análise técnica por IA, matriz de permissões por perfil e rastreabilidade completa de todas as ações.</p>')+
+        manualGrid([
+          {ico:'gauge',      title:'Dashboard',       desc:'Indicadores consolidados, KPIs e visão executiva do processo de auditoria.'},
+          {ico:'file-check-2',title:'Guias',          desc:'Relação completa de guias com filtros avançados, abertura de detalhes e emissão de parecer.'},
+          {ico:'kanban',     title:'Kanban',          desc:'Visualização por status em colunas, com filtros por UTI, regime e tipo.'},
+          {ico:'sliders',    title:'Parametrização',  desc:'Configuração de fluxos, regras DUT, procedimentos, pacotes, Mat/Med e diárias.'},
+          {ico:'history',    title:'Logs',            desc:'Rastreabilidade completa de ações de usuários e eventos do sistema e IA.'},
+          {ico:'wrench',     title:'Configurações',   desc:'Classificação de risco, prazos por fluxo e matriz de permissões por perfil.'},
+        ])+
+        manualBox('Navegação',
+          '<p>Use o <b>menu lateral esquerdo</b> para alternar entre as seções. O menu pode ser <b>recolhido</b> clicando no botão de seta no canto inferior do sidebar, exibindo apenas os ícones para economizar espaço.</p>'+
+          '<p>No topo da tela, o <b>relógio</b> exibe data e hora em tempo real e o <b>chip de usuário</b> indica o perfil ativo. O botão <b>Sair</b> no rodapé do sidebar encerra a sessão.</p>');
+    }
+
+    else if(sec==='login'){
+      body.innerHTML=
+        manualHdr('Login e Sessão','Acesso à plataforma e gerenciamento de sessão')+
+        manualBox('Acessar a plataforma',
+          '<p>Ao abrir o RegulaAI, a tela de login é exibida automaticamente caso não haja sessão ativa. Preencha os campos <b>Login</b> e <b>Senha</b> e clique em <b>Entrar</b> ou pressione <kbd>Enter</kbd>.</p>'+
+          manualScreen('login')+
+          '<ul>'+
+          '<li>A sessão é mantida mesmo após fechar o navegador.</li>'+
+          '<li>Em caso de credenciais incorretas, uma mensagem de erro é exibida e o campo senha é limpo.</li>'+
+          '</ul>')+
+        manualBox('Encerrar sessão',
+          '<p>Clique em <b>Sair</b> no rodapé do menu lateral esquerdo. Uma confirmação é solicitada antes de encerrar a sessão.</p>'+
+          '<p>Ao sair, o token de sessão é removido e a tela de login é exibida novamente.</p>');
+    }
+
+    else if(sec==='dashboard'){
+      body.innerHTML=
+        manualHdr('Dashboard Executivo','Visão consolidada de auditoria assistencial e indicadores operacionais')+
+        manualBox('Visão Geral',
+          '<p>O Dashboard apresenta os principais indicadores do processo de auditoria em tempo real, com base nas guias visíveis para o perfil ativo.</p>'+
+          manualScreen('dashboard'))+
+        manualBox('Filtro de Período',
+          '<p>No canto superior direito do título há um <b>seletor de período</b>. Por padrão, exibe os últimos <b>30 dias</b> a partir da data atual. O período pode ser alterado livremente — todas as métricas são recalculadas automaticamente.</p>')+
+        manualBox('KPIs disponíveis',
+          manualTable(['Indicador','Descrição'],[
+            ['Total de guias','Quantidade total de guias no período filtrado'],
+            ['Em análise','Guias com status "Em análise"'],
+            ['Em junta médica','Guias encaminhadas para junta médica'],
+            ['Aguardando complemento','Guias aguardando documentação adicional'],
+            ['Analisadas','Guias com análise concluída'],
+            ['Liberadas','Guias com parecer de aprovação'],
+            ['Negadas','Guias com parecer de reprovação'],
+            ['Com OPME','Guias que contêm itens OPME'],
+            ['Cotação de OPME','Guias em processo de cotação'],
+            ['Baixa aderência','Guias com aderência à DUT abaixo do limiar'],
+            ['Tempo médio','Média de dias em auditoria no período'],
+            ['Etapa com gargalo','Etapa com maior concentração de guias paradas'],
+          ]))+
+        manualBox('Ações nos KPIs',
+          '<p>Clicar em qualquer card de KPI abre um modal com a <b>lista detalhada</b> das guias que compõem aquele indicador. A partir do modal é possível clicar em qualquer guia para abrir seus detalhes completos.</p>')+
+        manualBox('Gráficos e Distribuições',
+          '<p>Abaixo dos KPIs, o dashboard exibe:</p><ul>'+
+          '<li><b>Distribuição por status</b> — barras horizontais com % por status</li>'+
+          '<li><b>Fluxos mais utilizados</b> — ranking de fluxos por volume de guias</li>'+
+          '<li><b>Duração dos subfluxos</b> — tempo médio por etapa de auditoria</li>'+
+          '</ul><p><i>Dica: clique em uma barra de status ou fluxo para abrir a relação filtrada de guias.</i></p>');
+    }
+
+    else if(sec==='guias'){
+      if(!State.manualGuiasTab) State.manualGuiasTab='lista';
+      var GUIAS_TABS=[
+        {id:'lista',   label:'Relação de Guias'},
+        {id:'detalhe', label:'Detalhes da Guia'},
+      ];
+      var tabBar='<div class="manual-subtab-bar">';
+      GUIAS_TABS.forEach(function(t){
+        tabBar+='<button class="manual-subtab'+(State.manualGuiasTab===t.id?' active':'')+'" data-gtab="'+t.id+'">'+t.label+'</button>';
+      });
+      tabBar+='</div>';
+
+      var gtab=State.manualGuiasTab;
+      var guiasContent='';
+
+      if(gtab==='lista'){
+        guiasContent=
+          manualBox('Visão Geral',
+            '<p>A tela de Guias apresenta todas as guias acessíveis ao perfil ativo, com filtros em duas camadas: <b>Relação de guia</b> (filtros rápidos) e <b>Filtro aprofundado</b> (15 flags + 20 campos).</p>')+
+          manualBox('Aba: Relação de guia — Filtros Rápidos',
+            manualTable(['Filtro','Opções'],[
+              ['Status','Em análise, Em junta médica, Aguardando complemento, Analisada, Liberada, Negada, Cotação de OPME'],
+              ['Fluxo','Todos os fluxos cadastrados (F1–F9)'],
+              ['Origem','Ambulatorial, Internação, Urgência etc.'],
+              ['Risco','Baixo, Médio, Alto, Crítico'],
+              ['Especialidade','Todas as especialidades médicas'],
+              ['OPME','Sim / Não'],
+              ['UTI','Sim / Não'],
+              ['Regime','Ambulatorial / Internação'],
+              ['Período de emissão','Seletor de data (De / Até)'],
+            ]))+
+          manualBox('Aba: Relação de guia — Tabela',
+            '<p>As colunas da tabela são ordenáveis clicando no cabeçalho (▲ Asc / ▼ Desc / ⇅ Padrão). Colunas disponíveis: <b>Nº Guia, Beneficiário, Prestador, Tipo</b> e <b>Status</b>.</p>'+
+            '<p><b>Atalhos de duplo-clique</b> em badges e células aplicam filtros rapidamente:</p>'+
+            '<ul><li>Duplo-clique em badge <b>Congênere</b> → filtra por congênere</li>'+
+            '<li>Duplo-clique em badge <b>Origem</b> → filtra por origem</li>'+
+            '<li>Duplo-clique em badge de <b>Status</b> → filtra por status</li>'+
+            '<li>Duplo-clique em badge de <b>Especialidade</b> → filtra por especialidade</li></ul>'+
+            '<p>Os <b>chips</b> no topo da tabela exibem os filtros ativos. Clique no × de cada chip para removê-lo individualmente.</p>')+
+          manualBox('Aba: Filtro aprofundado',
+            '<p>Oferece 15 checkboxes de flags e 20 dropdowns para segmentação avançada. Após configurar os filtros, clique em <b>Pesquisar</b>. O botão <b>Limpar filtros</b> reseta todos os campos.</p>'+
+            '<p>Exemplos de flags: OPME, UTI, Demanda judicial, Auditoria na origem, Inconsistência, DUT obrigatória, Documentação anexada.</p>')+
+          manualBox('Exportar',
+            '<p>O botão <b>Exportar</b> (topo direito) gera uma planilha Excel com duas abas: <b>Guias</b> (dados completos das guias filtradas) e <b>Indicadores</b> (métricas do conjunto).</p>');
+      }
+
+      else if(gtab==='detalhe'){
+        if(!State.manualDetalheTab) State.manualDetalheTab='cabecalho';
+        var DET_TABS=[
+          {id:'cabecalho',    label:'Cabeçalho'},
+          {id:'resumo',       label:'Resumo'},
+          {id:'beneficiario', label:'Beneficiário'},
+          {id:'prestador',    label:'Prestador'},
+          {id:'solicitacao',  label:'Solicitação'},
+          {id:'etapas',       label:'Etapas'},
+          {id:'procedimentos',label:'Procedimentos'},
+          {id:'pacotes',      label:'Pacotes'},
+          {id:'matmed',       label:'Mat/Med'},
+          {id:'diarias',      label:'Diárias/Taxas'},
+          {id:'opme',         label:'OPME'},
+          {id:'anexos',       label:'Anexos'},
+          {id:'criticas',     label:'Críticas'},
+          {id:'parecer_tec',  label:'Parecer Técnico'},
+          {id:'parecer_op',   label:'Parecer Operadora'},
+          {id:'historico',    label:'Histórico'},
+          {id:'logs_guia',    label:'Logs'},
+        ];
+        var dtab=State.manualDetalheTab;
+        var detTabBar='<div class="manual-det-tabbar">';
+        DET_TABS.forEach(function(t){
+          detTabBar+='<button class="manual-det-tab'+(dtab===t.id?' active':'')+'" data-dtab="'+t.id+'">'+t.label+'</button>';
+        });
+        detTabBar+='</div>';
+
+        var CONTEUDO_DET={
+          cabecalho:
+            '<p>O topo do modal exibe o <b>número da guia</b>, o <b>badge de status</b>, o nome do beneficiário, o tipo de atendimento e o fluxo vinculado. O botão <b>×</b> no canto superior direito fecha o modal.</p>'+
+            '<p>No rodapé ficam os botões de ação disponíveis conforme o perfil ativo:</p>'+
+            manualTable(['Botão','Descrição'],[
+              ['Reprocessar','Reexecuta a análise da IA para esta guia com os parâmetros atuais'],
+              ['Parecer da Operadora','Abre o formulário de decisão oficial da operadora'],
+            ]),
+          resumo:
+            '<p>Visão consolidada dos principais indicadores da guia:</p>'+
+            manualTable(['Campo','Descrição'],[
+              ['STATUS','Badge com o status atual da guia (Ex.: Em análise, Liberada, Negada)'],
+              ['DIAS EM AUDITORIA','Número de dias desde a emissão até hoje'],
+              ['ADERÊNCIA À DUT','Percentual de aderência às Diretrizes de Utilização — verde (alta), amarelo (moderada), laranja (baixa), vermelho (crítica)'],
+              ['FLUXO','Nome do fluxo assistencial vinculado (Ex.: Auditoria Urgência/Emergência)'],
+              ['NÚMERO','Número identificador da guia'],
+              ['BENEFICIÁRIO','Nome completo e idade do paciente'],
+              ['PLANO / CONTRATO','Nome do plano e código do contrato'],
+              ['PRESTADOR SOLICITANTE','Prestador que abriu a solicitação'],
+              ['PRESTADOR EXECUTANTE','Prestador que realizará o procedimento'],
+              ['NATUREZA / REGIME','Natureza (Internação, Ambulatorial) e regime (Urgência, Eletivo)'],
+              ['TIPO','Tipo da guia'],
+              ['DATA EMISSÃO','Data de emissão da guia'],
+            ])+
+            '<p style="margin-top:12px"><b>Grid de Risco (4 dimensões):</b></p>'+
+            manualTable(['Dimensão','Descrição'],[
+              ['Regulatório','Urgência, UTI, OPME, prazo vencido etc.'],
+              ['Assistencial','Complexidade do procedimento, oncologia'],
+              ['Documental','Aderência à DUT e documentação apresentada'],
+              ['Contratual','Cobertura contratual do plano para o procedimento'],
+            ]),
+          beneficiario:
+            '<p>Dados completos do paciente titular da guia:</p>'+
+            manualTable(['Campo','Descrição'],[
+              ['Nome','Nome completo do beneficiário'],
+              ['CPF','CPF parcialmente mascarado (privacidade de dados)'],
+              ['Cartão','Número do cartão do plano mascarado'],
+              ['Idade','Calculada automaticamente pela data de nascimento'],
+              ['Plano','Nome comercial do plano de saúde'],
+              ['Contrato','Código do contrato empresarial ou individual'],
+            ]),
+          prestador:
+            '<p>Dois painéis lado a lado com os prestadores envolvidos na guia:</p>'+
+            manualTable(['Painel','Descrição'],[
+              ['Prestador Solicitante','Nome e tipo do prestador que abriu a solicitação de autorização'],
+              ['Prestador Executante','Nome e tipo do prestador que realizará o procedimento ou internação'],
+            ]),
+          solicitacao:
+            '<p>Detalhes técnicos da solicitação médica:</p>'+
+            manualTable(['Campo','Descrição'],[
+              ['Tipo','Tipo da guia (Internação, Ambulatorial, SADT etc.)'],
+              ['Natureza','Eletivo, Urgência/Emergência, Acidente etc.'],
+              ['Regime','Ambulatorial, Internação, Hospital-dia'],
+              ['Origem','Canal de origem da solicitação (badge colorido)'],
+              ['Observações','Texto livre com observações do solicitante'],
+            ]),
+          etapas:
+            '<p>Timeline do fluxo de auditoria com status de cada etapa:</p>'+
+            manualTable(['Status','Descrição'],[
+              ['Concluída (verde)','Etapa finalizada — exibe data de início e fim'],
+              ['Em execução (destaque)','Etapa em andamento — exibe início e prazo restante'],
+              ['Pendente (cinza)','Etapa ainda não iniciada'],
+            ])+
+            '<p style="margin-top:10px">Cada etapa exibe: número de ordem, nome, responsável (Auditor / Enfermeiro), prazo em horas e datas de execução.</p>',
+          procedimentos:
+            '<p>Procedimentos vinculados à guia com suas configurações:</p>'+
+            manualTable(['Coluna','Descrição'],[
+              ['Código','Código TUSS ou interno do procedimento'],
+              ['Descrição','Nome do procedimento'],
+              ['Peso','Pontuação no cálculo de risco (0–10)'],
+              ['Obrig.','Se o procedimento é obrigatório para o fluxo'],
+              ['OPME','Se o item é classificado como OPME'],
+              ['IA','Instrução personalizada para análise pela IA'],
+              ['Status','Ativo ou Inativo na parametrização'],
+            ]),
+          pacotes:
+            '<p>Pacotes assistenciais vinculados à guia:</p>'+
+            manualTable(['Coluna','Descrição'],[
+              ['Código','Código do pacote'],
+              ['Descrição','Nome do pacote'],
+              ['Peso','Pontuação no cálculo de risco (0–10)'],
+              ['Obrig.','Se o pacote é obrigatório no fluxo'],
+              ['IA','Instrução para a IA analisar este pacote'],
+              ['Status','Ativo / Inativo'],
+            ]),
+          matmed:
+            '<p>Materiais e medicamentos vinculados à guia:</p>'+
+            manualTable(['Coluna','Descrição'],[
+              ['Código','Código TUSS do material ou medicamento'],
+              ['Descrição','Nome do item'],
+              ['Peso','Pontuação no cálculo de risco (0–10)'],
+              ['Obrig.','Se o item é obrigatório'],
+              ['IA','Instrução específica para a IA'],
+              ['Status','Ativo / Inativo'],
+            ]),
+          diarias:
+            '<p>Diárias hospitalares e taxas vinculadas à guia:</p>'+
+            manualTable(['Coluna','Descrição'],[
+              ['Código','Código da diária ou taxa'],
+              ['Descrição','Nome (Ex.: UTI Adulto, Taxa de Sala Cirúrgica)'],
+              ['Peso','Pontuação no cálculo de risco (0–10)'],
+              ['Obrig.','Se o item é obrigatório no fluxo'],
+              ['IA','Instrução para a IA avaliar este item'],
+              ['Status','Ativo / Inativo'],
+            ]),
+          opme:
+            '<p>Órteses, Próteses e Materiais Especiais vinculados à guia:</p>'+
+            manualTable(['Coluna','Descrição'],[
+              ['Código','Código do item OPME'],
+              ['Descrição','Nome do item'],
+              ['Cotação','Status da cotação (Em cotação, Cotado, Aprovado)'],
+              ['Peso','Pontuação no cálculo de risco'],
+              ['Status','Ativo / Inativo'],
+            ]),
+          anexos:
+            '<p>Documentos enviados junto à guia. Cada anexo exibe:</p>'+
+            '<ul>'+
+            '<li><b>Ícone</b> do tipo de arquivo (PDF, imagem etc.)</li>'+
+            '<li><b>Nome</b>, tamanho, páginas e data de envio</li>'+
+            '<li><b>Badge de categoria</b> (Ex.: Laudo médico, Receita, Exame)</li>'+
+            '<li><b>Contador de anotações</b> do auditor</li>'+
+            '</ul>'+
+            manualTable(['Ação','Descrição'],[
+              ['Visualizar','Abre o documento para leitura'],
+              ['Categorizar','Define ou altera a categoria do documento'],
+              ['Anotar','Adiciona anotações textuais ao documento'],
+            ]),
+          criticas:
+            '<p>Inconsistências e alertas identificados automaticamente pela IA e pelas regras de negócio. Cada crítica contém:</p>'+
+            manualTable(['Campo','Descrição'],[
+              ['Severidade','Crítica, Alta, Média ou Baixa'],
+              ['Descrição','O que foi identificado como inconsistente ou suspeito'],
+              ['Origem','Se a crítica foi gerada pela IA ou por regra de negócio'],
+            ]),
+          parecer_tec:
+            '<p>Análise técnica gerada pela IA com base nas regras DUT e nos parâmetros configurados:</p>'+
+            manualTable(['Elemento','Descrição'],[
+              ['Badge de confiança','Percentual de confiança da análise (Ex.: Confiança 87%)'],
+              ['Aderência','Barra visual com o percentual de aderência — ex.: 37 / 40 pts = 92%'],
+              ['Parecer geral','Texto da conclusão técnica gerada pela IA'],
+              ['Critérios cumpridos','Itens validados positivamente pela IA'],
+              ['Alertas','Itens com potencial inconsistência ou risco'],
+              ['Justificativa do Cálculo','Detalhamento ponto a ponto de como a aderência foi calculada'],
+            ])+
+            '<h4 style="margin:14px 0 6px">Teto de aderência dinâmico</h4>'+
+            '<p>O <b>total de pontos possíveis</b> (teto) <b>não é fixo</b> — ele varia de guia para guia, pois representa a soma apenas dos critérios <b>aplicáveis àquela guia específica</b>:</p>'+
+            '<ul style="margin:6px 0 10px">'+
+            '<li><b>DUT</b> só entra no teto se a guia possui procedimentos sujeitos a DUT.</li>'+
+            '<li><b>Pacotes, Mat/Med e Diárias/Taxas</b> só somam ao teto se a guia tiver esses itens vinculados.</li>'+
+            '<li>Critérios não aplicáveis são sinalizados como "— (não aplicável)" na Justificativa.</li>'+
+            '</ul>'+
+            '<p>Exemplo: uma guia com DUT + procedimentos + contratual pode ter teto de 40 pts; outra com pacotes e Mat/Med pode ter teto de 55 pts. <b>Não compare denominadores entre guias diferentes.</b></p>'+
+            '<p style="margin-top:10px"><b>Ação importante:</b> O auditor pode <b>desmarcar critérios</b> validados pela IA. Essa ação é registrada nos Logs como <b>"Correção IA"</b>, garantindo rastreabilidade da intervenção humana.</p>'+
+            '<p style="margin-top:8px"><b>Campo de Observações:</b> Ao final do Parecer Técnico há um campo de texto onde o auditor pode registrar apontamentos. Ao clicar em <b>"Reprocessar"</b>, a IA recebe esses apontamentos, os itens desmarcados e o conteúdo do Parecer da Operadora como contexto de aprendizado.</p>',
+          parecer_op:
+            '<p>Formulário de decisão oficial da operadora sobre a guia:</p>'+
+            manualTable(['Campo','Descrição'],[
+              ['Decisão','Aprovação / Aprovação com ressalva / Reprovação / Solicitar complemento / Encaminhar para junta médica'],
+              ['Motivo','Justificativa da decisão'],
+              ['Justificativa técnica','Texto técnico — pode ser gerado pela IA clicando em "Gerar análise técnica"'],
+              ['Obs. para o Prestador','Observações a serem comunicadas ao prestador solicitante'],
+              ['Obs. Internas','Observações internas da operadora (não visíveis ao prestador)'],
+            ])+
+            '<p style="margin-top:10px">Ao salvar, o <b>status da guia é atualizado automaticamente</b> e a ação é registrada nos logs.</p>',
+          historico:
+            '<p>Histórico cronológico de todas as movimentações da guia:</p>'+
+            '<ul>'+
+            '<li>Mudanças de status</li>'+
+            '<li>Emissão de pareceres</li>'+
+            '<li>Alterações de etapa</li>'+
+            '<li>Ações realizadas por usuários</li>'+
+            '</ul>'+
+            '<p>Cada registro exibe: data/hora, usuário responsável, perfil e descrição da ação.</p>',
+          logs_guia:
+            '<p>Logs de rastreabilidade <b>específicos desta guia</b> — diferente da tela geral de Logs que exibe todos os registros do sistema.</p>'+
+            '<p>Inclui tanto ações de usuários quanto eventos do sistema e da IA relacionados exclusivamente a esta guia:</p>'+
+            '<ul>'+
+            '<li>Análises da IA executadas</li>'+
+            '<li>Correções manuais de critérios da IA</li>'+
+            '<li>Alterações de parametrização aplicadas</li>'+
+            '<li>Envio e categorização de anexos</li>'+
+            '</ul>',
+        };
+
+        guiasContent=
+          manualBox('Como abrir',
+            '<p>Clique em qualquer linha da tabela de guias para abrir o modal de detalhes. O modal exibe todas as informações organizadas em <b>16 abas</b>. Selecione uma aba abaixo para ver a explicação detalhada.</p>')+
+          '<div class="manual-det-wrap">'+
+            detTabBar+
+            '<div class="manual-det-body">'+
+              (CONTEUDO_DET[dtab]||'')+'</div>'+
+          '</div>';+
+
+          manualBox('Aba: Resumo',
+            '<p>Visão consolidada dos principais indicadores da guia:</p>'+
+            manualTable(['Campo','Descrição'],[
+              ['STATUS','Badge com o status atual da guia (Ex.: Em análise, Liberada, Negada)'],
+              ['DIAS EM AUDITORIA','Número de dias desde a emissão da guia até hoje'],
+              ['ADERÊNCIA À DUT','Percentual de aderência às Diretrizes de Utilização — exibido em verde (alta), amarelo (moderada), laranja (baixa) ou vermelho (crítica)'],
+              ['FLUXO','Nome do fluxo assistencial vinculado à guia (Ex.: Auditoria Urgência/Emergência)'],
+              ['NÚMERO','Número identificador da guia'],
+              ['BENEFICIÁRIO','Nome completo e idade do paciente'],
+              ['PLANO / CONTRATO','Nome do plano e código do contrato'],
+              ['PRESTADOR SOLICITANTE','Nome do prestador que solicitou a autorização'],
+              ['PRESTADOR EXECUTANTE','Nome do prestador que executará o procedimento'],
+              ['NATUREZA / REGIME','Natureza do atendimento (Ex.: Internação) e regime (Ex.: Urgência, Eletivo)'],
+              ['TIPO','Tipo da guia (Ex.: Internação, Ambulatorial)'],
+              ['DATA EMISSÃO','Data em que a guia foi emitida'],
+            ])+
+            '<p style="margin-top:12px">Abaixo dos dados cadastrais, um <b>grid de 4 cards</b> exibe os níveis de risco por dimensão:</p>'+
+            manualTable(['Dimensão','Descrição'],[
+              ['Regulatório','Risco baseado em critérios regulatórios (urgência, UTI, OPME, prazo vencido etc.)'],
+              ['Assistencial','Risco assistencial com base na complexidade do procedimento e oncologia'],
+              ['Documental','Risco baseado na aderência à DUT e documentação apresentada'],
+              ['Contratual','Risco de cobertura contratual do plano para o procedimento solicitado'],
+            ]))+
+
+          manualBox('Aba: Beneficiário',
+            '<p>Dados completos do paciente titular da guia:</p>'+
+            manualTable(['Campo','Descrição'],[
+              ['Nome','Nome completo do beneficiário'],
+              ['CPF','CPF parcialmente mascarado (privacidade)'],
+              ['Cartão','Número do cartão do plano mascarado'],
+              ['Idade','Idade calculada automaticamente'],
+              ['Plano','Nome comercial do plano de saúde'],
+              ['Contrato','Código do contrato empresarial ou individual'],
+            ]))+
+
+          manualBox('Aba: Prestador',
+            '<p>Exibe dois painéis lado a lado com os dados dos prestadores envolvidos:</p>'+
+            manualTable(['Painel','Campos'],[
+              ['Prestador Solicitante','Nome e tipo do prestador que abriu a solicitação de autorização'],
+              ['Prestador Executante','Nome e tipo do prestador que realizará o procedimento ou internação'],
+            ]))+
+
+          manualBox('Aba: Solicitação',
+            '<p>Detalhes técnicos da solicitação médica:</p>'+
+            manualTable(['Campo','Descrição'],[
+              ['Tipo','Tipo da guia (Internação, Ambulatorial, SADT etc.)'],
+              ['Natureza','Natureza do atendimento (Eletivo, Urgência/Emergência, Acidente etc.)'],
+              ['Regime','Regime de atendimento (Ambulatorial, Internação, Hospital-dia)'],
+              ['Origem','Canal de origem da solicitação (badge colorido)'],
+              ['Observações','Texto livre com observações do solicitante'],
+            ]))+
+
+          manualBox('Aba: Etapas',
+            '<p>Exibe a <b>timeline do fluxo</b> de auditoria com o status de cada etapa:</p>'+
+            manualTable(['Status','Descrição'],[
+              ['Concluída (verde)','Etapa já finalizada — exibe data de início e fim'],
+              ['Em execução (destaque)','Etapa atualmente em andamento — exibe data de início e prazo restante'],
+              ['Pendente (cinza)','Etapa ainda não iniciada'],
+            ])+
+            '<p>Cada etapa exibe: número de ordem, nome, responsável (Auditor / Enfermeiro), prazo em horas e datas de execução.</p>')+
+
+          manualBox('Aba: Procedimentos',
+            '<p>Lista todos os procedimentos vinculados à guia com suas configurações:</p>'+
+            manualTable(['Coluna','Descrição'],[
+              ['Código','Código TUSS ou interno do procedimento'],
+              ['Descrição','Nome do procedimento'],
+              ['Peso','Pontuação do item no cálculo de risco (0–10)'],
+              ['Obrig.','Indica se o procedimento é obrigatório para o fluxo'],
+              ['OPME','Indica se o item é classificado como OPME'],
+              ['IA','Instrução personalizada para análise pela IA'],
+              ['Status','Ativo ou Inativo na parametrização'],
+            ]))+
+
+          manualBox('Aba: Pacotes',
+            '<p>Lista os pacotes assistenciais vinculados à guia. Estrutura idêntica à aba Procedimentos, sem a coluna OPME.</p>'+
+            manualTable(['Coluna','Descrição'],[
+              ['Código','Código do pacote'],
+              ['Descrição','Nome do pacote'],
+              ['Peso','Pontuação no cálculo de risco (0–10)'],
+              ['Obrig.','Se o pacote é obrigatório no fluxo'],
+              ['IA','Instrução para a IA analisar este pacote'],
+              ['Status','Ativo / Inativo'],
+            ]))+
+
+          manualBox('Aba: Mat/Med',
+            '<p>Materiais e medicamentos vinculados à guia. Estrutura idêntica à aba Procedimentos, sem a coluna OPME.</p>'+
+            manualTable(['Coluna','Descrição'],[
+              ['Código','Código TUSS do material ou medicamento'],
+              ['Descrição','Nome do item'],
+              ['Peso','Pontuação no cálculo de risco (0–10)'],
+              ['Obrig.','Se o item é obrigatório'],
+              ['IA','Instrução específica para a IA'],
+              ['Status','Ativo / Inativo'],
+            ]))+
+
+          manualBox('Aba: Diárias/Taxas',
+            '<p>Diárias hospitalares e taxas vinculadas à guia.</p>'+
+            manualTable(['Coluna','Descrição'],[
+              ['Código','Código da diária ou taxa'],
+              ['Descrição','Nome da diária/taxa (Ex.: UTI Adulto, Taxa de Sala Cirúrgica)'],
+              ['Peso','Pontuação no cálculo de risco (0–10)'],
+              ['Obrig.','Se o item é obrigatório no fluxo'],
+              ['IA','Instrução para a IA avaliar este item'],
+              ['Status','Ativo / Inativo'],
+            ]))+
+
+          manualBox('Aba: OPME',
+            '<p>Itens classificados como OPME (Órteses, Próteses e Materiais Especiais) vinculados à guia.</p>'+
+            '<p>Inclui colunas adicionais para controle de cotação:</p>'+
+            manualTable(['Coluna','Descrição'],[
+              ['Código','Código do item OPME'],
+              ['Descrição','Nome do item'],
+              ['Cotação','Status da cotação (Em cotação, Cotado, Aprovado)'],
+              ['Peso','Pontuação no cálculo de risco'],
+              ['Status','Ativo / Inativo'],
+            ]))+
+
+          manualBox('Aba: Anexos',
+            '<p>Documentos e arquivos enviados junto à guia. Cada anexo exibe:</p>'+
+            '<ul>'+
+            '<li><b>Ícone do tipo de arquivo</b> (PDF, imagem, etc.)</li>'+
+            '<li><b>Nome</b>, tamanho, número de páginas e data de envio</li>'+
+            '<li><b>Badge de categoria</b> (Ex.: Laudo médico, Receita, Exame)</li>'+
+            '<li><b>Contador de anotações</b> do auditor</li>'+
+            '</ul>'+
+            '<p><b>Ações disponíveis por anexo:</b></p>'+
+            manualTable(['Ação','Descrição'],[
+              ['Visualizar','Abre o documento para leitura'],
+              ['Categorizar','Define ou altera a categoria do documento'],
+              ['Anotar','Adiciona anotações textuais ao documento'],
+            ]))+
+
+          manualBox('Aba: Críticas',
+            '<p>Exibe as inconsistências e alertas identificados automaticamente pela IA e pelas regras de negócio na análise da guia.</p>'+
+            '<p>Cada crítica contém:</p>'+
+            '<ul>'+
+            '<li><b>Severidade</b> — Crítica, Alta, Média ou Baixa</li>'+
+            '<li><b>Descrição</b> — o que foi identificado como inconsistente ou suspeito</li>'+
+            '<li><b>Origem</b> — se a crítica foi gerada pela IA ou por regra de negócio</li>'+
+            '</ul>')+
+
+          manualBox('Aba: Parecer Técnico',
+            '<p>Exibe a análise técnica gerada pela IA com base nas regras DUT e nos parâmetros configurados:</p>'+
+            manualTable(['Elemento','Descrição'],[
+              ['Badge de confiança','Percentual de confiança da análise (Ex.: Confiança 87%)'],
+              ['Aderência à DUT','Barra visual com o percentual de aderência às diretrizes'],
+              ['Parecer geral','Texto da conclusão técnica da IA'],
+              ['Critérios cumpridos','Lista de itens validados positivamente pela IA'],
+              ['Alertas','Itens com potencial inconsistência ou risco identificados'],
+            ])+
+            '<p><b>Ação importante:</b> O auditor pode <b>desmarcar critérios</b> validados pela IA caso discorde da análise. Essa ação é registrada automaticamente nos Logs como <b>"Correção IA"</b>, gerando rastreabilidade da intervenção humana.</p>')+
+
+          manualBox('Aba: Parecer Operadora',
+            '<p>Formulário para registro da decisão oficial da operadora sobre a guia:</p>'+
+            manualTable(['Campo','Descrição'],[
+              ['Decisão','Seletor com as opções: Aprovação, Aprovação com ressalva, Reprovação, Solicitar complemento, Encaminhar para junta médica'],
+              ['Motivo','Campo de texto com a justificativa da decisão'],
+              ['Justificativa técnica','Texto técnico detalhado — pode ser gerado automaticamente pela IA clicando em "Gerar análise técnica"'],
+              ['Obs. para o Prestador','Observações a serem comunicadas ao prestador solicitante'],
+              ['Obs. Internas','Observações internas da operadora (não visíveis ao prestador)'],
+            ])+
+            '<p>Ao salvar, o status da guia é atualizado automaticamente conforme a decisão e a ação é registrada nos logs.</p>')+
+
+          manualBox('Aba: Histórico',
+            '<p>Exibe o histórico cronológico de todas as movimentações da guia:</p>'+
+            '<ul>'+
+            '<li>Mudanças de status</li>'+
+            '<li>Emissão de pareceres</li>'+
+            '<li>Alterações de etapa</li>'+
+            '<li>Ações realizadas por usuários</li>'+
+            '</ul>'+
+            '<p>Cada registro exibe: data/hora, usuário responsável, perfil e descrição da ação.</p>')+
+
+          manualBox('Aba: Logs',
+            '<p>Exibe os logs de rastreabilidade <b>específicos desta guia</b> — diferente da tela geral de Logs que mostra todos os registros do sistema.</p>'+
+            '<p>Inclui tanto ações de usuários quanto eventos do sistema e da IA relacionados exclusivamente a esta guia, como:</p>'+
+            '<ul>'+
+            '<li>Análises da IA executadas</li>'+
+            '<li>Correções manuais de critérios da IA</li>'+
+            '<li>Alterações de parametrização aplicadas</li>'+
+            '<li>Envio e categorização de anexos</li>'+
+            '</ul>');
+      }
+
+      body.innerHTML=
+        manualHdr('Relação de Guias','Filtre, audite e emita parecer com apoio da análise técnica da IA')+
+        tabBar+
+        guiasContent;
+
+      setTimeout(function(){
+        document.querySelectorAll('.manual-subtab[data-gtab]').forEach(function(btn){
+          btn.onclick=function(){
+            State.manualGuiasTab=btn.getAttribute('data-gtab');
+            if(State.manualGuiasTab!=='detalhe') State.manualDetalheTab='cabecalho';
+            var b=document.querySelector('.manual-body');
+            if(b) b.scrollTop=0;
+            render();
+          };
+        });
+        document.querySelectorAll('.manual-det-tab[data-dtab]').forEach(function(btn){
+          btn.onclick=function(){
+            State.manualDetalheTab=btn.getAttribute('data-dtab');
+            var b=document.querySelector('.manual-det-body');
+            if(b) b.scrollTop=0;
+            render();
+          };
+        });
+      },0);
+    }
+
+    else if(sec==='kanban'){
+      body.innerHTML=
+        manualHdr('Kanban de Guias','Acompanhamento visual por status')+
+        manualBox('Visão Geral',
+          '<p>O Kanban exibe as guias organizadas em <b>7 colunas</b> de status, permitindo acompanhar visualmente o fluxo de auditoria.</p>'+
+          manualScreen('kanban'))+
+        manualBox('Colunas',
+          manualTable(['Coluna','Cor'],[
+            ['Em análise','Azul (#4a7fa5)'],
+            ['Aguardando complemento','Âmbar (#b07a1a)'],
+            ['Em junta médica','Roxo (#6b57b0)'],
+            ['Cotação de OPME','Ciano (#0e7490)'],
+            ['Analisada','Verde (#2faa66)'],
+            ['Liberada','Verde escuro (#0a8a43)'],
+            ['Negada','Vermelho (#b91c1c)'],
+          ]))+
+        manualBox('Filtros',
+          manualTable(['Filtro','Opções'],[
+            ['Período de emissão','Seletor De / Até (botão Limpar disponível)'],
+            ['Colunas','Selecionar quais status exibir'],
+            ['UTI','Todos / UTI / Não UTI'],
+            ['Regime','Todos / Urgência / Eletivo'],
+            ['Tipo','Todos / Internação / Ambulatorial'],
+          ]))+
+        manualBox('Interação',
+          '<p>Clique em qualquer card para abrir os detalhes completos da guia (mesmo modal da tela Guias).</p>');
+    }
+
+    else if(sec==='param'){
+      body.innerHTML=
+        manualHdr('Painel de Parametrização','Configuração de fluxos, regras DUT e itens assistenciais')+
+        manualBox('Visão Geral',
+          '<p>A Parametrização é onde se configura tudo que a IA e os fluxos utilizam para analisar as guias. Possui 3 abas principais e um painel de KPIs no topo.</p>')+
+        manualBox('KPIs do Painel',
+          manualTable(['Card','Informações exibidas'],[
+            ['Fluxos sincronizados','Total de fluxos, quantos têm instrução IA, total ativos'],
+            ['Procedimentos','Total, com instrução IA, ativos'],
+            ['Pacotes','Total, com instrução IA, ativos'],
+            ['Mat/Med','Total, com instrução IA, ativos'],
+            ['Diárias/Taxas','Total, com instrução IA, ativos'],
+          ]))+
+        manualBox('Aba: Fluxos & Etapas',
+          '<p>Lista todos os fluxos assistenciais (F1–F9) com suas etapas, responsáveis e prazos. Para cada fluxo é possível configurar:</p>'+
+          '<ul><li><b>Subfluxos</b> — etapas internas do fluxo</li>'+
+          '<li><b>Vinculações</b> — procedimentos, pacotes, Mat/Med e diárias associados ao fluxo</li>'+
+          '<li><b>Pesos IA</b> — peso de cada critério no cálculo de aderência (sliders 0–10)</li></ul>')+
+        manualBox('Aba: Procedimentos / Pacotes / Mat/Med / Diárias',
+          '<p>Cada aba lista os itens da categoria com as colunas:</p>'+
+          manualTable(['Coluna','Descrição'],[
+            ['Código','Código do item'],
+            ['Descrição','Nome do procedimento/pacote/item'],
+            ['Peso','Pontuação do item no cálculo de risco (0–10)'],
+            ['Obrig.','Se o item é obrigatório na guia'],
+            ['IA','Instrução personalizada para a IA analisar este item'],
+            ['OPME','Se o item é classificado como OPME (apenas Procedimentos)'],
+            ['Status','Ativo ou Inativo'],
+          ]))+
+        manualBox('Importar / Exportar (Instruções IA + Pesos)',
+          '<p>Os botões <b>Exportar instruções IA</b> e <b>Importar instruções IA</b> permitem gerenciar em massa as instruções e pesos via planilha:</p>'+
+          '<ul>'+
+          '<li><b>Exportar</b> — gera planilha Excel com colunas: Código, Descrição, OPME (se aplicável), <b>Peso (0–10)</b> e Instrução IA</li>'+
+          '<li><b>Importar</b> — lê planilha preenchida, detecta colunas automaticamente por cabeçalho, exibe prévia com contagem de instruções e pesos a importar</li>'+
+          '<li>Valores de peso são clampados automaticamente entre 0 e 10</li>'+
+          '<li>Linhas sem peso não sobrescrevem o valor existente</li>'+
+          '</ul>'+
+          '<p><b>Formatos aceitos:</b> CSV, XLS, XLSX ou HTML (gerado pelo próprio Export).</p>')+
+        manualBox('Aba: Regras DUT',
+          '<p>Lista todas as Diretrizes de Utilização configuradas. Gestores podem:</p>'+
+          '<ul><li>Adicionar nova regra (código, descrição, texto normativo, instrução IA)</li>'+
+          '<li>Importar planilha de regras DUT</li>'+
+          '<li>Editar instrução IA de cada regra (máx. 3.000 caracteres)</li>'+
+          '<li>Alternar status Ativo/Inativo</li>'+
+          '<li>Excluir regras customizadas</li></ul>');
+    }
+
+    else if(sec==='logs'){
+      body.innerHTML=
+        manualHdr('Logs e Rastreabilidade','Auditoria completa de ações de usuários, sistema e IA')+
+        manualBox('Visão Geral',
+          '<p>A tela de Logs registra todas as ações realizadas na plataforma, garantindo rastreabilidade completa para fins de auditoria e conformidade.</p>')+
+        manualBox('Aba: Logs de Usuário',
+          '<p>Exibe ações realizadas por usuários da plataforma. Um gráfico de rosca no topo mostra a distribuição por perfil (Gestor, Auditor, Enfermeiro).</p>'+
+          manualTable(['Coluna','Descrição'],[
+            ['Data/Hora','Timestamp da ação'],
+            ['Usuário','Nome do usuário que realizou a ação'],
+            ['Perfil','Badge: Gestor, Auditor ou Enfermeiro'],
+            ['Ação','Descrição da ação realizada'],
+            ['Guia','Número da guia relacionada (extraído da referência)'],
+          ])+
+          '<p><b>Filtros disponíveis:</b> Período (De/Até), Perfil e Busca livre. Todas as colunas são ordenáveis.</p>')+
+        manualBox('Aba: Logs Sistema | IA',
+          '<p>Exibe eventos gerados automaticamente pelo sistema e pela IA. Um gráfico de rosca mostra a distribuição por tipo.</p>'+
+          manualTable(['Coluna','Descrição'],[
+            ['Data/Hora','Timestamp do evento'],
+            ['Origem','Nome do módulo ou serviço'],
+            ['Tipo','Badge: Sistema (azul), IA (roxo) ou Correção IA (âmbar)'],
+            ['Ação','Descrição do evento'],
+            ['Guia','Número da guia relacionada'],
+          ])+
+          '<p><b>Filtros disponíveis:</b> Período (De/Até), Tipo e Busca livre.</p>'+
+          '<p><b>Correção IA</b> é registrada automaticamente quando um auditor desmarca um critério validado pela IA no parecer técnico.</p>');
+    }
+
+    else if(sec==='config'){
+      body.innerHTML=
+        manualHdr('Configurações','Classificação de risco, prazos por fluxo e permissões')+
+        manualBox('Aba: Classificação de Risco',
+          '<p>Define como as guias são classificadas automaticamente em 4 níveis de risco (Baixo, Médio, Alto, Crítico) com base em fatores presentes na guia.</p>'+
+          '<p>Disponível apenas para o perfil <b>Gestor</b>.</p>'+
+          '<p><b>Toggle "Classificação automática ativa"</b> — quando ativo, o risco é recalculado automaticamente a cada análise. Quando inativo, o risco permanece manual.</p>'+
+          '<br><p><b>Sub-aba: Limiares por nível</b></p>'+
+          '<p>Define os limiares de pontuação para cada nível:</p>'+
+          manualTable(['Nível','Pontuação'],[
+            ['Baixo','0 até o limiar baixo (padrão: 7)'],
+            ['Médio','Acima do baixo até o limiar médio (padrão: 15)'],
+            ['Alto','Acima do médio até o limiar alto (padrão: 23)'],
+            ['Crítico','Acima do limiar alto'],
+          ])+
+          '<p><i>Validação: os limiares devem estar em ordem crescente. O sistema impede salvar se Baixo ≥ Médio ou Médio ≥ Alto.</i></p>'+
+          '<br><p><b>Sub-aba: Prévia</b></p>'+
+          '<p>Mostra em tempo real como as guias seriam distribuídas nos 4 níveis com os limiares configurados, exibindo quantidade e percentual de cada nível.</p>')+
+        manualBox('Aba: Prazos por Fluxo',
+          '<p>Define o prazo (em dias) e o regime de atendimento de cada fluxo assistencial.</p>'+
+          manualTable(['Coluna','Descrição'],[
+            ['Fluxo','Identificador e nome do fluxo'],
+            ['Prazo','Campo editável com o prazo em dias'],
+            ['Regime','Clicável — cicla entre: Todos / Eletivo / Urgência'],
+          ])+
+          '<p>A linha de legenda abaixo da tabela explica o comportamento da coluna Regime.</p>')+
+        manualBox('Aba: Perfis e Permissões',
+          '<p>Matriz editável de permissões por perfil. Disponível apenas para o perfil <b>Gestor</b>.</p>'+
+          '<p>Clique em qualquer célula da matriz para ciclar entre os níveis:</p>'+
+          manualTable(['Nível','Ícone','Descrição'],[
+            ['Acesso total','✓','Permissão completa para a ação'],
+            ['Somente leitura','👁','Pode visualizar mas não alterar'],
+            ['Sem acesso','—','Funcionalidade oculta para o perfil'],
+          ])+
+          '<p>As alterações são salvas automaticamente no navegador (localStorage).</p>');
+    }
+
+    else if(sec==='perfis'){
+      body.innerHTML=
+        manualHdr('Perfis de Acesso','Capacidades e restrições de cada perfil de usuário')+
+        manualBox('Perfis disponíveis',
+          manualTable(['Perfil','Acesso','Descrição'],[
+            ['Gestor','Total','Acesso a todas as funcionalidades, incluindo Configurações, Parametrização e Logs'],
+            ['Auditor','Parcial','Pode auditar guias, emitir pareceres e visualizar relatórios'],
+            ['Enfermeiro','Restrito','Acesso apenas às guias dos seus fluxos e às etapas de responsabilidade do enfermeiro'],
+          ]))+
+        manualBox('Simulação de Perfil (Gestor)',
+          '<p>O Gestor pode simular a visão de outros perfis usando o <b>botão flutuante</b> no canto inferior direito da tela (FAB com ícone de usuários). Ao selecionar um perfil:</p>'+
+          '<ul><li>A visão de guias é filtrada conforme as regras do perfil simulado</li>'+
+          '<li>Um banner de aviso é exibido no topo indicando o perfil em simulação</li>'+
+          '<li>Um botão "Sair da visão" permite retornar à visão completa</li></ul>')+
+        manualTable(['Funcionalidade','Gestor','Auditor','Enfermeiro'],[
+          ['Dashboard','✓','✓','✓'],
+          ['Relação de Guias','✓','✓','✓ (fluxos próprios)'],
+          ['Kanban','✓','✓','✓ (fluxos próprios)'],
+          ['Parametrização','✓','—','—'],
+          ['Logs','✓','—','—'],
+          ['Configurações','✓','—','—'],
+          ['Emitir parecer','✓','✓','—'],
+          ['Aprovar/Reprovar','✓','✓','—'],
+          ['Junta médica','✓','✓','—'],
+          ['Triagem/Complemento','✓','✓','✓'],
+        ]);
+    }
+
+    wrap.appendChild(body);
+    return wrap;
+
+    function manualHdr(title,sub){
+      return '<div class="manual-page-hdr">'+
+        '<h1>'+esc(title)+'</h1>'+
+        '<p>'+esc(sub)+'</p>'+
+      '</div>';
+    }
+    function manualBox(title,html){
+      return '<div class="manual-box">'+
+        '<h2>'+esc(title)+'</h2>'+
+        '<div class="manual-box-body">'+html+'</div>'+
+      '</div>';
+    }
+    function manualGrid(items){
+      var cells=items.map(function(it){
+        return '<div class="manual-grid-card">'+
+          '<div class="manual-grid-ico">'+ico(it.ico,20)+'</div>'+
+          '<div class="manual-grid-title">'+esc(it.title)+'</div>'+
+          '<div class="manual-grid-desc">'+esc(it.desc)+'</div>'+
+        '</div>';
+      }).join('');
+      return '<div class="manual-grid">'+cells+'</div>';
+    }
+    function manualTable(cols,rows){
+      var thead='<thead><tr>'+cols.map(function(c){ return '<th>'+esc(c)+'</th>'; }).join('')+'</tr></thead>';
+      var tbody='<tbody>'+rows.map(function(r,i){
+        return '<tr class="'+(i%2===0?'tr-a':'tr-b')+'">'+r.map(function(c){ return '<td>'+c+'</td>'; }).join('')+'</tr>';
+      }).join('')+'</tbody>';
+      return '<div class="manual-table-wrap"><table class="manual-table">'+thead+tbody+'</table></div>';
+    }
+    function manualScreen(name){
+      var SCREENS={
+        login:'<div class="ms-login"><div class="ms-card"><div class="ms-logo">R<span>AI</span></div><div class="ms-field"></div><div class="ms-field"></div><div class="ms-btn"></div></div></div>',
+        dashboard:'<div class="ms-dash"><div class="ms-kpi-row"><div class="ms-kpi"></div><div class="ms-kpi"></div><div class="ms-kpi"></div><div class="ms-kpi"></div></div><div class="ms-charts"><div class="ms-chart-bar"></div><div class="ms-chart-bar short"></div></div></div>',
+        kanban:'<div class="ms-kanban"><div class="ms-kb-col"><div class="ms-kb-card"></div><div class="ms-kb-card"></div></div><div class="ms-kb-col"><div class="ms-kb-card"></div></div><div class="ms-kb-col"><div class="ms-kb-card"></div><div class="ms-kb-card"></div><div class="ms-kb-card"></div></div></div>',
+      };
+      if(!SCREENS[name]) return '';
+      return '<div class="manual-screen">'+SCREENS[name]+'</div>';
+    }
+  }
+
+  /* === Autenticação === */
+  var AUTH_KEY='regula_auth_token';
+  var USERS_KEY='regula_users';
+
+  function getUsers(){
+    var saved=localStorage.getItem(USERS_KEY);
+    if(saved) return JSON.parse(saved);
+    var defaults=[{login:'admin',senha:'admin',nome:'Administrador',perfil:'gestor'}];
+    localStorage.setItem(USERS_KEY,JSON.stringify(defaults));
+    return defaults;
+  }
+
+  function authCheck(){
+    return !!localStorage.getItem(AUTH_KEY);
+  }
+
+  function authLogin(login,senha){
+    var users=getUsers();
+    for(var i=0;i<users.length;i++){
+      if(users[i].login===login&&users[i].senha===senha) return users[i];
+    }
+    return null;
+  }
+
+  function authLogout(){
+    localStorage.removeItem(AUTH_KEY);
+    location.reload();
+  }
+
+  function showLoginScreen(){
+    var scr=document.createElement('div');
+    scr.id='loginScreen';
+    scr.innerHTML=
+      '<div class="login-card-wrap">'+
+        '<div class="login-card">'+
+          '<div class="login-brand">'+
+            '<div class="login-brand-mark">R<span>AI</span></div>'+
+            '<div class="login-brand-info">'+
+              '<div class="login-brand-title">RegulaAI</div>'+
+              '<div class="login-brand-sub">Saúde · Auditoria</div>'+
+            '</div>'+
+          '</div>'+
+          '<div class="login-heading">'+
+            '<h2>Acesse sua conta</h2>'+
+            '<p>Entre com suas credenciais para continuar</p>'+
+          '</div>'+
+          '<div class="login-fields">'+
+            '<div class="login-field">'+
+              '<label>Login</label>'+
+              '<input id="loginUser" type="text" placeholder="Seu login" autocomplete="username" />'+
+            '</div>'+
+            '<div class="login-field">'+
+              '<label>Senha</label>'+
+              '<input id="loginPass" type="password" placeholder="Sua senha" autocomplete="current-password" />'+
+            '</div>'+
+          '</div>'+
+          '<div class="login-error" id="loginErr">'+
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>'+
+            '<span>Login ou senha incorretos</span>'+
+          '</div>'+
+          '<button class="login-btn" id="loginBtn">Entrar</button>'+
+          '<div class="login-footer">RegulaAI Saúde &mdash; Auditoria Assistencial</div>'+
+        '</div>'+
+      '</div>';
+    document.body.appendChild(scr);
+
+    var userEl=scr.querySelector('#loginUser');
+    var passEl=scr.querySelector('#loginPass');
+    var errEl=scr.querySelector('#loginErr');
+    var btn=scr.querySelector('#loginBtn');
+
+    function doLogin(){
+      var login=userEl.value.trim();
+      var senha=passEl.value;
+      if(!login||!senha) return;
+      btn.disabled=true;
+      var user=authLogin(login,senha);
+      if(user){
+        localStorage.setItem(AUTH_KEY,JSON.stringify({login:user.login,nome:user.nome,ts:Date.now()}));
+        errEl.classList.remove('show');
+        scr.classList.add('fade-out');
+        setTimeout(function(){
+          scr.remove();
+          aplicarRiscos();
+          renderUserChip(); bindNav(); render(); atualizarBreadcrumb();
+          bindLogout();
+        },420);
+      } else {
+        errEl.classList.add('show');
+        passEl.value='';
+        passEl.focus();
+        btn.disabled=false;
+      }
+    }
+
+    btn.onclick=doLogin;
+    passEl.addEventListener('keydown',function(e){ if(e.key==='Enter') doLogin(); });
+    userEl.addEventListener('keydown',function(e){ if(e.key==='Enter') passEl.focus(); });
+    setTimeout(function(){ userEl.focus(); },80);
+  }
+
+  /* === Botão de logout no topbar === */
+  function bindLogout(){
+    var btn=document.getElementById('logoutBtn');
+    if(btn) btn.onclick=function(){ if(confirm('Deseja sair da plataforma?')) authLogout(); };
+  }
+
   /* === Init === */
   aplicarRiscos();
-  renderUserChip(); bindNav(); render(); atualizarBreadcrumb();
+  if(authCheck()){
+    renderUserChip(); bindNav(); render(); atualizarBreadcrumb();
+    bindLogout();
+  } else {
+    showLoginScreen();
+  }
 })();
