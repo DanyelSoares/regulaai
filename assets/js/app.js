@@ -5716,6 +5716,7 @@
       '<button class="manual-chat-maxbtn" id="chatMaxBtn" title="Expandir">'+ico('maximize-2',14)+'</button>'+
       '<button class="manual-chat-maxbtn" id="chatMinBtn" title="Minimizar" style="margin-left:2px">'+ico('chevron-down',14)+'</button>';
     chatRoot.appendChild(chatHd);
+    lcIcons(); // renderiza ícones dos botões do header do chat
 
     var chatLog=el('div',{class:'manual-chat-log'});
     chatRoot.appendChild(chatLog);
