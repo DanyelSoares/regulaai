@@ -5798,8 +5798,8 @@
     chatHd.querySelector('#chatMaxBtn').onclick=function(){
       isMax=!isMax;
       chatRoot.classList.toggle('chat-max',isMax);
-      var mb=document.querySelector('.manual-body');
-      if(mb) mb.classList.toggle('chat-max',isMax);
+      var mw=document.querySelector('.manual-wrap');
+      if(mw) mw.classList.toggle('chat-max',isMax);
       this.innerHTML=ico(isMax?'minimize-2':'maximize-2',14);
       this.title=isMax?'Restaurar':'Maximizar';
       chatInp.focus();

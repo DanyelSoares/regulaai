@@ -1288,7 +1288,8 @@ tbody tr:hover{background:#f7fbf8;cursor:pointer}
 .login-footer{text-align:center;font-size:11px;color:var(--muted);padding-top:4px}
 
 /* === Manual do Usuário === */
-.manual-wrap{display:grid;grid-template-columns:220px 1fr;gap:0;height:calc(100vh - 56px);overflow:hidden}
+.manual-wrap{display:grid;grid-template-columns:220px 1fr;gap:0;height:calc(100vh - 56px);overflow:hidden;padding-right:320px;box-sizing:border-box}
+.manual-wrap.chat-max{padding-right:520px}
 .manual-nav{background:#fff;border-right:1px solid var(--line);padding:20px 12px;display:flex;flex-direction:column;gap:2px;height:100%;overflow-y:auto}
 .manual-nav-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);padding:0 8px 10px;border-bottom:1px solid var(--g-100);margin-bottom:6px}
 .manual-nav-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:7px;font-size:13px;color:var(--muted);cursor:pointer;transition:background .12s,color .12s}
@@ -1296,8 +1297,7 @@ tbody tr:hover{background:#f7fbf8;cursor:pointer}
 .manual-nav-item.active{background:var(--g-50);color:var(--g-700);font-weight:600}
 .manual-print-btn{margin-top:auto;display:flex;align-items:center;justify-content:center;gap:6px;padding:9px 12px;border-radius:8px;border:1.5px solid var(--g-200);background:#fff;color:var(--g-700);font-size:12.5px;font-weight:600;cursor:pointer;transition:background .12s}
 .manual-print-btn:hover{background:var(--g-50)}
-.manual-body{padding:28px 36px 28px calc(36px + 340px);display:flex;flex-direction:column;gap:20px;overflow-y:auto;height:100%}
-.manual-body.chat-max{padding-right:calc(36px + 540px)}
+.manual-body{padding:28px 36px;display:flex;flex-direction:column;gap:20px;overflow-y:auto;height:100%}
 /* Chat panel — fixo no body, visível só no Manual */
 .manual-chat-panel{position:fixed;top:56px;right:0;width:320px;height:calc(100vh - 56px);display:none;flex-direction:column;border-left:1px solid var(--line);background:#fff;z-index:50;transition:width .25s}
 .manual-chat-panel.chat-max{width:520px}
@@ -1385,6 +1385,7 @@ tbody tr:hover{background:#f7fbf8;cursor:pointer}
 }
 @media(max-width:900px){
   .manual-chat-panel{display:none!important}
+  .manual-wrap,.manual-wrap.chat-max{padding-right:0!important}
   .manual-body{padding:16px!important}
 }
 
