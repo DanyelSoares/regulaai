@@ -1365,10 +1365,10 @@ tbody tr:hover{background:#f7fbf8;cursor:pointer}
 .manual-chat-send:hover{background:var(--g-700)}
 .manual-chat-maxbtn{margin-left:8px;width:26px;height:26px;border-radius:6px;border:1px solid var(--g-200);background:#fff;color:var(--g-600);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .12s}
 .manual-chat-maxbtn:hover{background:var(--g-100)}
-.manual-page-hdr{padding-bottom:18px;border-bottom:2px solid var(--g-100);margin-bottom:4px}
+.manual-page-hdr{flex-shrink:0;padding-bottom:18px;border-bottom:2px solid var(--g-100);margin-bottom:4px}
 .manual-page-hdr h1{margin:0 0 4px;font-size:22px;color:var(--g-800)}
 .manual-page-hdr p{margin:0;font-size:13.5px;color:var(--muted)}
-.manual-box{background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.manual-box{flex-shrink:0;background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden}
 .manual-box h2{margin:0;font-size:13.5px;font-weight:700;color:var(--g-700);padding:12px 18px;background:var(--g-50);border-bottom:1px solid var(--g-100)}
 .manual-box-body{padding:16px 18px;font-size:13.5px;color:var(--ink-2);line-height:1.65}
 .manual-box-body p{margin:0 0 10px}
