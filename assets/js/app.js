@@ -762,9 +762,14 @@
     v.style.maxWidth=isManual?'none':'';
     v.style.overflow='';
     v.style.height='';
-    // mostra/oculta chat fixo conforme rota
-    var cr=$('#chatRoot');
-    if(cr) cr.style.display=isManual?'flex':'none';
+    // botão toggle: visível só no manual
+    var ctb=$('#chatToggleBtn');
+    if(ctb) ctb.classList.toggle('visible', isManual);
+    // se saiu do manual, fecha o painel
+    if(!isManual){
+      var cr=$('#chatRoot');
+      if(cr) cr.classList.remove('chat-open');
+    }
     if(State.route==='dashboard') v.appendChild(viewDashboard());
     else if(State.route==='guias') v.appendChild(viewGuias());
     else if(State.route==='kanban') v.appendChild(viewKanban());
@@ -5710,13 +5715,13 @@
 
     // Monta estrutura uma única vez
     chatRoot.className='manual-chat-panel';
-    chatRoot.style.display='none';
 
     var chatHd=el('div',{class:'manual-chat-hd'});
     chatHd.innerHTML=
       ico('bot',15)+' <span>Assistente RegulaAI</span>'+
       '<span id="chatStatusBadge" class="manual-chat-status '+(geminiKey?'online':'offline')+'">'+(geminiKey?'Online':'Offline')+'</span>'+
-      '<button class="manual-chat-maxbtn" id="chatMaxBtn" title="Maximizar">'+ico('maximize-2',14)+'</button>';
+      '<button class="manual-chat-maxbtn" id="chatMaxBtn" title="Expandir">'+ico('maximize-2',14)+'</button>'+
+      '<button class="manual-chat-maxbtn" id="chatCloseBtn" title="Minimizar" style="margin-left:2px">'+ico('x',14)+'</button>';
     chatRoot.appendChild(chatHd);
 
     var chatLog=el('div',{class:'manual-chat-log'});
@@ -5798,12 +5803,22 @@
     chatHd.querySelector('#chatMaxBtn').onclick=function(){
       isMax=!isMax;
       chatRoot.classList.toggle('chat-max',isMax);
-      var mw=document.querySelector('.manual-wrap');
-      if(mw) mw.classList.toggle('chat-max',isMax);
       this.innerHTML=ico(isMax?'minimize-2':'maximize-2',14);
-      this.title=isMax?'Restaurar':'Maximizar';
+      this.title=isMax?'Restaurar':'Expandir';
       chatInp.focus();
     };
+
+    chatHd.querySelector('#chatCloseBtn').onclick=function(){
+      chatRoot.classList.remove('chat-open');
+    };
+
+    var toggleBtn=$('#chatToggleBtn');
+    if(toggleBtn){
+      toggleBtn.onclick=function(){
+        chatRoot.classList.toggle('chat-open');
+        if(chatRoot.classList.contains('chat-open')) chatInp.focus();
+      };
+    }
   })();
 
   /* === Init === */
