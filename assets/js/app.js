@@ -5692,7 +5692,35 @@
     var geminiKey=localStorage.getItem('regula_gemini_key')||'';
     var geminiModel=localStorage.getItem('regula_gemini_model')||'gemini-2.5-flash';
     var chatHistory=[];
-    var isMax=false;
+    var maxLevel=0;            // 0=normal, 1=largo, 2=muito largo
+    var WELCOME='Olá! Sou a RAI, sua assistente virtual. Estou aqui para ajudar com dúvidas sobre o sistema, critérios de aderência, pontuações e uso da plataforma. Como posso te ajudar hoje?';
+
+    /* === Persistência de sessões de chat === */
+    var sessions=JSON.parse(localStorage.getItem('regula_chat_sessions')||'[]');
+    var currentSessionId=null;
+    function persistSessions(){ localStorage.setItem('regula_chat_sessions',JSON.stringify(sessions)); }
+    function findSession(id){ for(var i=0;i<sessions.length;i++){ if(sessions[i].id===id) return sessions[i]; } return null; }
+    function sessionTitle(s){
+      // primeiro texto do usuário vira título
+      for(var i=0;i<s.history.length;i++){ if(s.history[i].role==='user'){ var t=s.history[i].parts[0].text; return t.length>40?t.slice(0,40)+'…':t; } }
+      return 'Nova conversa';
+    }
+    function saveCurrent(){
+      if(!currentSessionId) return;
+      var s=findSession(currentSessionId);
+      if(!s) return;
+      s.history=chatHistory.slice();
+      s.updated=Date.now();
+      persistSessions();
+    }
+    function newSession(){
+      // remove sessões vazias antigas para não acumular
+      sessions=sessions.filter(function(s){ return s.history && s.history.length>0; });
+      currentSessionId='s'+Date.now();
+      sessions.unshift({id:currentSessionId,history:[],created:Date.now(),updated:Date.now()});
+      persistSessions();
+      chatHistory=[];
+    }
 
     var SYSTEM_CONTEXT='Você é a RAI, assistente virtual do RegulaAI Saúde, plataforma de auditoria assistencial para operadoras de saúde. '+
       'NÃO se apresente nem use saudações como "Olá! Sou a RAI" nas respostas — a apresentação já foi feita na abertura do chat. Vá direto ao ponto. '+
@@ -5718,11 +5746,16 @@
     chatHd.innerHTML=
       RAI_AVATAR+
       '<div class="rai-hd-info"><span class="rai-hd-name">RAI</span><span class="rai-hd-sub">Assistente AI</span></div>'+
-      '<button class="manual-chat-maxbtn chat-hd-btn" id="chatMaxBtn" title="Expandir">'+ico('maximize-2',14)+'</button>'+
+      '<button class="manual-chat-maxbtn chat-hd-btn" id="chatHistBtn" title="Conversas anteriores">'+ico('history',14)+'</button>'+
+      '<button class="manual-chat-maxbtn chat-hd-btn" id="chatMaxBtn" title="Expandir" style="margin-left:2px">'+ico('maximize-2',14)+'</button>'+
       '<button class="manual-chat-maxbtn chat-hd-btn" id="chatMinBtn" title="Minimizar" style="margin-left:2px">'+ico('chevron-down',14)+'</button>'+
       '<button class="manual-chat-maxbtn chat-hd-btn" id="chatCloseBtn" title="Fechar" style="margin-left:2px">'+ico('x',14)+'</button>';
     chatRoot.appendChild(chatHd);
     lcIcons();
+
+    // Painel de histórico (overlay dentro do chat)
+    var histPanel=el('div',{class:'mchat-hist'});
+    chatRoot.appendChild(histPanel);
 
     var chatLog=el('div',{class:'manual-chat-log'});
     chatRoot.appendChild(chatLog);
@@ -5745,8 +5778,93 @@
       chatLog.scrollTop=chatLog.scrollHeight;
     }
 
-    addMsg('bot','Olá! Sou a RAI, sua assistente virtual. Estou aqui para ajudar com dúvidas sobre o sistema, critérios de aderência, pontuações e uso da plataforma. Como posso te ajudar hoje?');
-    if(!geminiKey) addMsg('bot','⚠️ Chave de API do Gemini não configurada. Acesse <b>Configurações → Assistente</b> para inserir sua chave.');
+    // Renderiza o log a partir do chatHistory atual
+    function renderLog(){
+      chatLog.innerHTML='';
+      addMsg('bot',WELCOME);
+      if(!geminiKey) addMsg('bot','⚠️ Chave de API do Gemini não configurada. Acesse <b>Configurações → Assistente</b> para inserir sua chave.');
+      for(var i=0;i<chatHistory.length;i++){
+        addMsg(chatHistory[i].role==='user'?'user':'bot', chatHistory[i].parts[0].text);
+      }
+    }
+
+    // Carrega uma sessão pelo id
+    function loadSession(id){
+      var s=findSession(id);
+      if(!s) return;
+      currentSessionId=id;
+      chatHistory=s.history.slice();
+      renderLog();
+      closeHist();
+    }
+
+    // Inicia conversa nova (limpa log)
+    function startNew(){
+      newSession();
+      renderLog();
+      closeHist();
+      chatInp.focus();
+    }
+
+    /* === Painel de histórico === */
+    function fmtData(ts){
+      var d=new Date(ts), hj=new Date();
+      var hh=String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+      if(d.toDateString()===hj.toDateString()) return 'Hoje '+hh;
+      var ont=new Date(hj); ont.setDate(hj.getDate()-1);
+      if(d.toDateString()===ont.toDateString()) return 'Ontem '+hh;
+      return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear()+' '+hh;
+    }
+    function renderHist(){
+      var html='<div class="mchat-hist-hd"><span>Conversas anteriores</span>'+
+        '<button class="mchat-hist-close" id="histCloseBtn" title="Fechar">'+ico('x',14)+'</button></div>'+
+        '<div class="mchat-hist-hint">Selecione uma conversa para continuar, ou feche e envie uma mensagem para iniciar uma nova.</div>'+
+        '<div class="mchat-hist-list">';
+      var comConteudo=sessions.filter(function(s){ return s.history.length>0; });
+      if(!comConteudo.length){
+        html+='<div class="mchat-hist-empty">Nenhuma conversa salva ainda.</div>';
+      } else {
+        for(var i=0;i<comConteudo.length;i++){
+          var s=comConteudo[i];
+          var ativa=s.id===currentSessionId?' ativa':'';
+          html+='<div class="mchat-hist-item'+ativa+'" data-id="'+s.id+'">'+
+            '<div class="mchat-hist-item-main"><div class="mchat-hist-title">'+esc(sessionTitle(s))+'</div>'+
+            '<div class="mchat-hist-date">'+fmtData(s.updated)+'</div></div>'+
+            '<button class="mchat-hist-del" data-del="'+s.id+'" title="Excluir">'+ico('trash-2',13)+'</button>'+
+            '</div>';
+        }
+      }
+      html+='</div>';
+      histPanel.innerHTML=html;
+      lcIcons();
+      // Fechar o histórico inicia uma conversa nova (chat limpo)
+      histPanel.querySelector('#histCloseBtn').onclick=startNew;
+      var items=histPanel.querySelectorAll('.mchat-hist-item');
+      for(var j=0;j<items.length;j++){
+        items[j].onclick=function(e){
+          if(e.target.closest('.mchat-hist-del')) return;
+          loadSession(this.getAttribute('data-id'));
+        };
+      }
+      var dels=histPanel.querySelectorAll('.mchat-hist-del');
+      for(var k=0;k<dels.length;k++){
+        dels[k].onclick=function(e){
+          e.stopPropagation();
+          var id=this.getAttribute('data-del');
+          if(!confirm('Excluir esta conversa?')) return;
+          sessions=sessions.filter(function(s){ return s.id!==id; });
+          persistSessions();
+          if(id===currentSessionId){ newSession(); renderLog(); }
+          renderHist();
+        };
+      }
+    }
+    function openHist(){ renderHist(); chatRoot.classList.add('hist-open'); }
+    function closeHist(){ chatRoot.classList.remove('hist-open'); }
+
+    // Sessão inicial: nova conversa em branco
+    newSession();
+    renderLog();
 
     async function sendChat(){
       var q=chatInp.value.trim();
@@ -5785,9 +5903,11 @@
         } else {
           addMsg('bot','❌ '+(data.error?data.error.message:'Sem resposta. Tente novamente.'));
         }
+        saveCurrent();
       }catch(err){
         typing.remove();
         addMsg('bot','❌ Erro de conexão: '+err.message);
+        saveCurrent();
       }
     }
 
@@ -5801,14 +5921,22 @@
     });
 
     chatHd.querySelector('#chatMaxBtn').onclick=function(){
-      isMax=!isMax;
-      chatRoot.classList.toggle('chat-max',isMax);
-      this.innerHTML=ico(isMax?'minimize-2':'maximize-2',14);
-      this.title=isMax?'Restaurar':'Expandir';
+      maxLevel=(maxLevel+1)%3;   // cicla 0 → 1 → 2 → 0
+      chatRoot.classList.toggle('chat-max',maxLevel===1);
+      chatRoot.classList.toggle('chat-max2',maxLevel===2);
+      this.innerHTML=ico(maxLevel===2?'minimize-2':'maximize-2',14);
+      this.title=maxLevel===0?'Expandir':(maxLevel===1?'Expandir mais':'Restaurar');
       chatInp.focus();
     };
 
+    // Botão histórico no header (abre/fecha; fechar inicia conversa nova)
+    chatHd.querySelector('#chatHistBtn').onclick=function(e){
+      e.stopPropagation();
+      if(chatRoot.classList.contains('hist-open')) startNew(); else openHist();
+    };
+
     function chatMinimize(){
+      closeHist();
       chatRoot.classList.add('chat-open');
       chatRoot.classList.add('chat-minimized');
     }
@@ -5826,7 +5954,7 @@
 
     chatHd.querySelector('#chatCloseBtn').onclick=function(e){
       e.stopPropagation();
-      chatRoot.classList.remove('chat-open','chat-minimized','chat-max');
+      chatRoot.classList.remove('chat-open','chat-minimized','chat-max','chat-max2','hist-open');
     };
 
     // Clicar em qualquer lugar do header quando minimizado restaura
