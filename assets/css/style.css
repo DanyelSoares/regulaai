@@ -1369,39 +1369,76 @@ body.sidebar-collapsed .modal-backdrop{left:66px}
 .manual-print-btn:hover{background:var(--g-50)}
 .manual-body{padding:28px 36px;display:flex;flex-direction:column;gap:20px;overflow-y:auto;height:100%}
 /* Chat panel — fixo no body, visível só no Manual */
-.manual-chat-panel{position:fixed;top:80px;right:0;width:340px;height:calc(100vh - 80px);display:none;flex-direction:column;border-left:1px solid var(--line);background:#fff;z-index:55;box-shadow:-4px 0 18px rgba(0,0,0,.1);transition:width .25s;overflow:hidden}
+/* === Painel de chat: céu noturno nórdico com aurora boreal === */
+.manual-chat-panel{
+  position:fixed;top:80px;right:0;width:340px;height:calc(100vh - 80px);
+  display:none;flex-direction:column;border-left:1px solid #0a2417;
+  /* Céu noturno suave: verde-escuro translúcido, mais leve e etéreo */
+  background:linear-gradient(180deg,#0a2418 0%,#0c2a1d 45%,#071a12 100%);
+  z-index:55;box-shadow:-4px 0 18px rgba(0,0,0,.2);transition:width .25s;overflow:hidden;
+}
 .manual-chat-panel.chat-open{display:flex}
-/* Aurora boreal cobrindo todo o fundo do chat (atrás de tudo) */
-.manual-chat-panel::before,.manual-chat-panel::after{
-  content:'';position:absolute;left:-15%;right:-15%;top:64px;bottom:0;z-index:0;pointer-events:none;
-  background-repeat:no-repeat;mix-blend-mode:multiply;will-change:transform,opacity;
-}
+
+/* Camada 1 — estrelas (pontos estáticos) */
 .manual-chat-panel::before{
-  background:
-    radial-gradient(35% 60% at 18% 100%, rgba(74,222,128,.40), transparent 72%),
-    radial-gradient(30% 70% at 42% 100%, rgba(34,197,94,.34),  transparent 74%),
-    radial-gradient(38% 65% at 68% 100%, rgba(16,185,129,.36), transparent 73%),
-    radial-gradient(32% 58% at 88% 100%, rgba(110,231,183,.30),transparent 72%);
-  filter:blur(18px);
-  animation:aurora-a 14s ease-in-out infinite alternate;
+  content:'';position:absolute;left:0;right:0;top:64px;bottom:0;z-index:0;pointer-events:none;
+  background-image:
+    radial-gradient(1.4px 1.4px at 18% 22%, rgba(255,255,255,.9), transparent),
+    radial-gradient(1px 1px   at 64% 14%, rgba(255,255,255,.75),transparent),
+    radial-gradient(1.6px 1.6px at 82% 30%, rgba(255,255,255,.85),transparent),
+    radial-gradient(1px 1px   at 34% 40%, rgba(255,255,255,.6), transparent),
+    radial-gradient(1.2px 1.2px at 8% 52%, rgba(255,255,255,.7), transparent),
+    radial-gradient(1px 1px   at 92% 58%, rgba(255,255,255,.6), transparent),
+    radial-gradient(1.3px 1.3px at 50% 8%, rgba(255,255,255,.8), transparent),
+    radial-gradient(1px 1px   at 26% 66%, rgba(255,255,255,.5), transparent);
+  background-repeat:no-repeat;
+  animation:aurora-twinkle 5.5s ease-in-out infinite alternate;
 }
+/* Camada 2 — cortinas de aurora etéreas (luz somando sobre o escuro) */
 .manual-chat-panel::after{
+  content:'';position:absolute;left:-30%;right:-30%;top:56px;bottom:-8%;z-index:0;pointer-events:none;
+  mix-blend-mode:screen;will-change:transform,opacity;
   background:
-    radial-gradient(28% 55% at 30% 100%, rgba(52,211,153,.30), transparent 72%),
-    radial-gradient(34% 62% at 58% 100%, rgba(74,222,128,.28), transparent 74%),
-    radial-gradient(26% 50% at 80% 100%, rgba(16,185,129,.26), transparent 72%);
-  filter:blur(22px);
-  animation:aurora-b 20s ease-in-out infinite alternate;
+    /* feixes verticais translúcidos e delicados */
+    linear-gradient(14deg,  transparent 22%, rgba(74,222,128,.30) 44%, rgba(167,243,208,.45) 50%, rgba(74,222,128,.26) 56%, transparent 80%),
+    linear-gradient(-11deg, transparent 26%, rgba(16,185,129,.26) 47%, rgba(110,231,183,.38) 54%, rgba(16,185,129,.22) 61%, transparent 82%),
+    linear-gradient(7deg,   transparent 28%, rgba(34,197,94,.24)  49%, rgba(134,239,172,.40) 56%, rgba(34,197,94,.2) 63%, transparent 84%),
+    /* brilho difuso na base (origem das cortinas) */
+    radial-gradient(130% 60% at 50% 108%, rgba(45,212,160,.26), transparent 72%);
+  background-size:150% 100%, 130% 100%, 170% 100%, 100% 100%;
+  background-position:20% 0, 60% 0, 40% 0, 50% 100%;
+  background-repeat:no-repeat;
+  filter:blur(26px) saturate(1.1);
+  animation:aurora-flow 26s ease-in-out infinite alternate;
 }
-@keyframes aurora-a{
-  0%  {transform:translate3d(-7%,4%,0)  scaleY(1.0)  skewX(-6deg);opacity:.85}
-  50% {transform:translate3d(5%,-3%,0)  scaleY(1.25) skewX(5deg); opacity:1}
-  100%{transform:translate3d(-3%,2%,0)  scaleY(1.1)  skewX(-3deg);opacity:.9}
+/* segunda onda de cortinas, fase diferente, ainda mais sutil, via box do log */
+.manual-chat-log::before{
+  content:'';position:absolute;left:-30%;right:-30%;top:0;bottom:0;z-index:0;pointer-events:none;
+  mix-blend-mode:screen;will-change:transform,opacity;
+  background:
+    linear-gradient(-16deg, transparent 30%, rgba(52,211,153,.22) 51%, rgba(187,247,208,.32) 57%, rgba(52,211,153,.18) 64%, transparent 86%),
+    linear-gradient(18deg,  transparent 32%, rgba(74,222,128,.18) 52%, rgba(110,231,183,.28) 59%, rgba(74,222,128,.15) 66%, transparent 88%);
+  background-size:160% 100%, 140% 100%;
+  background-position:75% 0, 30% 0;
+  background-repeat:no-repeat;
+  filter:blur(34px) saturate(1.05);
+  animation:aurora-flow2 34s ease-in-out infinite alternate;
 }
-@keyframes aurora-b{
-  0%  {transform:translate3d(6%,2%,0)   scaleY(1.1)  skewX(7deg); opacity:.7}
-  50% {transform:translate3d(-6%,-4%,0) scaleY(1.3)  skewX(-5deg);opacity:.95}
-  100%{transform:translate3d(4%,3%,0)   scaleY(1.15) skewX(4deg); opacity:.8}
+@keyframes aurora-twinkle{
+  0%  {opacity:.45} 100%{opacity:.9}
+}
+/* Movimento lento e contínuo — ondular delicado, como véus flutuando */
+@keyframes aurora-flow{
+  0%  {transform:translate3d(-10%,2%,0) scaleY(1.0)  skewX(-9deg); opacity:.7}
+  35% {transform:translate3d(-2%,-3%,0) scaleY(1.18) skewX(4deg);  opacity:.92}
+  70% {transform:translate3d(7%,-1%,0)  scaleY(1.1)  skewX(8deg);  opacity:.82}
+  100%{transform:translate3d(-3%,3%,0)  scaleY(1.22) skewX(-5deg); opacity:.78}
+}
+@keyframes aurora-flow2{
+  0%  {transform:translate3d(9%,1%,0)   scaleY(1.1)  skewX(10deg); opacity:.5}
+  40% {transform:translate3d(-4%,-4%,0) scaleY(1.28) skewX(-6deg); opacity:.78}
+  75% {transform:translate3d(6%,-2%,0)  scaleY(1.15) skewX(7deg);  opacity:.62}
+  100%{transform:translate3d(-6%,2%,0)  scaleY(1.24) skewX(-4deg); opacity:.7}
 }
 .manual-chat-panel.chat-max{width:520px}
 .manual-chat-panel.chat-max2{width:min(820px,70vw)}
@@ -1442,7 +1479,7 @@ body.sidebar-collapsed .modal-backdrop{left:66px}
 .mchat-hist-del:hover{background:#fee2e2;color:#dc2626}
 /* Mensagens da RAI */
 .mchat-bubble-wrap{display:flex;flex-direction:column;gap:2px;max-width:calc(100% - 38px)}
-.mchat-sender{font-size:10.5px;font-weight:700;color:#1a5c38;letter-spacing:.3px}
+.mchat-sender{font-size:10.5px;font-weight:700;color:#7ee0a8;letter-spacing:.3px;text-shadow:0 1px 4px rgba(0,0,0,.4)}
 .rai-msg-avatar .rai-avatar-wrap{width:30px;height:30px}
 .rai-msg-avatar{width:30px;height:30px;min-width:30px;background:none}
 /* Minimizado: header escuro */
@@ -1458,17 +1495,29 @@ body.sidebar-collapsed .modal-backdrop{left:66px}
 .mchat-msg{display:flex;gap:8px;max-width:100%}
 .mchat-user{flex-direction:row-reverse}
 .mchat-avatar{width:26px;height:26px;min-width:26px;background:var(--g-600);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;margin-top:2px}
-.mchat-bubble{background:var(--g-50);border:1px solid var(--g-100);border-radius:10px;padding:8px 12px;font-size:12.5px;line-height:1.6;color:var(--ink-2);max-width:calc(100% - 38px)}
-.mchat-user .mchat-bubble{background:var(--g-600);color:#fff;border-color:var(--g-600)}
+/* Bolhas translúcidas e delicadas (frosted) — flutuam sobre o céu de aurora */
+.mchat-bubble{
+  background:rgba(10,36,24,.42);
+  border:1px solid rgba(167,243,208,.22);
+  border-radius:13px;padding:9px 13px;font-size:12.5px;line-height:1.6;
+  color:#eafff4;max-width:calc(100% - 38px);
+  backdrop-filter:blur(14px) saturate(1.15);
+  box-shadow:0 6px 22px rgba(0,0,0,.22),inset 0 1px 0 rgba(255,255,255,.07);
+}
+.mchat-user .mchat-bubble{
+  background:linear-gradient(135deg,rgba(22,163,94,.85),rgba(16,120,70,.85));
+  color:#fff;border-color:rgba(134,239,172,.4);
+}
 .mchat-typing{display:flex;align-items:center;gap:4px;padding:10px 14px}
-.mchat-typing span{width:6px;height:6px;border-radius:50%;background:var(--muted);animation:mchat-bounce .9s infinite}
+.mchat-typing span{width:6px;height:6px;border-radius:50%;background:rgba(167,243,208,.85);animation:mchat-bounce .9s infinite}
 .mchat-typing span:nth-child(2){animation-delay:.15s}
 .mchat-typing span:nth-child(3){animation-delay:.3s}
 @keyframes mchat-bounce{0%,80%,100%{transform:translateY(0)}40%{transform:translateY(-5px)}}
-/* Área de envio: fundo translúcido para a aurora aparecer suavemente atrás (mais neutra) */
-.manual-chat-foot{position:relative;z-index:2;padding:10px 12px;border-top:1px solid rgba(16,185,129,.18);display:flex;gap:8px;align-items:flex-end;background:rgba(255,255,255,.78);backdrop-filter:blur(8px)}
-.manual-chat-inp{flex:1;resize:none;border:1.5px solid var(--g-200);border-radius:8px;padding:8px 10px;font-size:12.5px;font-family:inherit;line-height:1.5;max-height:120px;overflow-y:auto;transition:border-color .15s}
-.manual-chat-inp:focus{outline:none;border-color:var(--g-400)}
+/* Área de envio: barra escura translúcida sobre o céu (aurora aparece atrás) */
+.manual-chat-foot{position:relative;z-index:2;padding:10px 12px;border-top:1px solid rgba(110,231,183,.18);display:flex;gap:8px;align-items:flex-end;background:rgba(4,17,11,.6);backdrop-filter:blur(12px) saturate(1.1)}
+.manual-chat-inp{flex:1;resize:none;border:1.5px solid rgba(110,231,183,.28);border-radius:9px;padding:8px 10px;font-size:12.5px;font-family:inherit;line-height:1.5;max-height:120px;overflow-y:auto;transition:border-color .15s,box-shadow .15s;background:rgba(255,255,255,.06);color:#eafff4}
+.manual-chat-inp::placeholder{color:rgba(200,232,214,.55)}
+.manual-chat-inp:focus{outline:none;border-color:rgba(110,231,183,.6);box-shadow:0 0 0 3px rgba(74,222,128,.12)}
 .manual-chat-send{width:34px;height:34px;min-width:34px;border-radius:8px;border:none;background:var(--g-600);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s}
 .manual-chat-send:hover{background:var(--g-700)}
 .manual-chat-maxbtn{margin-left:8px;width:26px;height:26px;border-radius:6px;border:1px solid var(--g-200);background:#fff;color:var(--g-600);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .12s}
