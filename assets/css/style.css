@@ -523,7 +523,7 @@ tbody tr:hover{background:#f7fbf8;cursor:pointer}
 .risk-clickable:active{transform:scale(.96)}
 
 /* Modal */
-.modal-backdrop{position:fixed;top:80px;left:196px;right:0;bottom:0;background:rgba(2,31,16,.6);display:flex;align-items:stretch;justify-content:stretch;padding:0;z-index:50;overflow:hidden}
+.modal-backdrop{position:fixed;top:80px;left:196px;right:0;bottom:0;background:rgba(2,31,16,.6);display:flex;align-items:stretch;justify-content:stretch;padding:0;z-index:50;overflow:hidden;transition:left .35s cubic-bezier(0.4,0,0.2,1)}
 body.sidebar-collapsed .modal-backdrop{left:66px}
 .modal{background:#fff;border-radius:0;width:100%;max-width:none;box-shadow:none;overflow:hidden;border:none;display:flex;flex-direction:column;height:100%;max-height:100%}
 .modal-header{flex-shrink:0;display:flex;justify-content:space-between;align-items:center;padding:0 20px;border-bottom:2px solid var(--g-200);background:linear-gradient(135deg,var(--g-700) 0%,var(--g-600) 60%,var(--g-500) 100%);min-height:66px;gap:12px}
