@@ -933,14 +933,15 @@
               '</div>'+
             '</div>';
         });
-        rankHTML+='</div>'+
-          '<div style="margin-top:10px;padding:8px 10px;background:var(--g-50);border-radius:8px;font-size:11.5px;color:var(--muted)">'+
-            ico('info',11)+' Barras em <span style="color:#e53935;font-weight:600">vermelho</span> indicam etapas acima do prazo configurado. Clique em uma linha para ver as guias nessa etapa.'+
+        rankHTML+='</div>';
+
+        var rankFoot=
+          '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;width:100%;font-size:11.5px;color:var(--muted)">'+
+            '<span style="flex:1;min-width:200px">'+ico('info',11)+' Barras em <span style="color:#e53935;font-weight:600">vermelho</span> indicam etapas acima do prazo configurado. Clique em uma linha para ver as guias nessa etapa.</span>'+
+            '<span style="white-space:nowrap;font-weight:600;color:var(--g-700)">'+ranking.length+' etapas · '+ranking.filter(function(r){return r.stuck>0;}).length+' com guias paradas agora</span>'+
           '</div>';
 
-        var m=modal('Ranking de Gargalos','Tempo médio por etapa — '+guias.length+' guias analisadas', rankHTML,
-          ranking.length+' etapas · '+ranking.filter(function(r){return r.stuck>0;}).length+' com guias paradas agora'
-        );
+        var m=modal('Ranking de Gargalos','Tempo médio por etapa — '+guias.length+' guias analisadas', rankHTML, rankFoot);
         setTimeout(function(){
           $$('[data-etapa]',m).forEach(function(row){
             row.style.cursor='pointer';
