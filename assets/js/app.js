@@ -578,6 +578,8 @@
     var btn=document.getElementById('sidebarToggle');
     if(!app||!btn) return;
     app.classList.toggle('sidebar-collapsed',_sidebarCollapsed);
+    // Espelha o estado no body para que o modal (fora de #app) se alinhe ao sidebar
+    document.body.classList.toggle('sidebar-collapsed',_sidebarCollapsed);
     btn.innerHTML=_sidebarCollapsed
       ?'<i data-lucide="chevron-right" width="12" height="12"></i>'
       :'<i data-lucide="chevron-left" width="12" height="12"></i>';
