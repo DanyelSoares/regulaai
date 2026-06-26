@@ -4168,9 +4168,13 @@
       (footHTML?'<div class="modal-foot">'+footHTML+'</div>':'');
     bd.appendChild(m); $('#modalRoot').appendChild(bd);
     document.body.style.overflow='hidden';
+    document.body.classList.add('modal-aberto');
     function closeModal(){
       bd.remove();
-      if(!document.querySelector('.modal-backdrop')) document.body.style.overflow='';
+      if(!document.querySelector('.modal-backdrop')){
+        document.body.style.overflow='';
+        document.body.classList.remove('modal-aberto');
+      }
     }
     bd.querySelector('.modal-close').onclick=function(){ closeModal(); };
     bd.onclick=function(e){ if(e.target===bd) closeModal(); };

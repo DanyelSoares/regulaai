@@ -17,6 +17,9 @@ button{font-family:inherit;cursor:pointer}
 input,select,textarea{font-family:inherit;font-size:14px}
 
 #app{display:grid;grid-template-columns:196px 1fr;min-height:100vh;transition:grid-template-columns .35s cubic-bezier(0.4,0,0.2,1)}
+/* Com modal aberto, oculta o conteúdo da página atrás — evita ver o reflow brusco
+   durante a animação do sidebar; o modal cobre toda a área mesmo. */
+body.modal-aberto .main .view{visibility:hidden}
 
 /* Sidebar */
 .sidebar{background:linear-gradient(180deg,var(--g-900) 0%,var(--g-800) 45%,var(--g-700) 100%);color:#dff0e6;display:flex;flex-direction:column;padding:18px 14px;position:sticky;top:0;height:100vh;transition:padding .35s cubic-bezier(0.4,0,0.2,1);overflow:visible;z-index:70}
