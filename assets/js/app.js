@@ -4964,6 +4964,29 @@
           ]))+
         manualBox('Ações nos KPIs',
           '<p>Clicar em qualquer card de KPI abre um modal com a <b>lista detalhada</b> das guias que compõem aquele indicador. A partir do modal é possível clicar em qualquer guia para abrir seus detalhes completos.</p>')+
+        manualBox('Ranking de Gargalos (KPI "Etapa com gargalo")',
+          '<p>O card <b>"Etapa com gargalo"</b> abre o <b>Ranking de Gargalos</b>: uma lista das etapas de auditoria ordenadas pelo <b>tempo médio</b> que as guias permanecem nelas. Serve para identificar onde o fluxo está mais lento e onde há guias travadas.</p>'+
+          '<p><b>O que cada etapa representa:</b> são as etapas dos fluxos assistenciais (ex.: <i>Auditoria Prévia, Cotação OPME, Junta Médica, Abordagem Presencial</i>) percorridas por cada guia ao longo da auditoria.</p>'+
+          '<h4 style="margin:14px 0 6px;font-size:13px;color:var(--g-700)">'+ico('list-checks',13)+' Quando uma guia entra na contagem de uma etapa</h4>'+
+          '<ul>'+
+            '<li>A guia é contabilizada em uma etapa quando <b>passou ou está passando</b> por ela no período filtrado.</li>'+
+            '<li>Etapas que <b>ainda não iniciaram</b> (status <i>aguardando</i>) <b>não entram</b> no cálculo daquela guia.</li>'+
+            '<li>Cada guia contribui com o <b>tempo que levou</b> naquela etapa para o cálculo da média.</li>'+
+          '</ul>'+
+          '<h4 style="margin:14px 0 6px;font-size:13px;color:var(--g-700)">'+ico('timer',13)+' Como o tempo médio é calculado</h4>'+
+          '<ul>'+
+            '<li><b>Etapa concluída:</b> usa o tempo real que a guia levou para completá-la.</li>'+
+            '<li><b>Etapa em andamento (guia parada nela):</b> usa o tempo decorrido <b>até agora</b> (dias em auditoria × 24h) — ou seja, quanto a guia já está esperando.</li>'+
+            '<li>A <b>média da etapa</b> = soma das horas de todas as guias ÷ número de guias que passaram por ela.</li>'+
+            '<li>São exibidas as <b>10 etapas</b> com maior tempo médio (as mais críticas).</li>'+
+          '</ul>'+
+          '<h4 style="margin:14px 0 6px;font-size:13px;color:var(--g-700)">'+ico('pause-circle',13)+' Quando uma guia aparece como "parada"</h4>'+
+          '<p>Uma guia está <b>parada</b> em uma etapa quando essa etapa está <b>em andamento</b> (ainda não foi concluída). O selo <span class="badge danger" style="font-size:10px">N parada(s)</span> ao lado da etapa indica quantas guias estão atualmente travadas ali. Se nenhuma guia está parada, mostra <span class="badge muted" style="font-size:10px">N passaram</span> (já concluíram a etapa).</p>'+
+          '<h4 style="margin:14px 0 6px;font-size:13px;color:var(--g-700)">'+ico('triangle-alert',13)+' Barra vermelha = acima do prazo</h4>'+
+          '<p>Cada etapa tem um <b>prazo configurado</b> (em horas; padrão de 24h se não definido). Quando o <b>tempo médio supera esse prazo</b>, a barra fica <span style="color:#e53935;font-weight:600">vermelha</span> — sinalizando que, em média, as guias estão estourando o tempo esperado naquela etapa. O prazo de cada etapa/fluxo é ajustável em <b>Configurações → Prazos por Fluxo</b>.</p>'+
+          '<h4 style="margin:14px 0 6px;font-size:13px;color:var(--g-700)">'+ico('mouse-pointer-click',13)+' Clicar em uma etapa</h4>'+
+          '<p>Clique em qualquer linha do ranking para abrir a <b>lista das guias daquela etapa</b>. As guias atualmente paradas vêm marcadas com o selo <span class="badge danger" style="font-size:9px">parada</span>. A partir dessa lista, clique em uma guia para abrir seus <b>detalhes completos</b> (já na aba <i>Etapas</i>).</p>'+
+          '<p style="margin-top:10px;padding:9px 12px;background:var(--g-50);border-radius:8px;font-size:12.5px"><b>'+ico('info',12)+' Resumo:</b> o ranking responde a três perguntas — <b>onde</b> o fluxo está mais lento (ordem por tempo médio), <b>quanto</b> está acima do esperado (barra vermelha) e <b>quantas</b> guias estão travadas agora (selo de paradas).</p>')+
         manualBox('Gráficos e Distribuições',
           '<p>Abaixo dos KPIs, o dashboard exibe:</p><ul>'+
           '<li><b>Distribuição por status</b> — barras horizontais com % por status</li>'+
