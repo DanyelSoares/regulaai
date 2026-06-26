@@ -523,9 +523,9 @@ tbody tr:hover{background:#f7fbf8;cursor:pointer}
 .risk-clickable:active{transform:scale(.96)}
 
 /* Modal */
-.modal-backdrop{position:fixed;top:80px;left:196px;right:0;bottom:0;background:rgba(2,31,16,.6);display:flex;align-items:flex-start;justify-content:center;padding:24px 20px;z-index:50;overflow:hidden}
+.modal-backdrop{position:fixed;top:80px;left:196px;right:0;bottom:0;background:rgba(2,31,16,.6);display:flex;align-items:stretch;justify-content:stretch;padding:0;z-index:50;overflow:hidden}
 body.sidebar-collapsed .modal-backdrop{left:66px}
-.modal{background:#fff;border-radius:14px;width:100%;max-width:1100px;box-shadow:0 24px 70px rgba(2,31,16,.35);overflow:hidden;border:1px solid var(--g-200);display:flex;flex-direction:column;max-height:100%}
+.modal{background:#fff;border-radius:0;width:100%;max-width:none;box-shadow:none;overflow:hidden;border:none;display:flex;flex-direction:column;height:100%;max-height:100%}
 .modal-header{flex-shrink:0;display:flex;justify-content:space-between;align-items:center;padding:0 20px;border-bottom:2px solid var(--g-200);background:linear-gradient(135deg,var(--g-700) 0%,var(--g-600) 60%,var(--g-500) 100%);min-height:66px;gap:12px}
 .modal-header-brand{display:flex;align-items:center;gap:10px;flex:1;min-width:0}
 .modal-header-brand .modal-brand-mark{width:32px;height:32px;background:rgba(255,255,255,.18);border-radius:8px;display:flex;align-items:center;justify-content:center;position:relative;font-weight:900;font-size:15px;color:#fff;letter-spacing:-1px;flex-shrink:0;border:1.5px solid rgba(255,255,255,.3)}
@@ -907,8 +907,6 @@ body.sidebar-collapsed .modal-backdrop{left:66px}
   .topbar-title{font-size:13px}
   .page-title{flex-direction:column;align-items:flex-start;gap:10px}
   .page-title h1{font-size:20px}
-  .modal-backdrop{padding:20px 12px}
-  .modal-body{max-height:65vh}
   .k-period-bar,.k-filter-bar{padding:8px 10px}
   .kanban{grid-auto-columns:270px}
 }
@@ -1038,13 +1036,13 @@ body.sidebar-collapsed .modal-backdrop{left:66px}
   .modal-backdrop{
     top:0!important;left:0!important;
     padding:0!important;
-    align-items:flex-end;
+    align-items:flex-end!important;justify-content:center!important;
     padding-top:60px!important;
   }
   .modal{
-    border-radius:16px 16px 0 0;
-    max-width:100%;
-    max-height:90vh;
+    border-radius:16px 16px 0 0!important;
+    width:100%;max-width:100%;
+    height:auto!important;max-height:90vh;
   }
   .modal-body{max-height:calc(90vh - 130px)}
 
@@ -1123,7 +1121,7 @@ body.sidebar-collapsed .modal-backdrop{left:66px}
   .page-title h1{font-size:16px}
   .topbar-title{font-size:12px}
   .topbar-logo-mark{width:30px!important;height:30px!important}
-  .modal{border-radius:14px 14px 0 0;max-height:95vh}
+  .modal{border-radius:14px 14px 0 0!important;height:auto!important;max-height:95vh}
   .modal-body{max-height:calc(95vh - 120px)}
   .k-flt-btn{font-size:10px;padding:3px 8px}
   .kanban{grid-auto-columns:min(88vw,300px)}
