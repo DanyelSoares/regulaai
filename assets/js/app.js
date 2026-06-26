@@ -601,11 +601,19 @@
     setTimeout(function(){ pl.classList.remove('pl--in'); },delay);
   }
 
+  /* === Fecha todos os modais abertos (usado ao trocar de página) === */
+  function fecharModais(){
+    $$('.modal-backdrop').forEach(function(bd){ bd.remove(); });
+    document.body.style.overflow='';
+    document.body.classList.remove('modal-aberto');
+  }
+
   /* === Sidebar / nav === */
   function bindNav(){
     $$('.nav-item').forEach(function(a){
-      if(a.id==='chatToggleBtn') return; // tratado pelo initChat
+      if(a.id==='chatToggleBtn') return; // tratado pelo initChat (não fecha modal)
       a.onclick=function(){
+        fecharModais(); // ao trocar de página, fecha qualquer modal aberto
         State.route=a.getAttribute('data-route');
         $$('.nav-item').forEach(function(x){x.classList.remove('active')});
         a.classList.add('active');
