@@ -125,8 +125,8 @@
                  fluxos: ENFERMEIROS[0].fluxos, enfermeiroId: ENFERMEIROS[0].id},
     auditor:    {nome:'Dr. Marcos Vinícius',cor:'#066b34', perms:['ver','triagem','complemento','parecer','aprovar','reprovar','junta']},
     gestor:     {nome:'Patrícia Andrade',  cor:'#054f27', perms:['ver','triagem','complemento','parecer','aprovar','reprovar','junta','config','parametrizar','logs']},
-    // Administrador: tudo que o gestor faz + gerenciar usuários (acima de todos)
-    admin:      {nome:'Administrador',     cor:'#021f10', perms:['ver','triagem','complemento','parecer','aprovar','reprovar','junta','config','parametrizar','logs','usuarios']}
+    // Administrador: tudo que o gestor faz + gerenciar usuários + chave de IA (acima de todos)
+    admin:      {nome:'Administrador',     cor:'#021f10', perms:['ver','triagem','complemento','parecer','aprovar','reprovar','junta','config','parametrizar','logs','usuarios','configIA']}
   };
   function can(act){ var d=perfilDef[State.perfil]; return !!d && d.perms.indexOf(act)>=0; }
   // Admin e Gestor compartilham os mesmos poderes (exceto "usuarios", só do admin)
@@ -3643,6 +3643,7 @@
     {key:'logs',         label:'Visualizar logs completos',              desc:'Admin e Gestor acessam todo o histórico; Auditor consulta os próprios',   p:['admin','gestor'],                        v:['auditor']},
     {key:'dadosSensiveis',label:'Dados sensíveis sem mascaramento',      desc:'CPF, cartão e informações pessoais exibidos sem ocultação de dígitos',   p:['admin','gestor'],                        v:[]},
     {key:'usuarios',     label:'Gerenciar usuários',                     desc:'Cadastrar, editar e inativar usuários — exclusivo do Administrador',      p:['admin'],                                 v:[]},
+    {key:'configIA',     label:'Configurar chave de API (Assistente IA)',desc:'Inserir/editar a chave do provedor de IA — exclusivo do Administrador',   p:['admin'],                                 v:[]},
   ];
   var PERM_PROFILES=['admin','gestor','auditor','enfermeiro'];
   var PERM_LEVELS=['edit','view','none']; // ciclo ao clicar
@@ -3750,7 +3751,8 @@
     ];
     // Aba Usuários: exclusiva do Administrador
     if(can('usuarios')) CFG_TABS.push({id:'usuarios', label:'Usuários', ico:'users'});
-    CFG_TABS.push({id:'ia', label:'Assistente IA', ico:'bot'});
+    // Aba Assistente IA (chave de API): exclusiva do Administrador
+    if(can('configIA')) CFG_TABS.push({id:'ia', label:'Assistente IA', ico:'bot'});
 
     var tabBar=el('div',{class:'cfg-tab-bar'});
     CFG_TABS.forEach(function(tb){
@@ -6124,11 +6126,17 @@
       chatLog.scrollTop=chatLog.scrollHeight;
     }
 
+    // Mensagem de "sem chave" adaptada ao perfil (admin configura; demais contatam admin)
+    function msgSemChave(){
+      if(can('configIA')) return '⚠️ Nenhuma chave de API configurada. Acesse <b>Configurações → Assistente IA</b> para escolher o provedor (Gemini, Claude ou OpenAI) e inserir sua chave.';
+      return '⚠️ O assistente ainda não está disponível. Solicite ao <b>Administrador</b> a configuração da chave de API.';
+    }
+
     // Renderiza o log a partir do chatHistory atual
     function renderLog(){
       chatLog.innerHTML='';
       addMsg('bot',WELCOME);
-      if(!getIaCfg().key) addMsg('bot','⚠️ Nenhuma chave de API configurada. Acesse <b>Configurações → Assistente</b> para escolher o provedor (Gemini, Claude ou OpenAI) e inserir sua chave.');
+      if(!getIaCfg().key) addMsg('bot',msgSemChave());
       for(var i=0;i<chatHistory.length;i++){
         addMsg(chatHistory[i].role==='user'?'user':'bot', chatHistory[i].parts[0].text);
       }
@@ -6274,7 +6282,7 @@
 
       var cfg=getIaCfg();
       if(!cfg.key){
-        addMsg('bot','⚠️ Configure o provedor e a chave de API em <b>Configurações → Assistente</b>.');
+        addMsg('bot',msgSemChave());
         return;
       }
 
