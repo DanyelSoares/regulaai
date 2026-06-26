@@ -82,6 +82,18 @@
     return out;
   }
 
+  // Migração única: promove a sessão atual de Gestor → Administrador (novo topo)
+  (function migraAdmin(){
+    if(localStorage.getItem('regula_admin_migrado')) return;
+    if(State.perfil==='gestor'){ State.perfil='admin'; localStorage.setItem('regula_perfil','admin'); }
+    // promove também o usuário "admin" salvo, se ainda estiver como gestor
+    try{
+      var us=JSON.parse(localStorage.getItem('regula_users')||'null');
+      if(us){ for(var ui=0;ui<us.length;ui++){ if(us[ui].login==='admin'&&us[ui].perfil==='gestor') us[ui].perfil='admin'; } localStorage.setItem('regula_users',JSON.stringify(us)); }
+    }catch(e){}
+    localStorage.setItem('regula_admin_migrado','1');
+  })();
+
   // Recupera pareceres salvos
   var saved = JSON.parse(localStorage.getItem('regula_pareceres')||'{}');
   for(var i=0;i<State.guias.length;i++){ if(saved[State.guias[i].numero]) State.guias[i].parecerOperadora = saved[State.guias[i].numero]; }
@@ -112,9 +124,13 @@
                  perms:['ver','triagem','complemento'],
                  fluxos: ENFERMEIROS[0].fluxos, enfermeiroId: ENFERMEIROS[0].id},
     auditor:    {nome:'Dr. Marcos Vinícius',cor:'#066b34', perms:['ver','triagem','complemento','parecer','aprovar','reprovar','junta']},
-    gestor:     {nome:'Patrícia Andrade',  cor:'#054f27', perms:['ver','triagem','complemento','parecer','aprovar','reprovar','junta','config','parametrizar','logs']}
+    gestor:     {nome:'Patrícia Andrade',  cor:'#054f27', perms:['ver','triagem','complemento','parecer','aprovar','reprovar','junta','config','parametrizar','logs']},
+    // Administrador: tudo que o gestor faz + gerenciar usuários (acima de todos)
+    admin:      {nome:'Administrador',     cor:'#021f10', perms:['ver','triagem','complemento','parecer','aprovar','reprovar','junta','config','parametrizar','logs','usuarios']}
   };
-  function can(act){ return perfilDef[State.perfil].perms.indexOf(act)>=0; }
+  function can(act){ var d=perfilDef[State.perfil]; return !!d && d.perms.indexOf(act)>=0; }
+  // Admin e Gestor compartilham os mesmos poderes (exceto "usuarios", só do admin)
+  function ehGestor(){ return State.perfil==='gestor' || State.perfil==='admin'; }
 
   // Retorna a etapa atualmente em execução de uma guia
   function etapaAtualDe(g){
@@ -128,12 +144,12 @@
   // Gestor: tudo; se State.visaoPerfil estiver definido, aplica a mesma lógica do perfil simulado
   function guiasVisiveis(){
     var base = State.guias;
-    var efetivo = State.perfil === 'gestor' ? State.visaoPerfil : State.perfil;
+    var efetivo = ehGestor() ? State.visaoPerfil : State.perfil;
     if(!efetivo) return base;
     if(efetivo === 'enfermeiro'){
       // Gestor pode filtrar por enfermeira específica; perfil enfermeiro usa seu próprio cadastro
       var fluxosEnf;
-      if(State.perfil==='gestor' && State.visaoEnfermeiros.length){
+      if(ehGestor() && State.visaoEnfermeiros.length){
         // uma ou mais enfermeiras selecionadas: união dos fluxos
         fluxosEnf = ENFERMEIROS
           .filter(function(e){ return State.visaoEnfermeiros.indexOf(e.id)>=0; })
@@ -259,7 +275,7 @@
     return wrap;
   }
   function esc(s){ if(s==null) return ''; return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]}); }
-  function mask(v){ if(State.perfil==='gestor') return v; if(!v) return ''; return v.replace(/\d(?=\d{2})/g,'•'); }
+  function mask(v){ if(ehGestor()) return v; if(!v) return ''; return v.replace(/\d(?=\d{2})/g,'•'); }
   function toast(msg,kind){ var t=el('div',{class:'toast '+(kind||'')},esc(msg)); $('#toastRoot').appendChild(t); setTimeout(function(){t.style.opacity=0; setTimeout(function(){t.remove()},300)},2800); }
   function ico(name,size){ size=size||14; return '<i data-lucide="'+name+'" width="'+size+'" height="'+size+'" style="vertical-align:middle"></i>'; }
   function icoLg(name){ return '<i data-lucide="'+name+'" width="40" height="40"></i>'; }
@@ -671,7 +687,10 @@
       var ic2=$('#fabBtn [data-lucide]');
       if(ic2){ ic2.setAttribute('data-lucide','users'); lcIcons(); }
       var users, label;
-      if(profile==='gestor'){
+      if(profile==='admin'){
+        users=[{nome:perfilDef.admin.nome, cor:perfilDef.admin.cor, profile:'admin', enfId:'', sub:'Acesso total + Usuários'}];
+        label='Administrador';
+      } else if(profile==='gestor'){
         users=[{nome:perfilDef.gestor.nome, cor:perfilDef.gestor.cor, profile:'gestor', enfId:'', sub:'Acesso total'}];
         label='Gestor';
       } else if(profile==='auditor'){
@@ -753,10 +772,11 @@
     });
   }
 
+  var PERFIL_NOMES={admin:'Administrador',gestor:'Gestor',auditor:'Auditor',enfermeiro:'Enfermeiro'};
   function renderUserChip(){
     var u=perfilDef[State.perfil];
     $('#userName').textContent=u.nome;
-    $('#userRole').textContent=State.perfil;
+    $('#userRole').textContent=PERFIL_NOMES[State.perfil]||State.perfil;
     $('#userAvatar').textContent=u.nome.charAt(0);
     $('#userAvatar').style.background=u.cor;
     // Marca ativo no FAB (perfil ativo = anel no botão do tipo de perfil)
@@ -795,7 +815,7 @@
       return true;
     });
     var tituloExtra='';
-    if(State.perfil==='gestor' && State.visaoPerfil) tituloExtra=' <span class="badge info">Visão: '+State.visaoPerfil+'</span>';
+    if(ehGestor() && State.visaoPerfil) tituloExtra=' <span class="badge info">Visão: '+State.visaoPerfil+'</span>';
     var hdr=el('div',{class:'page-title'},'<div><h1>Dashboard Executivo'+tituloExtra+'</h1><p>Visão consolidada de auditoria assistencial e indicadores operacionais.</p></div>');
     var dpWrap=el('div',{id:'dashPeriodoWrap',style:'display:flex;align-items:center'});
     hdr.appendChild(dpWrap);
@@ -808,7 +828,7 @@
     );
 
     // Banner de contexto de perfil
-    if(State.perfil!=='gestor'){
+    if(!ehGestor()){
       var bann=el('div',{class:'perfil-banner'});
       var bIcon=State.perfil==='enfermeiro'?'stethoscope':'search';
       var bMsg=State.perfil==='enfermeiro'
@@ -818,8 +838,8 @@
       wrap.appendChild(bann);
     }
 
-    // Seletor de visão para Gestor
-    if(State.perfil==='gestor') renderVisaoBar(wrap);
+    // Seletor de visão para Gestor/Admin
+    if(ehGestor()) renderVisaoBar(wrap);
 
     function count(fn){ return guias.filter(fn).length; }
     var refreshDuracao=null;
@@ -1339,7 +1359,7 @@
     wrap.appendChild(el('div',{class:'page-title'},'<div><h1>Relação de Guias</h1><p>Filtre, audite e emita parecer da operadora com apoio da análise técnica.</p></div><div style="display:flex;gap:8px;align-items:center"><button class="btn ghost" id="btnClear">'+ico('x',13)+' Limpar filtros</button><button class="btn-animated" id="btnExport">'+ico('download')+' Exportar Excel</button></div>'));
 
     // Banner de contexto de perfil
-    if(State.perfil!=='gestor'){
+    if(!ehGestor()){
       var bann=el('div',{class:'perfil-banner'});
       var bIcon=State.perfil==='enfermeiro'?'stethoscope':'search';
       var bMsg=State.perfil==='enfermeiro'
@@ -2913,7 +2933,7 @@
       content.innerHTML='';
       if(name==='Fluxos & Etapas'){ buildFluxosUI(content); lcIcons(); return; }
       var isDUT=name==='Regras DUT';
-      var isGestor=State.perfil==='gestor';
+      var isGestor=ehGestor();
       var prefix, data;
       if(isDUT){
         prefix='dut';
@@ -3611,19 +3631,20 @@
   }
 
   var PERM_LIST=[
-    {key:'verGuias',     label:'Visualizar guias e dashboard',           desc:'Leitura de guias, indicadores e painel geral',                             p:['gestor','auditor','enfermeiro'], v:[]},
-    {key:'triagem',      label:'Triagem e complemento de documentação',  desc:'Solicitar documentos, triagem inicial e registrar pendências',            p:['gestor','auditor','enfermeiro'], v:[]},
-    {key:'parecer',      label:'Emitir parecer técnico',                 desc:'Registrar pareceres de análise clínica e regulatória em guias',           p:['gestor','auditor'],              v:[]},
-    {key:'aprovar',      label:'Aprovar guias',                          desc:'Emitir autorização de procedimentos que atendem aos critérios técnicos',  p:['gestor','auditor'],              v:[]},
-    {key:'reprovar',     label:'Reprovar guias',                         desc:'Negar procedimentos por não conformidade técnica ou regulatória',         p:['gestor','auditor'],              v:[]},
-    {key:'juntaMedica',  label:'Encaminhar para junta médica',           desc:'Solicitar avaliação multidisciplinar por junta médica',                  p:['gestor','auditor'],              v:[]},
-    {key:'migrarPerfil', label:'Migrar entre perfis / visão geral',      desc:'Alternar entre perfis e visualizar as demandas de todos os usuários',    p:['gestor'],                        v:[]},
-    {key:'config',       label:'Acessar Configurações do sistema',       desc:'Gestor edita; Auditor e Enfermeiro podem consultar, sem alterar valores', p:['gestor'],                        v:['auditor','enfermeiro']},
-    {key:'parametrizar', label:'Parametrizar fluxos, DUT e vinculações', desc:'Gestor configura; Auditor e Enfermeiro visualizam os parâmetros ativos', p:['gestor'],                        v:['auditor','enfermeiro']},
-    {key:'logs',         label:'Visualizar logs completos',              desc:'Gestor acessa todo o histórico; Auditor consulta os próprios registros',  p:['gestor'],                        v:['auditor']},
-    {key:'dadosSensiveis',label:'Dados sensíveis sem mascaramento',      desc:'CPF, cartão e informações pessoais exibidos sem ocultação de dígitos',   p:['gestor'],                        v:[]},
+    {key:'verGuias',     label:'Visualizar guias e dashboard',           desc:'Leitura de guias, indicadores e painel geral',                             p:['admin','gestor','auditor','enfermeiro'], v:[]},
+    {key:'triagem',      label:'Triagem e complemento de documentação',  desc:'Solicitar documentos, triagem inicial e registrar pendências',            p:['admin','gestor','auditor','enfermeiro'], v:[]},
+    {key:'parecer',      label:'Emitir parecer técnico',                 desc:'Registrar pareceres de análise clínica e regulatória em guias',           p:['admin','gestor','auditor'],              v:[]},
+    {key:'aprovar',      label:'Aprovar guias',                          desc:'Emitir autorização de procedimentos que atendem aos critérios técnicos',  p:['admin','gestor','auditor'],              v:[]},
+    {key:'reprovar',     label:'Reprovar guias',                         desc:'Negar procedimentos por não conformidade técnica ou regulatória',         p:['admin','gestor','auditor'],              v:[]},
+    {key:'juntaMedica',  label:'Encaminhar para junta médica',           desc:'Solicitar avaliação multidisciplinar por junta médica',                  p:['admin','gestor','auditor'],              v:[]},
+    {key:'migrarPerfil', label:'Migrar entre perfis / visão geral',      desc:'Alternar entre perfis e visualizar as demandas de todos os usuários',    p:['admin','gestor'],                        v:[]},
+    {key:'config',       label:'Acessar Configurações do sistema',       desc:'Admin e Gestor editam; Auditor e Enfermeiro consultam, sem alterar',       p:['admin','gestor'],                        v:['auditor','enfermeiro']},
+    {key:'parametrizar', label:'Parametrizar fluxos, DUT e vinculações', desc:'Admin e Gestor configuram; Auditor e Enfermeiro visualizam',              p:['admin','gestor'],                        v:['auditor','enfermeiro']},
+    {key:'logs',         label:'Visualizar logs completos',              desc:'Admin e Gestor acessam todo o histórico; Auditor consulta os próprios',   p:['admin','gestor'],                        v:['auditor']},
+    {key:'dadosSensiveis',label:'Dados sensíveis sem mascaramento',      desc:'CPF, cartão e informações pessoais exibidos sem ocultação de dígitos',   p:['admin','gestor'],                        v:[]},
+    {key:'usuarios',     label:'Gerenciar usuários',                     desc:'Cadastrar, editar e inativar usuários — exclusivo do Administrador',      p:['admin'],                                 v:[]},
   ];
-  var PERM_PROFILES=['gestor','auditor','enfermeiro'];
+  var PERM_PROFILES=['admin','gestor','auditor','enfermeiro'];
   var PERM_LEVELS=['edit','view','none']; // ciclo ao clicar
   function _permBaseLevel(perm,profile){
     if(perm.p.indexOf(profile)>=0) return 'edit';
@@ -3636,8 +3657,8 @@
     return ov||_permBaseLevel(perm,profile);
   }
   function _buildPermMatrix(){
-    var editable=State.perfil==='gestor';
-    var profileColors={gestor:'#054f27',auditor:'#066b34',enfermeiro:'#0a8a43'};
+    var editable=ehGestor();
+    var profileColors={admin:'#021f10',gestor:'#054f27',auditor:'#066b34',enfermeiro:'#0a8a43'};
     var LEVEL_ICO={edit:'check-circle',view:'eye',none:'minus'};
     var LEVEL_COLOR={edit:'var(--g-600)',view:'#64748b',none:'var(--g-200)'};
     var LEVEL_LABEL={edit:'Acesso total',view:'Somente leitura',none:'Sem acesso'};
@@ -3726,9 +3747,10 @@
       {id:'risco',      label:'Classificação de Risco', ico:'shield-alert'},
       {id:'fluxos',     label:'Fluxos',                 ico:'git-branch'},
       {id:'permissoes', label:'Permissões',             ico:'shield'},
-      {id:'usuarios',   label:'Usuários',               ico:'users'},
-      {id:'ia',         label:'Assistente IA',          ico:'bot'},
     ];
+    // Aba Usuários: exclusiva do Administrador
+    if(can('usuarios')) CFG_TABS.push({id:'usuarios', label:'Usuários', ico:'users'});
+    CFG_TABS.push({id:'ia', label:'Assistente IA', ico:'bot'});
 
     var tabBar=el('div',{class:'cfg-tab-bar'});
     CFG_TABS.forEach(function(tb){
@@ -3954,7 +3976,7 @@
 
       var REGIME_OPTS=['Todos','Eletivo','Urgência'];
       var REGIME_CLS={Todos:'muted',Eletivo:'info',Urgência:'warn'};
-      var editable=State.perfil==='gestor';
+      var editable=ehGestor();
       var tbody=el('tbody');
       var inputs={};
       MOCK.FLUXOS.forEach(function(f){
@@ -4146,9 +4168,9 @@
     // ── Aba: Usuários ────────────────────────────────────────────────
     function renderUsuarios(){
       cfgContent.innerHTML='';
-      var PERFIS=[{v:'gestor',t:'Gestor'},{v:'auditor',t:'Auditor'},{v:'enfermeiro',t:'Enfermeiro'}];
-      var perfilLabel={gestor:'Gestor',auditor:'Auditor',enfermeiro:'Enfermeiro'};
-      var perfilCls={gestor:'badge info',auditor:'badge',enfermeiro:'badge muted'};
+      var PERFIS=[{v:'admin',t:'Administrador'},{v:'gestor',t:'Gestor'},{v:'auditor',t:'Auditor'},{v:'enfermeiro',t:'Enfermeiro'}];
+      var perfilLabel={admin:'Administrador',gestor:'Gestor',auditor:'Auditor',enfermeiro:'Enfermeiro'};
+      var perfilCls={admin:'badge dark',gestor:'badge info',auditor:'badge',enfermeiro:'badge muted'};
 
       var sec=el('div',{class:'panel',style:'padding:20px'});
       cfgContent.appendChild(sec);
@@ -5814,26 +5836,28 @@
         manualHdr('Perfis de Acesso','Capacidades e restrições de cada perfil de usuário')+
         manualBox('Perfis disponíveis',
           manualTable(['Perfil','Acesso','Descrição'],[
-            ['Gestor','Total','Acesso a todas as funcionalidades, incluindo Configurações, Parametrização e Logs'],
+            ['Administrador','Total +','Acesso a tudo, incluindo o gerenciamento de Usuários (Configurações → Usuários). É o perfil de mais alto nível.'],
+            ['Gestor','Total','Mesmos acessos do Administrador, exceto gerenciar Usuários. Inclui Configurações, Parametrização e Logs.'],
             ['Auditor','Parcial','Pode auditar guias, emitir pareceres e visualizar relatórios'],
             ['Enfermeiro','Restrito','Acesso apenas às guias dos seus fluxos e às etapas de responsabilidade do enfermeiro'],
           ]))+
-        manualBox('Simulação de Perfil (Gestor)',
-          '<p>O Gestor pode simular a visão de outros perfis usando o <b>botão flutuante</b> no canto inferior direito da tela (FAB com ícone de usuários). Ao selecionar um perfil:</p>'+
+        manualBox('Simulação de Perfil (Administrador / Gestor)',
+          '<p>Administrador e Gestor podem simular a visão de outros perfis usando o <b>botão flutuante</b> no canto inferior direito da tela (FAB com ícone de usuários). Ao selecionar um perfil:</p>'+
           '<ul><li>A visão de guias é filtrada conforme as regras do perfil simulado</li>'+
           '<li>Um banner de aviso é exibido no topo indicando o perfil em simulação</li>'+
           '<li>Um botão "Sair da visão" permite retornar à visão completa</li></ul>')+
-        manualTable(['Funcionalidade','Gestor','Auditor','Enfermeiro'],[
-          ['Dashboard','✓','✓','✓'],
-          ['Relação de Guias','✓','✓','✓ (fluxos próprios)'],
-          ['Kanban','✓','✓','✓ (fluxos próprios)'],
-          ['Parametrização','✓','—','—'],
-          ['Logs','✓','—','—'],
-          ['Configurações','✓','—','—'],
-          ['Emitir parecer','✓','✓','—'],
-          ['Aprovar/Reprovar','✓','✓','—'],
-          ['Junta médica','✓','✓','—'],
-          ['Triagem/Complemento','✓','✓','✓'],
+        manualTable(['Funcionalidade','Admin','Gestor','Auditor','Enfermeiro'],[
+          ['Dashboard','✓','✓','✓','✓'],
+          ['Relação de Guias','✓','✓','✓','✓ (fluxos próprios)'],
+          ['Kanban','✓','✓','✓','✓ (fluxos próprios)'],
+          ['Parametrização','✓','✓','—','—'],
+          ['Logs','✓','✓','—','—'],
+          ['Configurações','✓','✓','—','—'],
+          ['Gerenciar Usuários','✓','—','—','—'],
+          ['Emitir parecer','✓','✓','✓','—'],
+          ['Aprovar/Reprovar','✓','✓','✓','—'],
+          ['Junta médica','✓','✓','✓','—'],
+          ['Triagem/Complemento','✓','✓','✓','✓'],
         ]);
     }
 
@@ -5887,7 +5911,7 @@
   function getUsers(){
     var saved=localStorage.getItem(USERS_KEY);
     if(saved) return JSON.parse(saved);
-    var defaults=[{login:'admin',senha:'admin',nome:'Administrador',perfil:'gestor'}];
+    var defaults=[{login:'admin',senha:'admin',nome:'Administrador',cpf:'',email:'',perfil:'admin',ativo:true}];
     localStorage.setItem(USERS_KEY,JSON.stringify(defaults));
     return defaults;
   }
@@ -6054,7 +6078,7 @@
       '3) CRITÉRIOS DE ADERÊNCIA: Documental (documentação anexada), DUT (Diretriz de Utilização), Procedimentos vinculados, Pacotes, Mat/Med, Diárias/Taxas, Contratual/Histórico. '+
       '4) PESOS: configuráveis em Parametrização → cada aba (Procedimentos, Pacotes, Mat/Med, Diárias/Taxas) tem campo Peso de 0 a 10. '+
       '5) REPROCESSAR: reanalisa a guia passando itens desmarcados pelo auditor, observações e parecer da operadora como contexto de aprendizado. '+
-      '6) PERFIS: Gestor (acesso total), Auditor (análise e parecer), Enfermeiro (triagem e complemento). '+
+      '6) PERFIS: Administrador (acesso a tudo, incluindo gerenciar usuários), Gestor (mesmos acessos do Administrador, exceto gerenciar usuários), Auditor (análise e parecer), Enfermeiro (triagem e complemento). '+
       '7) FLUXOS: F1-Eletivo, F2-Alta Complexidade, F3-Oncologia, etc. '+
       'Se não souber algo específico do sistema, oriente o usuário a consultar o manual ou contatar o administrador.';
 

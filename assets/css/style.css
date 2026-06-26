@@ -805,6 +805,7 @@ body.sidebar-collapsed .modal-backdrop{left:66px}
   border-color:#fff;
   box-shadow:0 0 0 3px rgba(255,255,255,.35),0 4px 14px rgba(0,0,0,.28)
 }
+.fab-item--admin  {background:linear-gradient(135deg,#0b3d24,#010d07);font-size:11px}
 .fab-item--gestor {background:linear-gradient(135deg,#064e3b,#022c22)}
 .fab-item--auditor{background:linear-gradient(135deg,#14532d,#0d3318)}
 .fab-item--enf    {background:linear-gradient(135deg,#15803d,#166534)}
