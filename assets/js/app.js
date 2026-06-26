@@ -4155,41 +4155,120 @@
 
       function salvarUsers(arr){ localStorage.setItem('regula_users',JSON.stringify(arr)); }
 
+      // Máscara/validação simples de CPF
+      function soDigitos(s){ return (s||'').replace(/\D/g,''); }
+      function fmtCPF(s){
+        var d=soDigitos(s).slice(0,11);
+        if(d.length>9) return d.replace(/(\d{3})(\d{3})(\d{3})(\d{1,2})/,'$1.$2.$3-$4');
+        if(d.length>6) return d.replace(/(\d{3})(\d{3})(\d{1,3})/,'$1.$2.$3');
+        if(d.length>3) return d.replace(/(\d{3})(\d{1,3})/,'$1.$2');
+        return d;
+      }
+      function cpfValido(s){
+        var c=soDigitos(s);
+        if(c.length!==11||/^(\d)\1{10}$/.test(c)) return false;
+        var soma=0,r;
+        for(var i=0;i<9;i++) soma+=parseInt(c[i])*(10-i);
+        r=(soma*10)%11; if(r===10) r=0; if(r!==parseInt(c[9])) return false;
+        soma=0; for(i=0;i<10;i++) soma+=parseInt(c[i])*(11-i);
+        r=(soma*10)%11; if(r===10) r=0; return r===parseInt(c[10]);
+      }
+      function emailValido(s){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s||''); }
+
       function abreForm(idx){
         // idx=null → novo; senão edita o usuário no índice
         var users=getUsers();
-        var u=idx!=null?users[idx]:{login:'',senha:'',nome:'',perfil:'auditor'};
-        var titulo=idx!=null?'Editar usuário':'Novo usuário';
+        var u=idx!=null?users[idx]:{login:'',senha:'',nome:'',cpf:'',email:'',perfil:'auditor',ativo:true};
+        if(u.ativo===undefined) u.ativo=true;
+        var titulo=idx!=null?'Editar Usuário':'Novo Usuário';
         var body=
-          '<div style="display:flex;flex-direction:column;gap:14px">'+
+          '<div style="display:flex;flex-direction:column;gap:14px;max-width:560px;margin:0 auto">'+
             '<div class="usr-field"><label>Nome completo</label><input id="uNome" type="text" value="'+esc(u.nome||'')+'" placeholder="Ex.: Maria Silva" /></div>'+
-            '<div class="usr-field"><label>Login</label><input id="uLogin" type="text" value="'+esc(u.login||'')+'" placeholder="Ex.: maria.silva" autocomplete="off" /></div>'+
-            '<div class="usr-field"><label>Senha</label><input id="uSenha" type="text" value="'+esc(u.senha||'')+'" placeholder="Senha de acesso" autocomplete="new-password" /></div>'+
-            '<div class="usr-field"><label>Perfil</label><select id="uPerfil">'+
-              PERFIS.map(function(p){ return '<option value="'+p.v+'"'+(u.perfil===p.v?' selected':'')+'>'+p.t+'</option>'; }).join('')+
-            '</select></div>'+
+            '<div class="usr-row">'+
+              '<div class="usr-field"><label>CPF</label><input id="uCpf" type="text" value="'+esc(u.cpf||'')+'" placeholder="000.000.000-00" inputmode="numeric" maxlength="14" /></div>'+
+              '<div class="usr-field"><label>E-mail</label><input id="uEmail" type="email" value="'+esc(u.email||'')+'" placeholder="usuario@email.com" autocomplete="off" /></div>'+
+            '</div>'+
+            '<div class="usr-field"><label>Login (usado para acessar)</label><input id="uLogin" type="text" value="'+esc(u.login||'')+'" placeholder="Ex.: maria.silva" autocomplete="off" /></div>'+
+            '<div class="usr-row">'+
+              '<div class="usr-field"><label>Senha</label><input id="uSenha" type="text" value="'+esc(u.senha||'')+'" placeholder="Senha de acesso" autocomplete="new-password" /></div>'+
+              '<div class="usr-field"><label>Redigite a senha</label><input id="uSenha2" type="text" value="'+esc(u.senha||'')+'" placeholder="Repita a senha" autocomplete="new-password" /></div>'+
+            '</div>'+
+            '<div class="usr-row">'+
+              '<div class="usr-field"><label>Perfil</label><select id="uPerfil">'+
+                PERFIS.map(function(p){ return '<option value="'+p.v+'"'+(u.perfil===p.v?' selected':'')+'>'+p.t+'</option>'; }).join('')+
+              '</select></div>'+
+              '<div class="usr-field"><label>Situação</label><select id="uAtivo">'+
+                '<option value="1"'+(u.ativo?' selected':'')+'>Ativo</option>'+
+                '<option value="0"'+(!u.ativo?' selected':'')+'>Inativo</option>'+
+              '</select></div>'+
+            '</div>'+
           '</div>';
-        var foot='<button class="btn ghost" id="uCancel">Cancelar</button><button class="btn" id="uSalvar">'+ico('save',13)+' Salvar</button>';
+        var foot='<button class="btn ghost" id="uCancel">'+ico('arrow-left',13)+' Voltar</button><button class="btn" id="uSalvar">'+ico('save',13)+' Salvar</button>';
         var m=modal(titulo, idx!=null?'Altere os dados e salve':'Preencha os dados do novo usuário', body, foot);
+
+        // máscara de CPF ao digitar
+        var inpCpf=m.querySelector('#uCpf');
+        inpCpf.addEventListener('input',function(){ this.value=fmtCPF(this.value); });
+
         m.querySelector('#uCancel').onclick=function(){ fecharModais(); };
         m.querySelector('#uSalvar').onclick=function(){
           var nome=m.querySelector('#uNome').value.trim();
+          var cpf=m.querySelector('#uCpf').value.trim();
+          var email=m.querySelector('#uEmail').value.trim();
           var login=m.querySelector('#uLogin').value.trim();
           var senha=m.querySelector('#uSenha').value.trim();
+          var senha2=m.querySelector('#uSenha2').value.trim();
           var perfil=m.querySelector('#uPerfil').value;
+          var ativo=m.querySelector('#uAtivo').value==='1';
+
           if(!nome||!login||!senha){ toast('Preencha nome, login e senha','err'); return; }
+          if(!cpfValido(cpf)){ toast('CPF inválido','err'); return; }
+          if(!emailValido(email)){ toast('E-mail inválido','err'); return; }
+          if(senha!==senha2){ toast('As senhas não coincidem','err'); return; }
           var lista=getUsers();
-          // login único (exceto o próprio em edição)
           for(var i=0;i<lista.length;i++){
-            if(lista[i].login===login && i!==idx){ toast('Já existe um usuário com este login','err'); return; }
+            if(i===idx) continue;
+            if(lista[i].login===login){ toast('Já existe um usuário com este login','err'); return; }
+            if(lista[i].cpf && soDigitos(lista[i].cpf)===soDigitos(cpf)){ toast('Já existe um usuário com este CPF','err'); return; }
+            if(lista[i].email && lista[i].email.toLowerCase()===email.toLowerCase()){ toast('Já existe um usuário com este e-mail','err'); return; }
           }
-          var novo={login:login,senha:senha,nome:nome,perfil:perfil};
+          var novo={login:login,senha:senha,nome:nome,cpf:fmtCPF(cpf),email:email,perfil:perfil,ativo:ativo};
           if(idx!=null) lista[idx]=novo; else lista.push(novo);
           salvarUsers(lista);
           fecharModais();
           toast(idx!=null?'Usuário atualizado':'Usuário cadastrado','ok');
           renderUsuarios();
         };
+      }
+
+      function pinta(){
+        var users=getUsers();
+        var rows=users.map(function(u,i){
+          var ativo=u.ativo!==false; // padrão: ativo (compatível com cadastros antigos)
+          return '<tr>'+
+            '<td><b>'+esc(u.nome||'—')+'</b></td>'+
+            '<td>'+esc(u.email||u.login||'—')+'</td>'+
+            '<td><span class="'+(perfilCls[u.perfil]||'badge')+'">'+(perfilLabel[u.perfil]||u.perfil)+'</span></td>'+
+            '<td><span class="usr-sit '+(ativo?'on':'off')+'">'+ico(ativo?'check-circle-2':'x-circle',12)+' '+(ativo?'Ativo':'Inativo')+'</span></td>'+
+            '<td style="text-align:right;white-space:nowrap">'+
+              '<button class="usr-act" data-edit="'+i+'" title="Editar">'+ico('pencil',14)+'</button>'+
+              '<button class="usr-act usr-act-del" data-del="'+i+'" title="Excluir">'+ico('trash-2',14)+'</button>'+
+            '</td>'+
+          '</tr>';
+        }).join('');
+        sec.innerHTML=
+          '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap">'+
+            '<div><h3 style="margin:0 0 2px">'+ico('users',16)+' Usuários</h3>'+
+            '<p style="margin:0;font-size:12.5px;color:var(--muted)">Cadastre, edite e inative acessos. Perfis: Gestor, Auditor, Enfermeiro.</p></div>'+
+            '<button class="btn" id="uNovo" style="white-space:nowrap;display:inline-flex;align-items:center;gap:6px">'+ico('user-plus',14)+' Adicionar</button>'+
+          '</div>'+
+          '<div class="table-wrap"><table class="cfg-table usr-table"><thead><tr>'+
+            '<th>Nome</th><th>E-mail</th><th>Perfil</th><th>Situação</th><th style="text-align:right">Ações</th>'+
+          '</tr></thead><tbody>'+rows+'</tbody></table></div>';
+        sec.querySelector('#uNovo').onclick=function(){ abreForm(null); };
+        $$('[data-edit]',sec).forEach(function(b){ b.onclick=function(){ abreForm(+b.getAttribute('data-edit')); }; });
+        $$('[data-del]',sec).forEach(function(b){ b.onclick=function(){ excluir(+b.getAttribute('data-del')); }; });
+        lcIcons();
       }
 
       function excluir(idx){
@@ -4202,33 +4281,6 @@
         renderUsuarios();
       }
 
-      function pinta(){
-        var users=getUsers();
-        var rows=users.map(function(u,i){
-          return '<tr>'+
-            '<td><b>'+esc(u.nome||'—')+'</b></td>'+
-            '<td>'+esc(u.login)+'</td>'+
-            '<td><span class="'+(perfilCls[u.perfil]||'badge')+'">'+(perfilLabel[u.perfil]||u.perfil)+'</span></td>'+
-            '<td style="text-align:right;white-space:nowrap">'+
-              '<button class="usr-act" data-edit="'+i+'" title="Editar">'+ico('pencil',14)+'</button>'+
-              '<button class="usr-act usr-act-del" data-del="'+i+'" title="Excluir">'+ico('trash-2',14)+'</button>'+
-            '</td>'+
-          '</tr>';
-        }).join('');
-        sec.innerHTML=
-          '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap">'+
-            '<div><h3 style="margin:0 0 2px">'+ico('users',16)+' Usuários</h3>'+
-            '<p style="margin:0;font-size:12.5px;color:var(--muted)">Cadastre novos usuários e edite os perfis existentes (Gestor, Auditor, Enfermeiro).</p></div>'+
-            '<button class="btn" id="uNovo" style="white-space:nowrap;display:inline-flex;align-items:center;gap:6px">'+ico('user-plus',14)+' Novo usuário</button>'+
-          '</div>'+
-          '<div class="table-wrap"><table class="cfg-table usr-table"><thead><tr>'+
-            '<th>Nome</th><th>Login</th><th>Perfil</th><th style="text-align:right">Ações</th>'+
-          '</tr></thead><tbody>'+rows+'</tbody></table></div>';
-        sec.querySelector('#uNovo').onclick=function(){ abreForm(null); };
-        $$('[data-edit]',sec).forEach(function(b){ b.onclick=function(){ abreForm(+b.getAttribute('data-edit')); }; });
-        $$('[data-del]',sec).forEach(function(b){ b.onclick=function(){ excluir(+b.getAttribute('data-del')); }; });
-        lcIcons();
-      }
       pinta();
     }
 
@@ -5847,7 +5899,10 @@
   function authLogin(login,senha){
     var users=getUsers();
     for(var i=0;i<users.length;i++){
-      if(users[i].login===login&&users[i].senha===senha) return users[i];
+      if(users[i].login===login&&users[i].senha===senha){
+        if(users[i].ativo===false) return {_inativo:true};
+        return users[i];
+      }
     }
     return null;
   }
@@ -5905,6 +5960,12 @@
       if(!login||!senha) return;
       btn.disabled=true;
       var user=authLogin(login,senha);
+      if(user&&user._inativo){
+        var sp=errEl.querySelector('span'); if(sp) sp.textContent='Usuário inativo. Contate o administrador.';
+        errEl.classList.add('show');
+        passEl.value=''; passEl.focus(); btn.disabled=false;
+        return;
+      }
       if(user){
         localStorage.setItem(AUTH_KEY,JSON.stringify({login:user.login,nome:user.nome,ts:Date.now()}));
         errEl.classList.remove('show');
@@ -5916,6 +5977,7 @@
           bindLogout();
         },420);
       } else {
+        var sp2=errEl.querySelector('span'); if(sp2) sp2.textContent='Login ou senha incorretos';
         errEl.classList.add('show');
         passEl.value='';
         passEl.focus();
