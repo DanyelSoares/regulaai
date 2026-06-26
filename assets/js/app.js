@@ -4940,59 +4940,101 @@
     }
 
     else if(sec==='dashboard'){
+      if(!State.manualDashTab) State.manualDashTab='visao';
+      var DASH_TABS=[
+        {id:'visao',    label:'Visão Geral'},
+        {id:'kpis',     label:'KPIs'},
+        {id:'gargalos', label:'Ranking de Gargalos'},
+        {id:'graficos', label:'Gráficos'},
+      ];
+      var dashTabBar='<div class="manual-subtab-bar">';
+      DASH_TABS.forEach(function(t){
+        dashTabBar+='<button class="manual-subtab'+(State.manualDashTab===t.id?' active':'')+'" data-dashtab="'+t.id+'">'+t.label+'</button>';
+      });
+      dashTabBar+='</div>';
+
+      var dtab=State.manualDashTab;
+      var dashContent='';
+
+      if(dtab==='visao'){
+        dashContent=
+          manualBox('Visão Geral',
+            '<p>O Dashboard apresenta os principais indicadores do processo de auditoria em tempo real, com base nas guias visíveis para o perfil ativo.</p>'+
+            manualScreen('dashboard'))+
+          manualBox('Filtro de Período',
+            '<p>No canto superior direito do título há um <b>seletor de período</b>. Por padrão, exibe os últimos <b>30 dias</b> a partir da data atual. O período pode ser alterado livremente — todas as métricas são recalculadas automaticamente.</p>');
+      }
+      else if(dtab==='kpis'){
+        dashContent=
+          manualBox('KPIs disponíveis',
+            manualTable(['Indicador','Descrição'],[
+              ['Total de guias','Quantidade total de guias no período filtrado'],
+              ['Em análise','Guias com status "Em análise"'],
+              ['Em junta médica','Guias encaminhadas para junta médica'],
+              ['Aguardando complemento','Guias aguardando documentação adicional'],
+              ['Analisadas','Guias com análise concluída'],
+              ['Liberadas','Guias com parecer de aprovação'],
+              ['Negadas','Guias com parecer de reprovação'],
+              ['Com OPME','Guias que contêm itens OPME'],
+              ['Cotação de OPME','Guias em processo de cotação'],
+              ['Baixa aderência','Guias com aderência à DUT abaixo do limiar'],
+              ['Tempo médio','Média de dias em auditoria no período'],
+              ['Etapa com gargalo','Etapa com maior concentração de guias paradas'],
+            ]))+
+          manualBox('Ações nos KPIs',
+            '<p>Clicar em qualquer card de KPI abre um modal com a <b>lista detalhada</b> das guias que compõem aquele indicador. A partir do modal é possível clicar em qualquer guia para abrir seus detalhes completos.</p>');
+      }
+      else if(dtab==='gargalos'){
+        dashContent=
+          manualBox('Ranking de Gargalos (KPI "Etapa com gargalo")',
+            '<p>O card <b>"Etapa com gargalo"</b> abre o <b>Ranking de Gargalos</b>: uma lista das etapas de auditoria ordenadas pelo <b>tempo médio</b> que as guias permanecem nelas. Serve para identificar onde o fluxo está mais lento e onde há guias travadas.</p>'+
+            '<p><b>O que cada etapa representa:</b> são as etapas dos fluxos assistenciais (ex.: <i>Auditoria Prévia, Cotação OPME, Junta Médica, Abordagem Presencial</i>) percorridas por cada guia ao longo da auditoria.</p>'+
+            '<h4 style="margin:14px 0 6px;font-size:13px;color:var(--g-700)">'+ico('list-checks',13)+' Quando uma guia entra na contagem de uma etapa</h4>'+
+            '<ul>'+
+              '<li>A guia é contabilizada em uma etapa quando <b>passou ou está passando</b> por ela no período filtrado.</li>'+
+              '<li>Etapas que <b>ainda não iniciaram</b> (status <i>aguardando</i>) <b>não entram</b> no cálculo daquela guia.</li>'+
+              '<li>Cada guia contribui com o <b>tempo que levou</b> naquela etapa para o cálculo da média.</li>'+
+            '</ul>'+
+            '<h4 style="margin:14px 0 6px;font-size:13px;color:var(--g-700)">'+ico('timer',13)+' Como o tempo médio é calculado</h4>'+
+            '<ul>'+
+              '<li><b>Etapa concluída:</b> usa o tempo real que a guia levou para completá-la.</li>'+
+              '<li><b>Etapa em andamento (guia parada nela):</b> usa o tempo decorrido <b>até agora</b> (dias em auditoria × 24h) — ou seja, quanto a guia já está esperando.</li>'+
+              '<li>A <b>média da etapa</b> = soma das horas de todas as guias ÷ número de guias que passaram por ela.</li>'+
+              '<li>São exibidas as <b>10 etapas</b> com maior tempo médio (as mais críticas).</li>'+
+            '</ul>'+
+            '<h4 style="margin:14px 0 6px;font-size:13px;color:var(--g-700)">'+ico('pause-circle',13)+' Quando uma guia aparece como "parada"</h4>'+
+            '<p>Uma guia está <b>parada</b> em uma etapa quando essa etapa está <b>em andamento</b> (ainda não foi concluída). O selo <span class="badge danger" style="font-size:10px">N parada(s)</span> ao lado da etapa indica quantas guias estão atualmente travadas ali. Se nenhuma guia está parada, mostra <span class="badge muted" style="font-size:10px">N passaram</span> (já concluíram a etapa).</p>'+
+            '<h4 style="margin:14px 0 6px;font-size:13px;color:var(--g-700)">'+ico('triangle-alert',13)+' Barra vermelha = acima do prazo</h4>'+
+            '<p>Cada etapa tem um <b>prazo configurado</b> (em horas; padrão de 24h se não definido). Quando o <b>tempo médio supera esse prazo</b>, a barra fica <span style="color:#e53935;font-weight:600">vermelha</span> — sinalizando que, em média, as guias estão estourando o tempo esperado naquela etapa. O prazo de cada etapa/fluxo é ajustável em <b>Configurações → Prazos por Fluxo</b>.</p>'+
+            '<h4 style="margin:14px 0 6px;font-size:13px;color:var(--g-700)">'+ico('mouse-pointer-click',13)+' Clicar em uma etapa</h4>'+
+            '<p>Clique em qualquer linha do ranking para abrir a <b>lista das guias daquela etapa</b>. As guias atualmente paradas vêm marcadas com o selo <span class="badge danger" style="font-size:9px">parada</span>. A partir dessa lista, clique em uma guia para abrir seus <b>detalhes completos</b> (já na aba <i>Etapas</i>).</p>'+
+            '<p style="margin-top:10px;padding:9px 12px;background:var(--g-50);border-radius:8px;font-size:12.5px"><b>'+ico('info',12)+' Resumo:</b> o ranking responde a três perguntas — <b>onde</b> o fluxo está mais lento (ordem por tempo médio), <b>quanto</b> está acima do esperado (barra vermelha) e <b>quantas</b> guias estão travadas agora (selo de paradas).</p>');
+      }
+      else if(dtab==='graficos'){
+        dashContent=
+          manualBox('Gráficos e Distribuições',
+            '<p>Abaixo dos KPIs, o dashboard exibe:</p><ul>'+
+            '<li><b>Distribuição por status</b> — barras horizontais com % por status</li>'+
+            '<li><b>Fluxos mais utilizados</b> — ranking de fluxos por volume de guias</li>'+
+            '<li><b>Duração dos subfluxos</b> — tempo médio por etapa de auditoria</li>'+
+            '</ul><p><i>Dica: clique em uma barra de status ou fluxo para abrir a relação filtrada de guias.</i></p>');
+      }
+
       body.innerHTML=
         manualHdr('Dashboard Executivo','Visão consolidada de auditoria assistencial e indicadores operacionais')+
-        manualBox('Visão Geral',
-          '<p>O Dashboard apresenta os principais indicadores do processo de auditoria em tempo real, com base nas guias visíveis para o perfil ativo.</p>'+
-          manualScreen('dashboard'))+
-        manualBox('Filtro de Período',
-          '<p>No canto superior direito do título há um <b>seletor de período</b>. Por padrão, exibe os últimos <b>30 dias</b> a partir da data atual. O período pode ser alterado livremente — todas as métricas são recalculadas automaticamente.</p>')+
-        manualBox('KPIs disponíveis',
-          manualTable(['Indicador','Descrição'],[
-            ['Total de guias','Quantidade total de guias no período filtrado'],
-            ['Em análise','Guias com status "Em análise"'],
-            ['Em junta médica','Guias encaminhadas para junta médica'],
-            ['Aguardando complemento','Guias aguardando documentação adicional'],
-            ['Analisadas','Guias com análise concluída'],
-            ['Liberadas','Guias com parecer de aprovação'],
-            ['Negadas','Guias com parecer de reprovação'],
-            ['Com OPME','Guias que contêm itens OPME'],
-            ['Cotação de OPME','Guias em processo de cotação'],
-            ['Baixa aderência','Guias com aderência à DUT abaixo do limiar'],
-            ['Tempo médio','Média de dias em auditoria no período'],
-            ['Etapa com gargalo','Etapa com maior concentração de guias paradas'],
-          ]))+
-        manualBox('Ações nos KPIs',
-          '<p>Clicar em qualquer card de KPI abre um modal com a <b>lista detalhada</b> das guias que compõem aquele indicador. A partir do modal é possível clicar em qualquer guia para abrir seus detalhes completos.</p>')+
-        manualBox('Ranking de Gargalos (KPI "Etapa com gargalo")',
-          '<p>O card <b>"Etapa com gargalo"</b> abre o <b>Ranking de Gargalos</b>: uma lista das etapas de auditoria ordenadas pelo <b>tempo médio</b> que as guias permanecem nelas. Serve para identificar onde o fluxo está mais lento e onde há guias travadas.</p>'+
-          '<p><b>O que cada etapa representa:</b> são as etapas dos fluxos assistenciais (ex.: <i>Auditoria Prévia, Cotação OPME, Junta Médica, Abordagem Presencial</i>) percorridas por cada guia ao longo da auditoria.</p>'+
-          '<h4 style="margin:14px 0 6px;font-size:13px;color:var(--g-700)">'+ico('list-checks',13)+' Quando uma guia entra na contagem de uma etapa</h4>'+
-          '<ul>'+
-            '<li>A guia é contabilizada em uma etapa quando <b>passou ou está passando</b> por ela no período filtrado.</li>'+
-            '<li>Etapas que <b>ainda não iniciaram</b> (status <i>aguardando</i>) <b>não entram</b> no cálculo daquela guia.</li>'+
-            '<li>Cada guia contribui com o <b>tempo que levou</b> naquela etapa para o cálculo da média.</li>'+
-          '</ul>'+
-          '<h4 style="margin:14px 0 6px;font-size:13px;color:var(--g-700)">'+ico('timer',13)+' Como o tempo médio é calculado</h4>'+
-          '<ul>'+
-            '<li><b>Etapa concluída:</b> usa o tempo real que a guia levou para completá-la.</li>'+
-            '<li><b>Etapa em andamento (guia parada nela):</b> usa o tempo decorrido <b>até agora</b> (dias em auditoria × 24h) — ou seja, quanto a guia já está esperando.</li>'+
-            '<li>A <b>média da etapa</b> = soma das horas de todas as guias ÷ número de guias que passaram por ela.</li>'+
-            '<li>São exibidas as <b>10 etapas</b> com maior tempo médio (as mais críticas).</li>'+
-          '</ul>'+
-          '<h4 style="margin:14px 0 6px;font-size:13px;color:var(--g-700)">'+ico('pause-circle',13)+' Quando uma guia aparece como "parada"</h4>'+
-          '<p>Uma guia está <b>parada</b> em uma etapa quando essa etapa está <b>em andamento</b> (ainda não foi concluída). O selo <span class="badge danger" style="font-size:10px">N parada(s)</span> ao lado da etapa indica quantas guias estão atualmente travadas ali. Se nenhuma guia está parada, mostra <span class="badge muted" style="font-size:10px">N passaram</span> (já concluíram a etapa).</p>'+
-          '<h4 style="margin:14px 0 6px;font-size:13px;color:var(--g-700)">'+ico('triangle-alert',13)+' Barra vermelha = acima do prazo</h4>'+
-          '<p>Cada etapa tem um <b>prazo configurado</b> (em horas; padrão de 24h se não definido). Quando o <b>tempo médio supera esse prazo</b>, a barra fica <span style="color:#e53935;font-weight:600">vermelha</span> — sinalizando que, em média, as guias estão estourando o tempo esperado naquela etapa. O prazo de cada etapa/fluxo é ajustável em <b>Configurações → Prazos por Fluxo</b>.</p>'+
-          '<h4 style="margin:14px 0 6px;font-size:13px;color:var(--g-700)">'+ico('mouse-pointer-click',13)+' Clicar em uma etapa</h4>'+
-          '<p>Clique em qualquer linha do ranking para abrir a <b>lista das guias daquela etapa</b>. As guias atualmente paradas vêm marcadas com o selo <span class="badge danger" style="font-size:9px">parada</span>. A partir dessa lista, clique em uma guia para abrir seus <b>detalhes completos</b> (já na aba <i>Etapas</i>).</p>'+
-          '<p style="margin-top:10px;padding:9px 12px;background:var(--g-50);border-radius:8px;font-size:12.5px"><b>'+ico('info',12)+' Resumo:</b> o ranking responde a três perguntas — <b>onde</b> o fluxo está mais lento (ordem por tempo médio), <b>quanto</b> está acima do esperado (barra vermelha) e <b>quantas</b> guias estão travadas agora (selo de paradas).</p>')+
-        manualBox('Gráficos e Distribuições',
-          '<p>Abaixo dos KPIs, o dashboard exibe:</p><ul>'+
-          '<li><b>Distribuição por status</b> — barras horizontais com % por status</li>'+
-          '<li><b>Fluxos mais utilizados</b> — ranking de fluxos por volume de guias</li>'+
-          '<li><b>Duração dos subfluxos</b> — tempo médio por etapa de auditoria</li>'+
-          '</ul><p><i>Dica: clique em uma barra de status ou fluxo para abrir a relação filtrada de guias.</i></p>');
+        dashTabBar+
+        dashContent;
+
+      setTimeout(function(){
+        document.querySelectorAll('.manual-subtab[data-dashtab]').forEach(function(btn){
+          btn.onclick=function(){
+            State.manualDashTab=btn.getAttribute('data-dashtab');
+            var b=document.querySelector('.manual-body');
+            if(b) b.scrollTop=0;
+            render();
+          };
+        });
+      },0);
     }
 
     else if(sec==='guias'){
