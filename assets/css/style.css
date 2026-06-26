@@ -338,6 +338,14 @@ body.pl--blurring .pl--blur-target{filter:blur(5px)}
 .cfg-table tbody tr:hover td{background:var(--g-50)}
 .cfg-input-num{width:70px;padding:5px 8px;border:1.5px solid var(--g-200);border-radius:7px;font-size:13px;text-align:center;color:var(--ink);background:#fff;transition:border-color .15s}
 .cfg-input-num:focus{outline:none;border-color:var(--g-500);box-shadow:0 0 0 3px rgba(22,101,52,.1)}
+/* Aba Usuários */
+.usr-field{display:flex;flex-direction:column;gap:5px}
+.usr-field label{font-size:11.5px;font-weight:600;color:var(--g-700);text-transform:uppercase;letter-spacing:.4px}
+.usr-field input,.usr-field select{border:1.5px solid var(--g-200);border-radius:8px;padding:9px 12px;font-size:13.5px;color:var(--ink);background:#fafdfb;transition:border-color .15s,box-shadow .15s;outline:none}
+.usr-field input:focus,.usr-field select:focus{border-color:var(--g-500);box-shadow:0 0 0 3px rgba(10,138,67,.12)}
+.usr-act{width:30px;height:30px;border:1px solid var(--g-200);background:#fff;color:var(--g-700);border-radius:7px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;margin-left:6px;transition:background .12s,border-color .12s,color .12s;vertical-align:middle}
+.usr-act:hover{background:var(--g-50);border-color:var(--g-400)}
+.usr-act-del:hover{background:#fee2e2;border-color:#fca5a5;color:#dc2626}
 .fluxo-sla-solus{font-size:12px;font-weight:600;color:var(--muted);background:var(--g-50);border-radius:5px;padding:3px 8px;display:inline-block}
 .donut{
   --p:0;

@@ -3726,6 +3726,7 @@
       {id:'risco',      label:'Classificação de Risco', ico:'shield-alert'},
       {id:'fluxos',     label:'Fluxos',                 ico:'git-branch'},
       {id:'permissoes', label:'Permissões',             ico:'shield'},
+      {id:'usuarios',   label:'Usuários',               ico:'users'},
       {id:'ia',         label:'Assistente IA',          ico:'bot'},
     ];
 
@@ -4142,12 +4143,102 @@
       lcIcons();
     }
 
+    // ── Aba: Usuários ────────────────────────────────────────────────
+    function renderUsuarios(){
+      cfgContent.innerHTML='';
+      var PERFIS=[{v:'gestor',t:'Gestor'},{v:'auditor',t:'Auditor'},{v:'enfermeiro',t:'Enfermeiro'}];
+      var perfilLabel={gestor:'Gestor',auditor:'Auditor',enfermeiro:'Enfermeiro'};
+      var perfilCls={gestor:'badge info',auditor:'badge',enfermeiro:'badge muted'};
+
+      var sec=el('div',{class:'panel',style:'padding:20px'});
+      cfgContent.appendChild(sec);
+
+      function salvarUsers(arr){ localStorage.setItem('regula_users',JSON.stringify(arr)); }
+
+      function abreForm(idx){
+        // idx=null → novo; senão edita o usuário no índice
+        var users=getUsers();
+        var u=idx!=null?users[idx]:{login:'',senha:'',nome:'',perfil:'auditor'};
+        var titulo=idx!=null?'Editar usuário':'Novo usuário';
+        var body=
+          '<div style="display:flex;flex-direction:column;gap:14px">'+
+            '<div class="usr-field"><label>Nome completo</label><input id="uNome" type="text" value="'+esc(u.nome||'')+'" placeholder="Ex.: Maria Silva" /></div>'+
+            '<div class="usr-field"><label>Login</label><input id="uLogin" type="text" value="'+esc(u.login||'')+'" placeholder="Ex.: maria.silva" autocomplete="off" /></div>'+
+            '<div class="usr-field"><label>Senha</label><input id="uSenha" type="text" value="'+esc(u.senha||'')+'" placeholder="Senha de acesso" autocomplete="new-password" /></div>'+
+            '<div class="usr-field"><label>Perfil</label><select id="uPerfil">'+
+              PERFIS.map(function(p){ return '<option value="'+p.v+'"'+(u.perfil===p.v?' selected':'')+'>'+p.t+'</option>'; }).join('')+
+            '</select></div>'+
+          '</div>';
+        var foot='<button class="btn ghost" id="uCancel">Cancelar</button><button class="btn" id="uSalvar">'+ico('save',13)+' Salvar</button>';
+        var m=modal(titulo, idx!=null?'Altere os dados e salve':'Preencha os dados do novo usuário', body, foot);
+        m.querySelector('#uCancel').onclick=function(){ fecharModais(); };
+        m.querySelector('#uSalvar').onclick=function(){
+          var nome=m.querySelector('#uNome').value.trim();
+          var login=m.querySelector('#uLogin').value.trim();
+          var senha=m.querySelector('#uSenha').value.trim();
+          var perfil=m.querySelector('#uPerfil').value;
+          if(!nome||!login||!senha){ toast('Preencha nome, login e senha','err'); return; }
+          var lista=getUsers();
+          // login único (exceto o próprio em edição)
+          for(var i=0;i<lista.length;i++){
+            if(lista[i].login===login && i!==idx){ toast('Já existe um usuário com este login','err'); return; }
+          }
+          var novo={login:login,senha:senha,nome:nome,perfil:perfil};
+          if(idx!=null) lista[idx]=novo; else lista.push(novo);
+          salvarUsers(lista);
+          fecharModais();
+          toast(idx!=null?'Usuário atualizado':'Usuário cadastrado','ok');
+          renderUsuarios();
+        };
+      }
+
+      function excluir(idx){
+        var lista=getUsers();
+        if(lista.length<=1){ toast('Deve existir ao menos um usuário','err'); return; }
+        if(!confirm('Excluir o usuário "'+(lista[idx].nome||lista[idx].login)+'"?')) return;
+        lista.splice(idx,1);
+        salvarUsers(lista);
+        toast('Usuário excluído','ok');
+        renderUsuarios();
+      }
+
+      function pinta(){
+        var users=getUsers();
+        var rows=users.map(function(u,i){
+          return '<tr>'+
+            '<td><b>'+esc(u.nome||'—')+'</b></td>'+
+            '<td>'+esc(u.login)+'</td>'+
+            '<td><span class="'+(perfilCls[u.perfil]||'badge')+'">'+(perfilLabel[u.perfil]||u.perfil)+'</span></td>'+
+            '<td style="text-align:right;white-space:nowrap">'+
+              '<button class="usr-act" data-edit="'+i+'" title="Editar">'+ico('pencil',14)+'</button>'+
+              '<button class="usr-act usr-act-del" data-del="'+i+'" title="Excluir">'+ico('trash-2',14)+'</button>'+
+            '</td>'+
+          '</tr>';
+        }).join('');
+        sec.innerHTML=
+          '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap">'+
+            '<div><h3 style="margin:0 0 2px">'+ico('users',16)+' Usuários</h3>'+
+            '<p style="margin:0;font-size:12.5px;color:var(--muted)">Cadastre novos usuários e edite os perfis existentes (Gestor, Auditor, Enfermeiro).</p></div>'+
+            '<button class="btn" id="uNovo" style="white-space:nowrap;display:inline-flex;align-items:center;gap:6px">'+ico('user-plus',14)+' Novo usuário</button>'+
+          '</div>'+
+          '<div class="table-wrap"><table class="cfg-table usr-table"><thead><tr>'+
+            '<th>Nome</th><th>Login</th><th>Perfil</th><th style="text-align:right">Ações</th>'+
+          '</tr></thead><tbody>'+rows+'</tbody></table></div>';
+        sec.querySelector('#uNovo').onclick=function(){ abreForm(null); };
+        $$('[data-edit]',sec).forEach(function(b){ b.onclick=function(){ abreForm(+b.getAttribute('data-edit')); }; });
+        $$('[data-del]',sec).forEach(function(b){ b.onclick=function(){ excluir(+b.getAttribute('data-del')); }; });
+        lcIcons();
+      }
+      pinta();
+    }
+
     // ── Ativar aba ───────────────────────────────────────────────────
     function setTab(id){
       $$('.cfg-tab',tabBar).forEach(function(b){ b.classList.toggle('active',b.getAttribute('data-cfg-tab')===id); });
       if(id==='risco') renderRisco();
       else if(id==='permissoes') renderPermissoes();
       else if(id==='fluxos') renderFluxos();
+      else if(id==='usuarios') renderUsuarios();
       else if(id==='ia') renderIA();
     }
 
