@@ -4203,7 +4203,7 @@
               '</select></div>'+
             '</div>'+
           '</div>';
-        var foot='<button class="btn ghost" id="uCancel">'+ico('arrow-left',13)+' Voltar</button><button class="btn" id="uSalvar">'+ico('save',13)+' Salvar</button>';
+        var foot='<button class="btn ghost" id="uCancel">'+ico('arrow-left',13)+' Voltar</button><button class="btn-animated" id="uSalvar">'+ico('save',13)+' Salvar</button>';
         var m=modal(titulo, idx!=null?'Altere os dados e salve':'Preencha os dados do novo usuário', body, foot);
 
         // máscara de CPF ao digitar
@@ -4260,7 +4260,7 @@
           '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap">'+
             '<div><h3 style="margin:0 0 2px">'+ico('users',16)+' Usuários</h3>'+
             '<p style="margin:0;font-size:12.5px;color:var(--muted)">Cadastre, edite e inative acessos. Perfis: Gestor, Auditor, Enfermeiro.</p></div>'+
-            '<button class="btn" id="uNovo" style="white-space:nowrap;display:inline-flex;align-items:center;gap:6px">'+ico('user-plus',14)+' Adicionar</button>'+
+            '<button class="btn-animated" id="uNovo">'+ico('user-plus',14)+' Adicionar</button>'+
           '</div>'+
           '<div class="table-wrap"><table class="cfg-table usr-table"><thead><tr>'+
             '<th>Nome</th><th>E-mail</th><th>Perfil</th><th>Situação</th><th style="text-align:right">Ações</th>'+
