@@ -539,6 +539,8 @@ body.sidebar-collapsed .modal-backdrop{left:66px}
 .modal-body::-webkit-scrollbar-track{background:var(--g-50)}
 .modal-body::-webkit-scrollbar-thumb{background:var(--g-300);border-radius:6px}
 .modal-foot{flex-shrink:0;padding:12px 20px;border-top:2px solid var(--g-100);display:flex;justify-content:flex-end;gap:8px;background:linear-gradient(90deg,#f0faf4,#f7fbf8)}
+.rank-row{transition:background .12s,box-shadow .12s}
+.rank-row:hover{box-shadow:inset 0 0 0 1.5px var(--g-300);background:var(--g-50)!important}
 
 /* Tabs */
 .tabs{display:flex;flex-wrap:wrap;gap:1px;align-items:center;border-bottom:2px solid var(--g-100);margin-bottom:16px;background:var(--g-50);border-radius:8px 8px 0 0;padding:4px 6px 0}

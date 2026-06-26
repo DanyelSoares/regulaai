@@ -916,7 +916,7 @@
           var overPrazo=r.media>r.prazo;
           var barColor=overPrazo?'#e53935':'var(--g-400)';
           rankHTML+=
-            '<div style="display:grid;grid-template-columns:22px 1fr 60px 70px;align-items:center;gap:10px;padding:7px 10px;border-radius:8px;background:'+(idx%2===0?'var(--g-50)':'#fff')+'">'+
+            '<div class="rank-row" data-etapa="'+esc(r.nome)+'" style="display:grid;grid-template-columns:22px 1fr 60px 70px;align-items:center;gap:10px;padding:7px 10px;border-radius:8px;background:'+(idx%2===0?'var(--g-50)':'#fff')+'">'+
               '<span style="font-size:13px;font-weight:700;color:var(--muted);text-align:right">#'+(idx+1)+'</span>'+
               '<div>'+
                 '<div style="font-size:12.5px;font-weight:600;color:var(--g-800);margin-bottom:4px">'+esc(r.nome)+'</div>'+
@@ -947,20 +947,32 @@
             row.style.cursor='pointer';
             row.onclick=function(){
               var nome=row.getAttribute('data-etapa');
+              // Todas as guias que passaram por esta etapa (parada ou já concluída)
               var sub=guias.filter(function(g){
-                return (g.etapas||[]).some(function(e){return e.nome===nome&&e.status==='em_execucao';});
+                return (g.etapas||[]).some(function(e){return e.nome===nome&&e.status!=='aguardando';});
               });
+              var paradas=sub.filter(function(g){
+                return (g.etapas||[]).some(function(e){return e.nome===nome&&e.status==='em_execucao';});
+              }).length;
+              var t2;
               if(sub.length){
-                var t2='<table style="width:100%"><thead><tr><th>Nº Guia</th><th>Beneficiário</th><th>Dias</th><th>Status</th></tr></thead><tbody>'+
-                  sub.map(function(g,i){return '<tr class="'+(i%2===0?'log-row-a':'log-row-b')+' kpi-modal-row" data-num="'+esc(g.numero)+'"><td>'+esc(g.numero)+'</td><td>'+esc(g.beneficiario.nome)+'</td><td><b>'+g.diasAuditoria+'</b></td><td>'+statusBadge(g.status)+'</td></tr>';}).join('')+
+                t2='<table style="width:100%"><thead><tr><th>Nº Guia</th><th>Beneficiário</th><th>Dias</th><th>Status</th></tr></thead><tbody>'+
+                  sub.map(function(g,i){
+                    var parada=(g.etapas||[]).some(function(e){return e.nome===nome&&e.status==='em_execucao';});
+                    return '<tr class="'+(i%2===0?'log-row-a':'log-row-b')+' kpi-modal-row" data-num="'+esc(g.numero)+'"><td>'+esc(g.numero)+(parada?' <span class="badge danger" style="font-size:9px">parada</span>':'')+'</td><td>'+esc(g.beneficiario.nome)+'</td><td><b>'+g.diasAuditoria+'</b></td><td>'+statusBadge(g.status)+'</td></tr>';
+                  }).join('')+
                   '</tbody></table>';
-                var m2=modal(esc(nome),'Guias paradas nesta etapa',t2,sub.length+' guia(s)');
-                setTimeout(function(){
-                  $$('.kpi-modal-row',m2).forEach(function(tr){
-                    tr.onclick=function(){var g=guias.filter(function(x){return x.numero===tr.getAttribute('data-num');})[0];if(g)openGuia(g,'etapas');};
-                  });
-                },0);
+              } else {
+                t2='<div class="empty">'+icoLg('inbox')+'<div>Nenhuma guia passou por esta etapa no período.</div></div>';
               }
+              var foot2=sub.length+' guia(s)'+(paradas?' · '+paradas+' parada(s) agora':'');
+              var m2=modal(esc(nome),'Guias nesta etapa',t2,foot2);
+              setTimeout(function(){
+                $$('.kpi-modal-row',m2).forEach(function(tr){
+                  tr.style.cursor='pointer';
+                  tr.onclick=function(){var g=guias.filter(function(x){return x.numero===tr.getAttribute('data-num');})[0];if(g)openGuia(g,'etapas');};
+                });
+              },0);
             };
           });
         },0);
