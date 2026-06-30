@@ -944,7 +944,7 @@
           var overPrazo=r.media>r.prazo;
           var barColor=overPrazo?'#e53935':'var(--g-400)';
           rankHTML+=
-            '<div class="rank-row" data-etapa="'+esc(r.nome)+'" style="display:grid;grid-template-columns:22px 1fr 60px 70px;align-items:center;gap:10px;padding:7px 10px;border-radius:8px;background:'+(idx%2===0?'var(--g-50)':'#fff')+'">'+
+            '<div class="rank-row" data-etapa="'+esc(r.nome)+'" style="display:grid;grid-template-columns:22px 1fr 56px 112px;align-items:center;gap:10px;padding:7px 10px;border-radius:8px;background:'+(idx%2===0?'var(--g-50)':'#fff')+'">'+
               '<span style="font-size:13px;font-weight:700;color:var(--muted);text-align:right">#'+(idx+1)+'</span>'+
               '<div>'+
                 '<div style="font-size:12.5px;font-weight:600;color:var(--g-800);margin-bottom:4px">'+esc(r.nome)+'</div>'+
@@ -957,7 +957,9 @@
                 '<div style="font-size:10px;color:var(--muted)">média</div>'+
               '</div>'+
               '<div style="text-align:center">'+
-                (r.stuck?'<span class="badge danger" style="font-size:10px">'+r.stuck+' parada'+(r.stuck>1?'s':'')+'</span>':'<span class="badge muted" style="font-size:10px">'+r.cnt+' passaram</span>')+
+                '<span class="badge '+(r.stuck?'danger':'muted')+'" style="font-size:10px;white-space:nowrap" title="'+r.cnt+' guia(s) nesta etapa'+(r.stuck?', '+r.stuck+' parada(s) agora':'')+'">'+
+                  r.cnt+' guia'+(r.cnt>1?'s':'')+(r.stuck?' · '+r.stuck+' parada'+(r.stuck>1?'s':''):'')+
+                '</span>'+
               '</div>'+
             '</div>';
         });
@@ -5179,7 +5181,12 @@
               '<li>São exibidas as <b>10 etapas</b> com maior tempo médio (as mais críticas).</li>'+
             '</ul>'+
             '<h4 style="margin:14px 0 6px;font-size:13px;color:var(--g-700)">'+ico('pause-circle',13)+' Quando uma guia aparece como "parada"</h4>'+
-            '<p>Uma guia está <b>parada</b> em uma etapa quando essa etapa está <b>em andamento</b> (ainda não foi concluída). O selo <span class="badge danger" style="font-size:10px">N parada(s)</span> ao lado da etapa indica quantas guias estão atualmente travadas ali. Se nenhuma guia está parada, mostra <span class="badge muted" style="font-size:10px">N passaram</span> (já concluíram a etapa).</p>'+
+            '<p>Uma guia está <b>parada</b> em uma etapa quando essa etapa está <b>em andamento</b> (ainda não foi concluída). O selo ao lado de cada etapa mostra o <b>total de guias</b> que passaram por ela e, quando há travadas, <b>quantas estão paradas agora</b>:</p>'+
+            '<ul>'+
+              '<li>Com guias travadas: <span class="badge danger" style="font-size:10px;white-space:nowrap">8 guias · 3 paradas</span> (vermelho) — total + paradas no momento.</li>'+
+              '<li>Sem nenhuma parada: <span class="badge muted" style="font-size:10px;white-space:nowrap">6 guias</span> (cinza) — todas já concluíram a etapa.</li>'+
+            '</ul>'+
+            '<p>Assim, quando uma etapa tem guias paradas <b>e</b> guias que já passaram, ambas aparecem no mesmo selo: o número total e, em destaque, quantas seguem travadas.</p>'+
             '<h4 style="margin:14px 0 6px;font-size:13px;color:var(--g-700)">'+ico('triangle-alert',13)+' Barra vermelha = acima do prazo</h4>'+
             '<p>Cada etapa tem um <b>prazo configurado</b> (em horas; padrão de 24h se não definido). Quando o <b>tempo médio supera esse prazo</b>, a barra fica <span style="color:#e53935;font-weight:600">vermelha</span> — sinalizando que, em média, as guias estão estourando o tempo esperado naquela etapa. O prazo de cada etapa/fluxo é ajustável em <b>Configurações → Prazos por Fluxo</b>.</p>'+
             '<h4 style="margin:14px 0 6px;font-size:13px;color:var(--g-700)">'+ico('mouse-pointer-click',13)+' Clicar em uma etapa</h4>'+
