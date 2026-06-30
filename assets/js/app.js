@@ -811,6 +811,17 @@
     if(fabActive) fabActive.classList.add('fab-active');
   }
 
+  /* === Módulo Relatórios (isolado em relatorios.js) === */
+  function viewRelatorios(){
+    if(!window.RELATORIOS){
+      return el('div',{class:'panel',style:'padding:24px'},ico('alert-triangle',18)+' Módulo Relatórios não carregado.');
+    }
+    return window.RELATORIOS.view({
+      el:el, ico:ico, esc:esc, lcIcons:lcIcons,
+      guias: guiasVisiveis(), State: State
+    });
+  }
+
   /* === Views === */
   function render(){
     var v=$('#view'); v.innerHTML='';
@@ -822,6 +833,7 @@
     if(State.route==='dashboard') v.appendChild(viewDashboard());
     else if(State.route==='guias') v.appendChild(viewGuias());
     else if(State.route==='kanban') v.appendChild(viewKanban());
+    else if(State.route==='relatorios') v.appendChild(viewRelatorios());
     else if(State.route==='param') v.appendChild(viewParam());
     else if(State.route==='logs'){ if(can('logs')) v.appendChild(viewLogs()); else { State.route='dashboard'; v.appendChild(viewDashboard()); } }
     else if(State.route==='config') v.appendChild(viewConfig());
@@ -5007,7 +5019,7 @@
   setInterval(atualizarRelogio,1000);
 
   /* === Breadcrumb === */
-  var ROUTE_LABELS={dashboard:'Dashboard',guias:'Guias',kanban:'Kanban',param:'Parametrização',logs:'Logs',config:'Configurações',manual:'Manual do Usuário'};
+  var ROUTE_LABELS={dashboard:'Dashboard',guias:'Guias',kanban:'Kanban',relatorios:'Relatórios',param:'Parametrização',logs:'Logs',config:'Configurações',manual:'Manual do Usuário'};
   function atualizarBreadcrumb(){
     var el=$('#topbarRoute'); if(!el) return;
     el.textContent=ROUTE_LABELS[State.route]||State.route;

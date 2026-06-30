@@ -339,6 +339,49 @@ body.pl--blurring .pl--blur-target{filter:blur(5px)}
 .cfg-input-num{width:70px;padding:5px 8px;border:1.5px solid var(--g-200);border-radius:7px;font-size:13px;text-align:center;color:var(--ink);background:#fff;transition:border-color .15s}
 /* Modo somente-leitura: controles desativados ficam esmaecidos e sem interação */
 .cfg-readonly input:disabled,.cfg-readonly select:disabled,.cfg-readonly textarea:disabled,.cfg-readonly button:disabled{opacity:.55;cursor:not-allowed;background:var(--g-50)}
+
+/* ═══════════════════════════════════════════
+   Módulo Relatórios (BI / Inteligência Assistencial)
+═══════════════════════════════════════════ */
+.rel-tab-bar{display:flex;gap:6px;overflow-x:auto;padding:4px 0 12px;margin-bottom:6px;border-bottom:1.5px solid var(--g-100);scrollbar-width:thin}
+.rel-tab-bar::-webkit-scrollbar{height:6px}
+.rel-tab-bar::-webkit-scrollbar-thumb{background:var(--g-200);border-radius:4px}
+.rel-tab{flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;padding:8px 14px;border:1px solid var(--g-200);background:#fff;color:var(--g-700);font-size:12.5px;font-weight:600;border-radius:20px;cursor:pointer;transition:background .12s,border-color .12s,color .12s}
+.rel-tab:hover{background:var(--g-50);border-color:var(--g-400)}
+.rel-tab.active{background:var(--g-600);color:#fff;border-color:var(--g-600)}
+.rel-content{padding-top:6px}
+.rel-section{display:flex;flex-direction:column;gap:16px}
+.rel-kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+.rel-kpi{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px 18px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+.rel-kpi-v{font-size:26px;font-weight:800;line-height:1.1}
+.rel-kpi-t{font-size:12.5px;color:var(--ink-2);margin-top:6px;font-weight:600}
+.rel-kpi-s{font-size:11px;color:var(--muted);margin-top:2px}
+.rel-note{display:flex;align-items:flex-start;gap:8px;background:#fef9e7;border:1px solid #f5e2a3;border-radius:9px;padding:10px 13px;font-size:12.5px;color:#7a5d00;line-height:1.55}
+.rel-soon{background:#fff;border:1px dashed var(--g-300);border-radius:14px;padding:32px 26px;text-align:center}
+.rel-soon-ico{color:var(--g-500);margin-bottom:10px}
+.rel-soon h3{margin:0 0 6px;font-size:17px;color:var(--g-800)}
+.rel-soon p{margin:0 auto;max-width:560px;font-size:13px;color:var(--muted);line-height:1.6}
+.rel-soon-list{max-width:560px;margin:18px auto 0;text-align:left;background:var(--g-50);border-radius:10px;padding:14px 18px}
+.rel-soon-list-hd{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:8px}
+.rel-soon-list ul{margin:0;padding-left:18px}
+.rel-soon-list li{font-size:12.5px;color:var(--ink-2);margin-bottom:4px;line-height:1.5}
+/* Alertas */
+.rel-alert-table tbody tr.rel-alert-row{cursor:pointer}
+.rel-alert-table tbody tr.rel-alert-row:hover td{background:var(--g-50)}
+.rel-sev{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 9px;border-radius:20px}
+.rel-sev-critica{background:#fee2e2;color:#b91c1c}
+.rel-sev-alta{background:#ffedd5;color:#c2410c}
+.rel-sev-media{background:#fef9c3;color:#a16207}
+.rel-sev-baixa{background:#e0f2fe;color:#0369a1}
+.rel-alert-detail td{background:#f8fbf9;border-top:none}
+.rel-alert-exp{font-size:12.5px;color:var(--ink-2);line-height:1.55;padding:4px 0}
+.rel-alert-meta{display:flex;flex-wrap:wrap;gap:16px;margin-top:8px;font-size:11.5px;color:var(--muted)}
+.rel-alert-meta span{display:inline-flex;align-items:center;gap:5px}
+@media(max-width:640px){
+  .rel-kpi-grid{grid-template-columns:1fr 1fr}
+  .rel-kpi-v{font-size:22px}
+  .rel-alert-table{min-width:760px}
+}
 .cfg-input-num:focus{outline:none;border-color:var(--g-500);box-shadow:0 0 0 3px rgba(22,101,52,.1)}
 /* Aba Usuários */
 .usr-row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
