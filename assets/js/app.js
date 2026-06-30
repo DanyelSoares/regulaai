@@ -2066,9 +2066,6 @@
 
     // Barra de filtro de período
     var bar=el('div',{class:'k-period-bar'});
-    var periodLabel=el('span',{class:'k-period-label'});
-    periodLabel.innerHTML=ico('calendar-range',13)+' Período de emissão';
-    bar.appendChild(periodLabel);
 
     var periodWrap=el('div',{id:'kbPeriodoWrap',style:'display:flex;align-items:center'});
     bar.appendChild(periodWrap);
