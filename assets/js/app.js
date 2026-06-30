@@ -119,17 +119,31 @@
     {id:'E2', nome:'Carla Mendonça', cor:'#2faa66', fluxos:['F2','F6'],      especialidade:'Alta Complexidade / Bariátrica'}
   ];
 
+  // Permissões: "config"/"parametrizar" = ABRIR a tela (Auditor/Enfermeiro têm,
+  // em modo leitura). A EDIÇÃO é controlada por ehGestor() (só Admin/Gestor).
+  // "logs" = acesso à área de Logs (só Admin/Gestor).
   var perfilDef = {
     enfermeiro: {nome: ENFERMEIROS[0].nome, cor: ENFERMEIROS[0].cor,
-                 perms:['ver','triagem','complemento'],
+                 perms:['ver','triagem','complemento','config','parametrizar'],
                  fluxos: ENFERMEIROS[0].fluxos, enfermeiroId: ENFERMEIROS[0].id},
-    auditor:    {nome:'Dr. Marcos Vinícius',cor:'#066b34', perms:['ver','triagem','complemento','parecer','aprovar','reprovar','junta']},
+    auditor:    {nome:'Dr. Marcos Vinícius',cor:'#066b34', perms:['ver','triagem','complemento','parecer','aprovar','reprovar','junta','config','parametrizar']},
     gestor:     {nome:'Patrícia Andrade',  cor:'#054f27', perms:['ver','triagem','complemento','parecer','aprovar','reprovar','junta','config','parametrizar','logs']},
     // Administrador: tudo que o gestor faz + gerenciar usuários + chave de IA (acima de todos)
     admin:      {nome:'Administrador',     cor:'#021f10', perms:['ver','triagem','complemento','parecer','aprovar','reprovar','junta','config','parametrizar','logs','usuarios','configIA']}
   };
   function can(act){ var d=perfilDef[State.perfil]; return !!d && d.perms.indexOf(act)>=0; }
   // Admin e Gestor compartilham os mesmos poderes (exceto "usuarios", só do admin)
+  // Aplica modo somente-leitura num container: desativa inputs/selects/botões e
+  // bloqueia cliques de edição (usado quando Auditor/Enfermeiro só podem visualizar).
+  function aplicarSomenteLeitura(container){
+    if(!container) return;
+    container.classList.add('cfg-readonly');
+    container.querySelectorAll('input,select,textarea,button').forEach(function(el){
+      // mantém ativos apenas controles de navegação/busca/filtro
+      if(el.classList.contains('param-search')||el.classList.contains('cfg-tab')||el.classList.contains('vinc-tab')||el.classList.contains('subfluxo-tab')) return;
+      el.disabled=true;
+    });
+  }
   function ehGestor(){ return State.perfil==='gestor' || State.perfil==='admin'; }
 
   // Retorna a etapa atualmente em execução de uma guia
@@ -624,13 +638,23 @@
     document.body.classList.remove('modal-aberto');
   }
 
+  // Oculta itens do menu conforme a permissão do perfil ativo (ex.: Logs só Gestor/Admin)
+  function aplicarVisibilidadeNav(){
+    var logsItem=document.querySelector('.nav-item[data-route="logs"]');
+    if(logsItem) logsItem.style.display=can('logs')?'':'none';
+  }
+
   /* === Sidebar / nav === */
   function bindNav(){
+    aplicarVisibilidadeNav();
     $$('.nav-item').forEach(function(a){
       if(a.id==='chatToggleBtn') return; // tratado pelo initChat (não fecha modal)
       a.onclick=function(){
+        var rota=a.getAttribute('data-route');
+        // Bloqueio de rota: Logs exige permissão (Gestor/Admin)
+        if(rota==='logs' && !can('logs')){ toast('Acesso restrito ao Gestor/Administrador','err'); return; }
         fecharModais(); // ao trocar de página, fecha qualquer modal aberto
-        State.route=a.getAttribute('data-route');
+        State.route=rota;
         $$('.nav-item').forEach(function(x){x.classList.remove('active')});
         a.classList.add('active');
         render();
@@ -727,7 +751,9 @@
             }
             State.perfil=u.profile; State.visaoPerfil=''; State.visaoEnfermeiros=[];
             localStorage.setItem('regula_perfil',State.perfil);
-            fabClose(); renderUserChip(); render();
+            // Se o perfil perdeu acesso à rota atual (ex.: Logs), volta ao Dashboard
+            if(State.route==='logs' && !can('logs')){ State.route='dashboard'; }
+            fabClose(); renderUserChip(); aplicarVisibilidadeNav(); render();
             toast('Perfil: '+u.nome,'ok');
           };
           list.appendChild(btn);
@@ -797,7 +823,7 @@
     else if(State.route==='guias') v.appendChild(viewGuias());
     else if(State.route==='kanban') v.appendChild(viewKanban());
     else if(State.route==='param') v.appendChild(viewParam());
-    else if(State.route==='logs') v.appendChild(viewLogs());
+    else if(State.route==='logs'){ if(can('logs')) v.appendChild(viewLogs()); else { State.route='dashboard'; v.appendChild(viewDashboard()); } }
     else if(State.route==='config') v.appendChild(viewConfig());
     else if(State.route==='manual') v.appendChild(viewManual());
     lcIcons();
@@ -2285,6 +2311,7 @@
 
   function buildFluxosUI(container){
     var fluxos=MOCK.FLUXOS;
+    var editavelParam=ehGestor(); // Admin/Gestor editam; Auditor/Enfermeiro só visualizam
     var subBar=el('div',{class:'cfg-sub-tab-bar'});
     var subContent=el('div',{class:'cfg-sub-content'});
 
@@ -2397,7 +2424,7 @@
             '<span style="font-size:12px;color:var(--muted)">'+f.etapas.length+' etapas</span>'+
           '</div>'+
         '</div>'+
-        '<button class="btn-animated" id="btnSalvarFluxo">'+ico('save',13)+' Salvar instruções</button>';
+        (editavelParam?'<button class="btn-animated" id="btnSalvarFluxo">'+ico('save',13)+' Salvar instruções</button>':'<span class="badge muted" style="font-size:11px">'+ico('eye',11)+' Somente leitura</span>');
       subContent.appendChild(hd);
 
       var vincBar=el('div',{class:'vinc-tab-bar'});
@@ -2514,7 +2541,7 @@
             toast('Pesos IA salvos para '+fid,'ok');
           };
           _wBar.appendChild(_wSave);
-          _wWrap.appendChild(_wBar);
+          if(editavelParam) _wWrap.appendChild(_wBar);
           vincPanel.appendChild(_wWrap);
           lcIcons();
         } else {
@@ -2848,9 +2875,11 @@
           if(_vincToolbar) vincPanel.appendChild(_vincToolbar);
           vincPanel.appendChild(srchWrap);
           vincPanel.appendChild(box);
-          vincPanel.appendChild(saveBar);
+          if(editavelParam) vincPanel.appendChild(saveBar);
         }
         lcIcons();
+        // Auditor/Enfermeiro: bloqueia edição (prompts dos subfluxos, pesos e instruções)
+        if(!editavelParam) aplicarSomenteLeitura(vincPanel);
       }
 
       $$('.vinc-tab',vincBar).forEach(function(b){ b.onclick=function(){showVinc(b.getAttribute('data-vinc'));}; });
@@ -3638,9 +3667,10 @@
     {key:'reprovar',     label:'Reprovar guias',                         desc:'Negar procedimentos por não conformidade técnica ou regulatória',         p:['admin','gestor','auditor'],              v:[]},
     {key:'juntaMedica',  label:'Encaminhar para junta médica',           desc:'Solicitar avaliação multidisciplinar por junta médica',                  p:['admin','gestor','auditor'],              v:[]},
     {key:'migrarPerfil', label:'Migrar entre perfis / visão geral',      desc:'Alternar entre perfis e visualizar as demandas de todos os usuários',    p:['admin','gestor'],                        v:[]},
-    {key:'config',       label:'Acessar Configurações do sistema',       desc:'Admin e Gestor editam; Auditor e Enfermeiro consultam, sem alterar',       p:['admin','gestor'],                        v:['auditor','enfermeiro']},
-    {key:'parametrizar', label:'Parametrizar fluxos, DUT e vinculações', desc:'Admin e Gestor configuram; Auditor e Enfermeiro visualizam',              p:['admin','gestor'],                        v:['auditor','enfermeiro']},
-    {key:'logs',         label:'Visualizar logs completos',              desc:'Admin e Gestor acessam todo o histórico; Auditor consulta os próprios',   p:['admin','gestor'],                        v:['auditor']},
+    {key:'config',       label:'Configurações (Risco e Fluxos)',         desc:'Admin e Gestor editam; Auditor e Enfermeiro visualizam, sem alterar',     p:['admin','gestor'],                        v:['auditor','enfermeiro']},
+    {key:'permissoes',   label:'Editar matriz de Permissões',            desc:'Acessar e editar a aba Permissões — exclusivo do Administrador',          p:['admin'],                                 v:[]},
+    {key:'parametrizar', label:'Parametrizar fluxos, DUT e vinculações', desc:'Admin e Gestor editam/inserem prompts e pesos; Auditor e Enfermeiro visualizam', p:['admin','gestor'],                  v:['auditor','enfermeiro']},
+    {key:'logs',         label:'Acessar Logs e Rastreabilidade',         desc:'Área de Logs — exclusiva de Administrador e Gestor',                      p:['admin','gestor'],                        v:[]},
     {key:'dadosSensiveis',label:'Dados sensíveis sem mascaramento',      desc:'CPF, cartão e informações pessoais exibidos sem ocultação de dígitos',   p:['admin','gestor'],                        v:[]},
     {key:'usuarios',     label:'Gerenciar usuários',                     desc:'Cadastrar, editar e inativar usuários — exclusivo do Administrador',      p:['admin'],                                 v:[]},
     {key:'configIA',     label:'Configurar chave de API (Assistente IA)',desc:'Inserir/editar a chave do provedor de IA — exclusivo do Administrador',   p:['admin'],                                 v:[]},
@@ -3747,8 +3777,9 @@
     var CFG_TABS=[
       {id:'risco',      label:'Classificação de Risco', ico:'shield-alert'},
       {id:'fluxos',     label:'Fluxos',                 ico:'git-branch'},
-      {id:'permissoes', label:'Permissões',             ico:'shield'},
     ];
+    // Aba Permissões: exclusiva do Administrador
+    if(State.perfil==='admin') CFG_TABS.push({id:'permissoes', label:'Permissões', ico:'shield'});
     // Aba Usuários: exclusiva do Administrador
     if(can('usuarios')) CFG_TABS.push({id:'usuarios', label:'Usuários', ico:'users'});
     // Aba Assistente IA (chave de API): exclusiva do Administrador
@@ -3779,8 +3810,12 @@
     function renderRisco(){
       cfgContent.innerHTML='';
       if(!can('config')){
-        cfgContent.appendChild(el('div',{class:'ai-warn',style:'margin-top:14px'},ico('lock')+' A configuração de risco é exclusiva do perfil Gestor.'));
+        cfgContent.appendChild(el('div',{class:'ai-warn',style:'margin-top:14px'},ico('lock')+' Você não tem acesso a esta área.'));
         return;
+      }
+      var soLeitura=!ehGestor();
+      if(soLeitura){
+        cfgContent.appendChild(el('div',{class:'ai-confirm-note',style:'margin:12px 0 0'},ico('eye',13)+' <span>Modo somente leitura — apenas Administrador e Gestor podem editar a classificação de risco.</span>'));
       }
       var cfg=State.riscoConfig;
       var rp=el('div',{class:'panel risco-cfg-panel'});
@@ -3942,10 +3977,16 @@
       });
       showRst('limiares');
       cfgContent.appendChild(rp);
+      if(soLeitura) setTimeout(function(){ aplicarSomenteLeitura(rp); },0);
     }
 
     function renderPermissoes(){
       cfgContent.innerHTML='';
+      // Aba Permissões: exclusiva do Administrador
+      if(State.perfil!=='admin'){
+        cfgContent.appendChild(el('div',{class:'ai-warn',style:'margin-top:14px'},ico('lock')+' A edição de permissões é exclusiva do <b>Administrador</b>.'));
+        return;
+      }
       var panel=el('div',{class:'panel'});
       panel.innerHTML='<h3>Perfis e permissões</h3><p style="font-size:13px;color:var(--muted);margin-bottom:16px">Cada perfil acessa apenas os recursos compatíveis com sua responsabilidade funcional.</p>';
       panel.appendChild(_buildPermMatrix());
@@ -4031,13 +4072,16 @@
       _cfgTblWrap.appendChild(tbl);
       sec.appendChild(_cfgTblWrap);
 
+      if(!editable){
+        sec.insertBefore(el('div',{class:'ai-confirm-note',style:'margin:0 0 14px'},ico('eye',13)+' <span>Modo somente leitura — apenas Administrador e Gestor editam os prazos dos fluxos.</span>'),sec.firstChild.nextSibling);
+      }
       var btnRow=el('div',{style:'margin-top:18px;display:flex;gap:12px;align-items:center'});
       var btnSave=el('button',{class:'btn btn-primary'});
       btnSave.innerHTML=ico('save',14)+' Salvar prazos';
       var savedMsg=el('span',{style:'font-size:12px;color:var(--g-600);opacity:0;transition:opacity .4s;display:flex;align-items:center;gap:4px'});
       savedMsg.innerHTML=ico('check-circle-2',13)+' Salvo com sucesso';
       btnRow.appendChild(btnSave); btnRow.appendChild(savedMsg);
-      sec.appendChild(btnRow);
+      if(editable) sec.appendChild(btnRow);
 
       btnSave.onclick=function(){
         MOCK.FLUXOS.forEach(function(f){
@@ -4054,6 +4098,7 @@
       };
 
       cfgContent.appendChild(sec);
+      if(!editable) setTimeout(function(){ aplicarSomenteLeitura(sec); },0);
       lcIcons();
     }
 
@@ -5730,7 +5775,8 @@
       body.innerHTML=
         manualHdr('Painel de Parametrização','Configuração de fluxos, regras DUT e itens assistenciais')+
         manualBox('Visão Geral',
-          '<p>A Parametrização é onde se configura tudo que a IA e os fluxos utilizam para analisar as guias. Possui 3 abas principais e um painel de KPIs no topo.</p>')+
+          '<p>A Parametrização é onde se configura tudo que a IA e os fluxos utilizam para analisar as guias. Possui 3 abas principais e um painel de KPIs no topo.</p>'+
+          '<p style="padding:9px 12px;background:var(--g-50);border-radius:8px;font-size:12.5px"><b>'+ico('lock',12)+' Edição restrita:</b> apenas <b>Administrador</b> e <b>Gestor</b> editam/inserem prompts dos Subfluxos e as instruções/pesos da IA em Procedimentos, Pacotes, Mat/Med e Diárias/Taxas. <b>Auditor</b> e <b>Enfermeiro</b> visualizam, mas não editam.</p>')+
         manualBox('KPIs do Painel',
           manualTable(['Card','Informações exibidas'],[
             ['Fluxos sincronizados','Total de fluxos, quantos têm instrução IA, total ativos'],
@@ -5777,7 +5823,8 @@
       body.innerHTML=
         manualHdr('Logs e Rastreabilidade','Auditoria completa de ações de usuários, sistema e IA')+
         manualBox('Visão Geral',
-          '<p>A tela de Logs registra todas as ações realizadas na plataforma, garantindo rastreabilidade completa para fins de auditoria e conformidade.</p>')+
+          '<p>A tela de Logs registra todas as ações realizadas na plataforma, garantindo rastreabilidade completa para fins de auditoria e conformidade.</p>'+
+          '<p style="padding:9px 12px;background:var(--g-50);border-radius:8px;font-size:12.5px"><b>'+ico('lock',12)+' Acesso restrito:</b> a área de Logs é exclusiva de <b>Administrador</b> e <b>Gestor</b>. Auditor e Enfermeiro não visualizam este menu.</p>')+
         manualBox('Aba: Logs de Usuário',
           '<p>Exibe ações realizadas por usuários da plataforma. Um gráfico de rosca no topo mostra a distribuição por perfil (Gestor, Auditor, Enfermeiro).</p>'+
           manualTable(['Coluna','Descrição'],[
@@ -5820,15 +5867,17 @@
           '<br><p><b>Sub-aba: Prévia</b></p>'+
           '<p>Mostra em tempo real como as guias seriam distribuídas nos 4 níveis com os limiares configurados, exibindo quantidade e percentual de cada nível.</p>')+
         manualBox('Aba: Fluxos',
-          '<p>Nesta aba ficam os <b>Prazos por Fluxo</b>: define o prazo máximo de auditoria (em dias) e o regime de atendimento de cada fluxo assistencial. O prazo é consultado no Solus e usado nos relatórios e gráficos.</p>'+
+          '<p><span class="badge info" style="font-size:10px">Admin/Gestor editam · Auditor/Enfermeiro visualizam</span></p>'+
+          '<p>Nesta aba ficam os <b>Prazos por Fluxo</b>: define o prazo máximo de auditoria (em dias) e o regime de atendimento de cada fluxo assistencial. O prazo é consultado no Solus e usado nos relatórios e gráficos. <b>Apenas Administrador e Gestor editam</b>; Auditor e Enfermeiro veem em modo somente leitura.</p>'+
           manualTable(['Coluna','Descrição'],[
             ['Fluxo','Identificador e nome do fluxo'],
             ['Regime','Clicável — cicla entre: Todos / Eletivo / Urgência'],
             ['Prazo (dias)','Campo editável com o prazo máximo de auditoria'],
           ])+
           '<p>A legenda/nota abaixo da tabela explica o comportamento da coluna Regime.</p>')+
-        manualBox('Aba: Perfis e Permissões',
-          '<p>Matriz editável de permissões por perfil. Edição disponível para <b>Administrador</b> e <b>Gestor</b>.</p>'+
+        manualBox('Aba: Permissões',
+          '<p><span class="badge info" style="font-size:10px">só Administrador</span></p>'+
+          '<p>Matriz de permissões por perfil. Esta aba é <b>exclusiva do Administrador</b> — Gestor, Auditor e Enfermeiro não a visualizam.</p>'+
           '<p>Clique em qualquer célula da matriz para ciclar entre os níveis:</p>'+
           manualTable(['Nível','Ícone','Descrição'],[
             ['Acesso total','✓','Permissão completa para a ação'],
