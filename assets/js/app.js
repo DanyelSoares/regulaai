@@ -5798,10 +5798,10 @@
 
     else if(sec==='config'){
       body.innerHTML=
-        manualHdr('Configurações','Classificação de risco, prazos por fluxo e permissões')+
+        manualHdr('Configurações','Risco, prazos, permissões, usuários e assistente IA')+
         manualBox('Aba: Classificação de Risco',
           '<p>Define como as guias são classificadas automaticamente em 4 níveis de risco (Baixo, Médio, Alto, Crítico) com base em fatores presentes na guia.</p>'+
-          '<p>Disponível apenas para o perfil <b>Gestor</b>.</p>'+
+          '<p>Edição disponível para <b>Administrador</b> e <b>Gestor</b>.</p>'+
           '<p><b>Toggle "Classificação automática ativa"</b> — quando ativo, o risco é recalculado automaticamente a cada análise. Quando inativo, o risco permanece manual.</p>'+
           '<br><p><b>Sub-aba: Limiares por nível</b></p>'+
           '<p>Define os limiares de pontuação para cada nível:</p>'+
@@ -5823,14 +5823,48 @@
           ])+
           '<p>A linha de legenda abaixo da tabela explica o comportamento da coluna Regime.</p>')+
         manualBox('Aba: Perfis e Permissões',
-          '<p>Matriz editável de permissões por perfil. Disponível apenas para o perfil <b>Gestor</b>.</p>'+
+          '<p>Matriz editável de permissões por perfil. Edição disponível para <b>Administrador</b> e <b>Gestor</b>.</p>'+
           '<p>Clique em qualquer célula da matriz para ciclar entre os níveis:</p>'+
           manualTable(['Nível','Ícone','Descrição'],[
             ['Acesso total','✓','Permissão completa para a ação'],
             ['Somente leitura','👁','Pode visualizar mas não alterar'],
             ['Sem acesso','—','Funcionalidade oculta para o perfil'],
           ])+
-          '<p>As alterações são salvas automaticamente no navegador (localStorage).</p>');
+          '<p>As alterações são salvas automaticamente no navegador (localStorage).</p>')+
+        manualBox('Aba: Usuários',
+          '<p><span class="badge info" style="font-size:10px">só Administrador</span></p>'+
+          '<p>Cadastro e gerenciamento dos usuários que acessam a plataforma. Esta aba é <b>exclusiva do perfil Administrador</b> — os demais perfis não a visualizam.</p>'+
+          '<p><b>Listagem</b> — exibe os usuários com as colunas:</p>'+
+          manualTable(['Coluna','Descrição'],[
+            ['Nome','Nome completo do usuário'],
+            ['E-mail','E-mail de contato cadastrado'],
+            ['Perfil','Administrador, Gestor, Auditor ou Enfermeiro'],
+            ['Situação','Selo <b>Ativo</b> (verde) ou <b>Inativo</b> (cinza)'],
+            ['Ações','Botões Editar e Excluir'],
+          ])+
+          '<p><b>Adicionar / Editar</b> — abre um formulário com os campos:</p>'+
+          '<ul>'+
+            '<li><b>Nome completo</b></li>'+
+            '<li><b>CPF</b> — com máscara automática e validação dos dígitos verificadores</li>'+
+            '<li><b>E-mail</b> — validado quanto ao formato</li>'+
+            '<li><b>Login</b> — usado para acessar a plataforma</li>'+
+            '<li><b>Senha</b> e <b>Redigite a senha</b> — devem coincidir</li>'+
+            '<li><b>Perfil</b> e <b>Situação</b> (Ativo / Inativo)</li>'+
+          '</ul>'+
+          '<p><b>Validações:</b> Login, CPF e e-mail são <b>únicos</b> (não se repetem entre usuários); CPF e e-mail precisam ser válidos; as senhas devem ser iguais.</p>'+
+          '<p style="padding:9px 12px;background:var(--g-50);border-radius:8px;font-size:12.5px"><b>'+ico('lock',12)+' Inativar acesso:</b> ao definir um usuário como <b>Inativo</b>, ele não consegue mais fazer login (recebe o aviso "Usuário inativo. Contate o administrador."). Use isso para bloquear acessos sem precisar excluir o cadastro.</p>')+
+        manualBox('Aba: Assistente IA',
+          '<p><span class="badge info" style="font-size:10px">só Administrador</span></p>'+
+          '<p>Configura a chave de API que ativa a assistente <b>RAI</b>. Esta aba é <b>exclusiva do Administrador</b>.</p>'+
+          '<p><b>Provedores suportados</b> — o Administrador escolhe um e informa a chave correspondente:</p>'+
+          manualTable(['Provedor','Onde obter a chave'],[
+            ['Google Gemini','aistudio.google.com (possui plano gratuito)'],
+            ['Anthropic (Claude)','console.anthropic.com'],
+            ['OpenAI','platform.openai.com/api-keys'],
+          ])+
+          '<p>Cada provedor guarda sua própria chave e modelo. A chave fica armazenada <b>apenas no navegador</b> (localStorage) — nunca é enviada ao servidor nem ao código-fonte.</p>'+
+          '<p><b>Importante para os demais perfis:</b> Auditor, Enfermeiro e Gestor <b>não veem</b> esta aba, mas <b>usam o chat normalmente</b> com a chave que o Administrador configurou. Caso a chave ainda não esteja configurada naquele dispositivo, o chat orienta a contatar o Administrador.</p>'+
+          '<p style="padding:9px 12px;background:#fef9e7;border:1px solid #f5e2a3;border-radius:8px;font-size:12.5px"><b>'+ico('info',12)+' Chave por dispositivo:</b> a chave é salva por navegador/dispositivo. Para habilitar a RAI em um novo computador, o <b>Administrador</b> deve abrir o sistema naquele dispositivo e inserir a chave uma vez — os demais usuários daquele navegador passam a usar o assistente sem precisar da chave. <i>(A análise de aderência das guias é local e funciona para todos, independentemente da chave.)</i></p>');
     }
 
     else if(sec==='perfis'){
