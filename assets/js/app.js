@@ -6119,23 +6119,36 @@
     }
 
     // Base de identidade comum aos dois modos
-    var CTX_BASE='Você é a RAI, assistente virtual do RegulaAI Saúde, plataforma de auditoria assistencial para operadoras de saúde. '+
+    var CTX_BASE='Você é a RAI, assistente virtual integrada ao RegulaAI Saúde, plataforma de auditoria assistencial para operadoras de saúde. Você CONHECE o sistema real e a navegação exata dele. '+
       'NÃO se apresente nem use saudações como "Olá! Sou a RAI" nas respostas — a apresentação já foi feita na abertura do chat. Vá direto ao ponto. '+
       'Se o usuário perguntar o que significa RAI ou o motivo do nome, responda: "RAI é a combinação da primeira letra de Regulação (R) + AI (Artificial Intelligence)." '+
-      'Responda em português, de forma objetiva, técnica e acolhedora. ';
+      'Responda em português, de forma objetiva, técnica e acolhedora. '+
+      'REGRA DE PRECISÃO (obrigatória): nunca use linguagem vaga ou hipotética sobre o sistema. É PROIBIDO escrever "costuma ser", "geralmente", "provavelmente", "deve estar em", "ou X ou Y", ou inventar nomes de menus/telas. Cite SEMPRE o caminho exato usando os nomes reais abaixo, no formato "Seção → Aba → campo". Se você realmente não souber um caminho específico, diga "Não tenho esse caminho mapeado; consulte o Manual" — jamais invente. ';
+
+    // Mapa de navegação REAL do sistema (nomes exatos das telas e abas)
+    var MAPA_SISTEMA=
+      'MAPA DE NAVEGAÇÃO (nomes EXATOS — use-os literalmente):\n'+
+      'MENU LATERAL (sidebar): Dashboard | Guias | Kanban | Parametrização | Configurações | Assistente | Manual | Logs.\n'+
+      'CONFIGURAÇÕES (abas): "Classificação de Risco", "Fluxos", "Permissões", "Usuários" (só Administrador), "Assistente IA" (só Administrador).\n'+
+      ' - Classificação de Risco: define os fatores de risco e, na sub-aba "Limiares", os limiares Baixo/Médio/Alto; sub-aba "Prévia" mostra a distribuição.\n'+
+      ' - Fluxos: define o prazo (SLA, em dias) e o regime de cada fluxo.\n'+
+      ' - Permissões: matriz de permissões por perfil (clique na célula para ciclar Acesso total / Somente leitura / Sem acesso).\n'+
+      ' - Usuários: cadastro de usuários (Nome, CPF, E-mail, Login, Senha, Perfil, Situação Ativo/Inativo).\n'+
+      ' - Assistente IA: provedor (Gemini/Claude/OpenAI) + chave de API + modelo.\n'+
+      'PARAMETRIZAÇÃO: selecione um fluxo e use as abas internas. Os PESOS do cálculo de aderência ficam na aba "Pesos IA" (ícone de cérebro) DENTRO do fluxo selecionado — lá há um campo de peso (0 a 10) para cada critério: Documental, DUT, Procedimentos, Pacotes, Mat/Med, Diárias/Taxas, Contratual/Histórico. As Regras DUT ficam na aba "Regras DUT". As vinculações (Procedimentos, Pacotes, Mat/Med, Diárias/Taxas) têm suas próprias abas, cada uma com campo de peso por item.\n'+
+      'GUIAS: a relação tem filtros rápidos e o "Filtro aprofundado"; clicar numa guia abre o modal de detalhes com 16 abas (Cabeçalho, Resumo, Beneficiário, Prestador, Solicitação, Etapas, Procedimentos, Pacotes, Mat/Med, Diárias/Taxas, OPME, Anexos, Críticas, Parecer Técnico, Parecer Operadora, Histórico, Logs). No rodapé do modal: botão "Reprocessar" e "Parecer da Operadora".\n'+
+      'DASHBOARD: KPIs clicáveis; o KPI "Etapa com gargalo" abre o "Ranking de Gargalos".\n';
 
     // Modo "Uso do sistema" — manual + dúvidas de usabilidade
     var CTX_SISTEMA=CTX_BASE+
       'MODO: USO DO SISTEMA. Você atua como o manual interativo do RegulaAI Saúde, tirando dúvidas sobre usabilidade, telas, fluxos de trabalho e funcionamento da plataforma. NÃO emita pareceres clínicos neste modo; se o usuário quiser análise técnica de uma guia, oriente-o a iniciar uma "Conversa técnica". '+
-      'Conhecimento do sistema: '+
-      '1) GUIAS: cada guia possui número, tipo (internação/ambulatorial), regime, natureza, fluxo, status (triagem/análise/complemento/parecer/concluída). '+
-      '2) ADERÊNCIA: calculada pela IA com critérios ponderados por pesos configuráveis. O TETO é dinâmico — soma apenas critérios aplicáveis à guia específica (ex.: DUT só entra se a guia tem procedimentos com DUT obrigatória; pacotes só se vinculados). '+
-      '3) CRITÉRIOS DE ADERÊNCIA: Documental, DUT (Diretriz de Utilização), Procedimentos vinculados, Pacotes, Mat/Med, Diárias/Taxas, Contratual/Histórico. '+
-      '4) PESOS: configuráveis em Parametrização → cada aba (Procedimentos, Pacotes, Mat/Med, Diárias/Taxas) tem campo Peso de 0 a 10. '+
-      '5) REPROCESSAR: reanalisa a guia passando itens desmarcados pelo auditor, observações e parecer da operadora como contexto de aprendizado. '+
-      '6) PERFIS: Administrador (acesso a tudo, incluindo gerenciar usuários), Gestor (mesmos acessos do Administrador, exceto gerenciar usuários), Auditor (análise e parecer), Enfermeiro (triagem e complemento). '+
-      '7) FLUXOS: F1-Eletivo, F2-Alta Complexidade, F3-Oncologia, etc. '+
-      'Se não souber algo específico, oriente a consultar o Manual ou o administrador.';
+      MAPA_SISTEMA+
+      'CONCEITOS: '+
+      '1) ADERÊNCIA: calculada por critérios ponderados pelos pesos definidos em Parametrização → (fluxo) → "Pesos IA". O TETO é dinâmico — soma apenas os critérios aplicáveis àquela guia (ex.: DUT só entra se a guia tem procedimento com DUT obrigatória; Pacotes só se houver pacote vinculado). '+
+      '2) REPROCESSAR: o botão "Reprocessar" (rodapé do modal da guia) reanalisa a guia considerando itens desmarcados pelo auditor, observações e parecer da operadora. '+
+      '3) PERFIS: Administrador (tudo, incluindo Configurações → Usuários), Gestor (igual ao Administrador, exceto Usuários), Auditor (análise e parecer), Enfermeiro (triagem e complemento nos seus fluxos). '+
+      'Exemplo de resposta correta a "onde ajusto os pesos da aderência": "Acesse Parametrização, selecione o fluxo desejado e abra a aba Pesos IA. Lá há um campo de peso (0 a 10) para cada critério (Documental, DUT, Procedimentos, etc.)." '+
+      'Se não souber um caminho específico, diga que não está mapeado e oriente a consultar o Manual — nunca invente.';
 
     // Modo "Conversa técnica" — recebe os dados da guia como contexto
     function ctxTecnico(resumoGuia){
@@ -6212,11 +6225,23 @@
     chatFoot.appendChild(chatSend);
     chatRoot.appendChild(chatFoot);
 
+    // Renderiza markdown básico das respostas da RAI (negrito, itálico, listas, quebras)
+    // Escapa HTML primeiro (segurança) e depois aplica a formatação.
+    function mdToHtml(t){
+      var h=esc(t);
+      h=h.replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>');      // **negrito**
+      h=h.replace(/(^|[^*])\*([^*\n]+)\*/g,'$1<i>$2</i>'); // *itálico*
+      h=h.replace(/`([^`]+)`/g,'<code>$1</code>');      // `código`
+      // listas: linhas iniciadas por "- " ou "* " ou "1. "
+      h=h.replace(/(^|<br>)\s*[-*]\s+/g,'$1• ');
+      h=h.replace(/\n/g,'<br>');
+      return h;
+    }
     function addMsg(role,text){
       var d=el('div',{class:'mchat-msg mchat-'+role});
       if(role==='bot') d.innerHTML=
         '<div class="mchat-avatar rai-msg-avatar">'+RAI_AVATAR+'</div>'+
-        '<div class="mchat-bubble-wrap"><span class="mchat-sender">RAI</span><div class="mchat-bubble">'+text.replace(/\n/g,'<br>')+'</div></div>';
+        '<div class="mchat-bubble-wrap"><span class="mchat-sender">RAI</span><div class="mchat-bubble">'+mdToHtml(text)+'</div></div>';
       else d.innerHTML='<div class="mchat-bubble">'+esc(text)+'</div>';
       chatLog.appendChild(d);
       chatLog.scrollTop=chatLog.scrollHeight;

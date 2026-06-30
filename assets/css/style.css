@@ -1471,7 +1471,7 @@ body.sidebar-collapsed .modal-backdrop{left:66px}
 .mchat-hist-item:hover .mchat-hist-del{opacity:1}
 .mchat-hist-del:hover{background:#fee2e2;color:#dc2626}
 /* Mensagens da RAI */
-.mchat-bubble-wrap{display:flex;flex-direction:column;gap:2px;max-width:calc(100% - 38px)}
+.mchat-bubble-wrap{display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-width:0;max-width:calc(100% - 38px)}
 .mchat-sender{font-size:10.5px;font-weight:700;color:#7ee0a8;letter-spacing:.3px;text-shadow:0 1px 4px rgba(0,0,0,.4)}
 .rai-msg-avatar .rai-avatar-wrap{width:30px;height:30px}
 .rai-msg-avatar{width:30px;height:30px;min-width:30px;background:none}
@@ -1487,13 +1487,19 @@ body.sidebar-collapsed .modal-backdrop{left:66px}
 }
 .mchat-msg{display:flex;gap:8px;max-width:100%}
 .mchat-user{flex-direction:row-reverse}
+/* Bolha do usuário (filha direta da linha) também limita à largura disponível */
+.mchat-user>.mchat-bubble{max-width:82%}
+.mchat-bubble code{background:rgba(167,243,208,.18);border:1px solid rgba(167,243,208,.25);border-radius:4px;padding:0 4px;font-size:11.5px}
+.mchat-bubble b{color:#bbf7d0;font-weight:700}
 .mchat-avatar{width:26px;height:26px;min-width:26px;background:var(--g-600);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;margin-top:2px}
 /* Bolhas translúcidas e delicadas (frosted) — flutuam sobre o céu de aurora */
 .mchat-bubble{
   background:rgba(10,36,24,.42);
   border:1px solid rgba(167,243,208,.22);
   border-radius:13px;padding:9px 13px;font-size:12.5px;line-height:1.6;
-  color:#eafff4;max-width:calc(100% - 38px);
+  color:#eafff4;
+  width:fit-content;max-width:100%;
+  overflow-wrap:break-word;word-break:normal;
   backdrop-filter:blur(14px) saturate(1.15);
   box-shadow:0 6px 22px rgba(0,0,0,.22),inset 0 1px 0 rgba(255,255,255,.07);
 }
@@ -1510,11 +1516,11 @@ body.sidebar-collapsed .modal-backdrop{left:66px}
   color:#fff;border-color:rgba(134,239,172,.4);
 }
 /* Indicador "RAI pensando" — três pontos com brilho verde, em onda */
-.mchat-typing{display:flex;align-items:center;gap:6px;padding:11px 16px}
+.mchat-bubble.mchat-typing{display:flex;align-items:center;gap:6px;padding:12px 16px;min-width:54px;width:auto}
 .mchat-typing span{
-  width:9px;height:9px;border-radius:50%;
+  width:9px;height:9px;min-width:9px;flex:0 0 9px;border-radius:50%;
   background:radial-gradient(circle at 35% 35%, #d9ffe9, #4ade80 60%, #16a34a);
-  box-shadow:0 0 8px rgba(74,222,128,.65),0 0 2px rgba(167,243,208,.9);
+  box-shadow:0 0 8px rgba(74,222,128,.7),0 0 2px rgba(167,243,208,.95);
   animation:mchat-wave 1.2s ease-in-out infinite;
 }
 .mchat-typing span:nth-child(2){animation-delay:.18s}
