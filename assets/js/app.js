@@ -6238,12 +6238,16 @@
       h=h.replace(/\n/g,'<br>');
       return h;
     }
-    function addMsg(role,text){
+    // isHtml=true → texto já é HTML confiável do sistema (não escapa nem aplica markdown).
+    // isHtml=false/omitido → resposta da IA: escapa e aplica markdown básico.
+    function addMsg(role,text,isHtml){
       var d=el('div',{class:'mchat-msg mchat-'+role});
-      if(role==='bot') d.innerHTML=
-        '<div class="mchat-avatar rai-msg-avatar">'+RAI_AVATAR+'</div>'+
-        '<div class="mchat-bubble-wrap"><span class="mchat-sender">RAI</span><div class="mchat-bubble">'+mdToHtml(text)+'</div></div>';
-      else d.innerHTML='<div class="mchat-bubble">'+esc(text)+'</div>';
+      if(role==='bot'){
+        var corpo=isHtml?text:mdToHtml(text);
+        d.innerHTML=
+          '<div class="mchat-avatar rai-msg-avatar">'+RAI_AVATAR+'</div>'+
+          '<div class="mchat-bubble-wrap"><span class="mchat-sender">RAI</span><div class="mchat-bubble">'+corpo+'</div></div>';
+      } else d.innerHTML='<div class="mchat-bubble">'+esc(text)+'</div>';
       chatLog.appendChild(d);
       chatLog.scrollTop=chatLog.scrollHeight;
     }
@@ -6279,7 +6283,7 @@
     function renderLog(){
       chatLog.innerHTML='';
       addMsg('bot',WELCOME);
-      if(!getIaCfg().key){ addMsg('bot',msgSemChave()); return; }
+      if(!getIaCfg().key){ addMsg('bot',msgSemChave(),true); return; }
       // Conversa nova e sem modo definido → mostra os botões de escolha
       if(!chatMode && chatHistory.length===0){ addModePicker(); return; }
       for(var i=0;i<chatHistory.length;i++){
@@ -6293,11 +6297,11 @@
       var pk=chatLog.querySelector('.mchat-modes'); if(pk){ var m=pk.closest('.mchat-msg'); if(m) m.remove(); }
       if(modo==='sistema'){
         chatMode='sistema'; aguardandoGuia=false; chatGuia=null;
-        addMsg('bot','Perfeito! Estou no modo <b>Uso do sistema</b>. Pode perguntar sobre telas, fluxos, aderência, pontuações e qualquer dúvida de usabilidade. Como funciona o que você precisa?');
+        addMsg('bot','Perfeito! Estou no modo <b>Uso do sistema</b>. Pode perguntar sobre telas, fluxos, aderência, pontuações e qualquer dúvida de usabilidade. Como funciona o que você precisa?',true);
         chatInp.focus();
       } else if(modo==='tecnica'){
         chatMode='tecnica'; chatGuia=null; aguardandoGuia=true;
-        addMsg('bot','Modo <b>Conversa técnica</b> ativado. Para começar, informe o <b>número da guia</b> que deseja analisar.');
+        addMsg('bot','Modo <b>Conversa técnica</b> ativado. Para começar, informe o <b>número da guia</b> que deseja analisar.',true);
         chatInp.placeholder='Digite o número da guia...';
         chatInp.focus();
       }
@@ -6308,12 +6312,12 @@
       var alvo=String(num).replace(/\D/g,'');
       var g=State.guias.find(function(gg){ return String(gg.numero)===String(num).trim() || String(gg.numero).replace(/\D/g,'')===alvo; });
       if(!g){
-        addMsg('bot','Não encontrei a guia <b>'+esc(num)+'</b>. Confira o número e tente novamente.');
+        addMsg('bot','Não encontrei a guia <b>'+esc(num)+'</b>. Confira o número e tente novamente.',true);
         return;
       }
       chatGuia=g; aguardandoGuia=false;
       chatInp.placeholder='Digite sua mensagem...';
-      addMsg('bot','Guia <b>'+esc(g.numero)+'</b> carregada — '+esc(g.beneficiario&&g.beneficiario.nome||'')+' · '+esc(g.tipo)+' · aderência '+ (g._cache?g._cache.aderencia:AI.analisarGuiaComIA(g,{pesos:getFluxoPesos(g.fluxo&&g.fluxo.id)}).aderencia) +'%.<br>Pode perguntar sobre a indicação técnica dos serviços, o parecer, contraindicações ou alternativas. <i>Lembre-se: sou apoio à decisão — a palavra final é da operadora.</i>');
+      addMsg('bot','Guia <b>'+esc(g.numero)+'</b> carregada — '+esc(g.beneficiario&&g.beneficiario.nome||'')+' · '+esc(g.tipo)+' · aderência '+ (g._cache?g._cache.aderencia:AI.analisarGuiaComIA(g,{pesos:getFluxoPesos(g.fluxo&&g.fluxo.id)}).aderencia) +'%.<br>Pode perguntar sobre a indicação técnica dos serviços, o parecer, contraindicações ou alternativas. <i>Lembre-se: sou apoio à decisão — a palavra final é da operadora.</i>',true);
       chatInp.focus();
     }
 
@@ -6469,7 +6473,7 @@
 
       var cfg=getIaCfg();
       if(!cfg.key){
-        addMsg('bot',msgSemChave());
+        addMsg('bot',msgSemChave(),true);
         return;
       }
 
