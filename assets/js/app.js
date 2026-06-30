@@ -6297,7 +6297,7 @@
       var pk=chatLog.querySelector('.mchat-modes'); if(pk){ var m=pk.closest('.mchat-msg'); if(m) m.remove(); }
       if(modo==='sistema'){
         chatMode='sistema'; aguardandoGuia=false; chatGuia=null;
-        addMsg('bot','Perfeito! Estou no modo <b>Uso do sistema</b>. Pode perguntar sobre telas, fluxos, aderência, pontuações e qualquer dúvida de usabilidade. Como funciona o que você precisa?',true);
+        addMsg('bot','Perfeito! Estou no modo <b>Uso do sistema</b>. Pode perguntar sobre telas, fluxos, aderência, pontuações e qualquer dúvida de usabilidade. O que você deseja saber?',true);
         chatInp.focus();
       } else if(modo==='tecnica'){
         chatMode='tecnica'; chatGuia=null; aguardandoGuia=true;
