@@ -2221,9 +2221,10 @@
         var ad=guiaAderencia(g);
         var et=etapaAtualDe(g);
         var etapaLabel=et?esc(et.nome):'—';
+        // OPME e UTI são indicadores próprios. O regime (Urgência/Eletivo) já é
+        // exibido na pílula k-regime do rodapé — não repetir como badge "URG".
         var badges=(g.opme?'<span class="badge warn" style="font-size:10px">OPME</span>':'')+
-                   (g.uti?'<span class="badge info" style="font-size:10px">UTI</span>':'')+
-                   (g.regime==='Urgência'?'<span class="badge danger" style="font-size:10px">URG</span>':'');
+                   (g.uti?'<span class="badge info" style="font-size:10px">UTI</span>':'');
 
         var c=el('div',{class:'k-card'});
         c.innerHTML=
