@@ -1509,11 +1509,20 @@ body.sidebar-collapsed .modal-backdrop{left:66px}
   background:linear-gradient(135deg,rgba(22,163,94,.85),rgba(16,120,70,.85));
   color:#fff;border-color:rgba(134,239,172,.4);
 }
-.mchat-typing{display:flex;align-items:center;gap:4px;padding:10px 14px}
-.mchat-typing span{width:6px;height:6px;border-radius:50%;background:rgba(167,243,208,.85);animation:mchat-bounce .9s infinite}
-.mchat-typing span:nth-child(2){animation-delay:.15s}
-.mchat-typing span:nth-child(3){animation-delay:.3s}
-@keyframes mchat-bounce{0%,80%,100%{transform:translateY(0)}40%{transform:translateY(-5px)}}
+/* Indicador "RAI pensando" — três pontos com brilho verde, em onda */
+.mchat-typing{display:flex;align-items:center;gap:6px;padding:11px 16px}
+.mchat-typing span{
+  width:9px;height:9px;border-radius:50%;
+  background:radial-gradient(circle at 35% 35%, #d9ffe9, #4ade80 60%, #16a34a);
+  box-shadow:0 0 8px rgba(74,222,128,.65),0 0 2px rgba(167,243,208,.9);
+  animation:mchat-wave 1.2s ease-in-out infinite;
+}
+.mchat-typing span:nth-child(2){animation-delay:.18s}
+.mchat-typing span:nth-child(3){animation-delay:.36s}
+@keyframes mchat-wave{
+  0%,70%,100%{transform:translateY(0) scale(.85);opacity:.5}
+  35%        {transform:translateY(-6px) scale(1.15);opacity:1}
+}
 /* Área de envio: barra escura translúcida sobre o céu (aurora aparece atrás) */
 .manual-chat-foot{position:relative;z-index:2;padding:10px 12px;border-top:1px solid rgba(110,231,183,.18);display:flex;gap:8px;align-items:flex-end;background:rgba(4,17,11,.6);backdrop-filter:blur(12px) saturate(1.1)}
 .manual-chat-inp{flex:1;resize:none;border:1.5px solid rgba(110,231,183,.28);border-radius:9px;padding:8px 10px;font-size:12.5px;font-family:inherit;line-height:1.5;max-height:120px;overflow-y:auto;transition:border-color .15s,box-shadow .15s;background:rgba(255,255,255,.06);color:#eafff4}

@@ -6503,16 +6503,26 @@
       document.body.classList.toggle('chat-fullopen',aberto);
     }
 
+    // Persiste o estado de abertura do chat (sobrevive à navegação e ao reload)
+    function persistChatUI(){
+      var st='closed';
+      if(chatRoot.classList.contains('chat-open')){
+        st=chatRoot.classList.contains('chat-minimized')?'minimized':'open';
+      }
+      localStorage.setItem('regula_chat_ui',st);
+    }
     function chatMinimize(){
       closeHist();
       chatRoot.classList.add('chat-open');
       chatRoot.classList.add('chat-minimized');
       syncBodyState();
+      persistChatUI();
     }
     function chatRestore(){
       chatRoot.classList.add('chat-open');
       chatRoot.classList.remove('chat-minimized');
       syncBodyState();
+      persistChatUI();
       // No mobile não foca de imediato (o teclado cobriria o painel pequeno)
       if(window.innerWidth>640) chatInp.focus();
     }
@@ -6527,6 +6537,7 @@
       e.stopPropagation();
       chatRoot.classList.remove('chat-open','chat-minimized','chat-max','chat-max2','hist-open');
       syncBodyState();
+      persistChatUI();
     };
 
     // Clicar em qualquer lugar do header quando minimizado restaura
@@ -6543,6 +6554,16 @@
           chatMinimize();
         }
       };
+    }
+
+    // Restaura o estado salvo do chat (minimizado/aberto persiste entre telas e reloads)
+    var savedUI=localStorage.getItem('regula_chat_ui');
+    if(savedUI==='minimized'){
+      chatRoot.classList.add('chat-open','chat-minimized');
+      syncBodyState();
+    } else if(savedUI==='open'){
+      chatRoot.classList.add('chat-open');
+      syncBodyState();
     }
   })();
 
