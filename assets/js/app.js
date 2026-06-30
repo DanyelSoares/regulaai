@@ -5811,14 +5811,14 @@
           '<p><i>Validação: os limiares devem estar em ordem crescente. O sistema impede salvar se Baixo ≥ Médio ou Médio ≥ Alto.</i></p>'+
           '<br><p><b>Sub-aba: Prévia</b></p>'+
           '<p>Mostra em tempo real como as guias seriam distribuídas nos 4 níveis com os limiares configurados, exibindo quantidade e percentual de cada nível.</p>')+
-        manualBox('Aba: Prazos por Fluxo',
-          '<p>Define o prazo (em dias) e o regime de atendimento de cada fluxo assistencial.</p>'+
+        manualBox('Aba: Fluxos',
+          '<p>Nesta aba ficam os <b>Prazos por Fluxo</b>: define o prazo máximo de auditoria (em dias) e o regime de atendimento de cada fluxo assistencial. O prazo é consultado no Solus e usado nos relatórios e gráficos.</p>'+
           manualTable(['Coluna','Descrição'],[
             ['Fluxo','Identificador e nome do fluxo'],
-            ['Prazo','Campo editável com o prazo em dias'],
             ['Regime','Clicável — cicla entre: Todos / Eletivo / Urgência'],
+            ['Prazo (dias)','Campo editável com o prazo máximo de auditoria'],
           ])+
-          '<p>A linha de legenda abaixo da tabela explica o comportamento da coluna Regime.</p>')+
+          '<p>A legenda/nota abaixo da tabela explica o comportamento da coluna Regime.</p>')+
         manualBox('Aba: Perfis e Permissões',
           '<p>Matriz editável de permissões por perfil. Edição disponível para <b>Administrador</b> e <b>Gestor</b>.</p>'+
           '<p>Clique em qualquer célula da matriz para ciclar entre os níveis:</p>'+
