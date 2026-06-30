@@ -1394,51 +1394,44 @@ body.sidebar-collapsed .modal-backdrop{left:66px}
   background-repeat:no-repeat;
   animation:aurora-twinkle 5.5s ease-in-out infinite alternate;
 }
-/* Camada 2 — cortinas de aurora etéreas (luz somando sobre o escuro) */
+/* Camada 2 — cortinas de aurora etéreas (luz somando sobre o escuro).
+   Movimento contínuo via background-position (mais visível que transform sob blur). */
 .manual-chat-panel::after{
-  content:'';position:absolute;left:-30%;right:-30%;top:56px;bottom:-8%;z-index:0;pointer-events:none;
-  mix-blend-mode:screen;will-change:transform,opacity;
+  content:'';position:absolute;left:-40%;right:-40%;top:56px;bottom:-8%;z-index:0;pointer-events:none;
+  mix-blend-mode:screen;will-change:background-position;
   background:
-    /* feixes verticais translúcidos e delicados */
-    linear-gradient(14deg,  transparent 22%, rgba(74,222,128,.30) 44%, rgba(167,243,208,.45) 50%, rgba(74,222,128,.26) 56%, transparent 80%),
-    linear-gradient(-11deg, transparent 26%, rgba(16,185,129,.26) 47%, rgba(110,231,183,.38) 54%, rgba(16,185,129,.22) 61%, transparent 82%),
-    linear-gradient(7deg,   transparent 28%, rgba(34,197,94,.24)  49%, rgba(134,239,172,.40) 56%, rgba(34,197,94,.2) 63%, transparent 84%),
-    /* brilho difuso na base (origem das cortinas) */
+    linear-gradient(14deg,  transparent 22%, rgba(74,222,128,.30) 44%, rgba(167,243,208,.48) 50%, rgba(74,222,128,.26) 56%, transparent 80%),
+    linear-gradient(-11deg, transparent 26%, rgba(16,185,129,.26) 47%, rgba(110,231,183,.40) 54%, rgba(16,185,129,.22) 61%, transparent 82%),
+    linear-gradient(7deg,   transparent 28%, rgba(34,197,94,.24)  49%, rgba(134,239,172,.42) 56%, rgba(34,197,94,.2) 63%, transparent 84%),
     radial-gradient(130% 60% at 50% 108%, rgba(45,212,160,.26), transparent 72%);
-  background-size:150% 100%, 130% 100%, 170% 100%, 100% 100%;
-  background-position:20% 0, 60% 0, 40% 0, 50% 100%;
-  background-repeat:no-repeat;
-  filter:blur(26px) saturate(1.1);
-  animation:aurora-flow 26s ease-in-out infinite alternate;
+  background-size:55% 100%, 48% 100%, 62% 100%, 100% 100%;
+  background-repeat:repeat-x, repeat-x, repeat-x, no-repeat;
+  filter:blur(24px) saturate(1.12);
+  animation:aurora-pan 18s linear infinite;
 }
-/* segunda onda de cortinas, fase diferente, ainda mais sutil, via box do log */
+/* segunda onda de cortinas, sentido oposto e ainda mais sutil */
 .manual-chat-log::before{
-  content:'';position:absolute;left:-30%;right:-30%;top:0;bottom:0;z-index:0;pointer-events:none;
-  mix-blend-mode:screen;will-change:transform,opacity;
+  content:'';position:absolute;left:-40%;right:-40%;top:0;bottom:0;z-index:0;pointer-events:none;
+  mix-blend-mode:screen;will-change:background-position;
   background:
-    linear-gradient(-16deg, transparent 30%, rgba(52,211,153,.22) 51%, rgba(187,247,208,.32) 57%, rgba(52,211,153,.18) 64%, transparent 86%),
-    linear-gradient(18deg,  transparent 32%, rgba(74,222,128,.18) 52%, rgba(110,231,183,.28) 59%, rgba(74,222,128,.15) 66%, transparent 88%);
-  background-size:160% 100%, 140% 100%;
-  background-position:75% 0, 30% 0;
-  background-repeat:no-repeat;
-  filter:blur(34px) saturate(1.05);
-  animation:aurora-flow2 34s ease-in-out infinite alternate;
+    linear-gradient(-16deg, transparent 30%, rgba(52,211,153,.22) 51%, rgba(187,247,208,.34) 57%, rgba(52,211,153,.18) 64%, transparent 86%),
+    linear-gradient(18deg,  transparent 32%, rgba(74,222,128,.18) 52%, rgba(110,231,183,.30) 59%, rgba(74,222,128,.15) 66%, transparent 88%);
+  background-size:58% 100%, 50% 100%;
+  background-repeat:repeat-x, repeat-x;
+  filter:blur(30px) saturate(1.06);
+  animation:aurora-pan-rev 26s linear infinite;
 }
 @keyframes aurora-twinkle{
   0%  {opacity:.45} 100%{opacity:.9}
 }
-/* Movimento lento e contínuo — ondular delicado, como véus flutuando */
-@keyframes aurora-flow{
-  0%  {transform:translate3d(-10%,2%,0) scaleY(1.0)  skewX(-9deg); opacity:.7}
-  35% {transform:translate3d(-2%,-3%,0) scaleY(1.18) skewX(4deg);  opacity:.92}
-  70% {transform:translate3d(7%,-1%,0)  scaleY(1.1)  skewX(8deg);  opacity:.82}
-  100%{transform:translate3d(-3%,3%,0)  scaleY(1.22) skewX(-5deg); opacity:.78}
+/* Deslizamento horizontal contínuo das cortinas (loop perfeito) */
+@keyframes aurora-pan{
+  0%  {background-position:0% 0, 0% 0, 0% 0, 50% 100%}
+  100%{background-position:55% 0, -48% 0, 62% 0, 50% 100%}
 }
-@keyframes aurora-flow2{
-  0%  {transform:translate3d(9%,1%,0)   scaleY(1.1)  skewX(10deg); opacity:.5}
-  40% {transform:translate3d(-4%,-4%,0) scaleY(1.28) skewX(-6deg); opacity:.78}
-  75% {transform:translate3d(6%,-2%,0)  scaleY(1.15) skewX(7deg);  opacity:.62}
-  100%{transform:translate3d(-6%,2%,0)  scaleY(1.24) skewX(-4deg); opacity:.7}
+@keyframes aurora-pan-rev{
+  0%  {background-position:0% 0, 0% 0}
+  100%{background-position:-58% 0, 50% 0}
 }
 .manual-chat-panel.chat-max{width:520px}
 .manual-chat-panel.chat-max2{width:min(820px,70vw)}
@@ -1490,7 +1483,7 @@ body.sidebar-collapsed .modal-backdrop{left:66px}
 .manual-chat-log{position:relative;z-index:1;flex:1;overflow-y:auto;overflow-x:hidden;padding:14px 12px;display:flex;flex-direction:column;gap:10px;background:transparent}
 .manual-chat-log>*{position:relative;z-index:1}
 @media (prefers-reduced-motion: reduce){
-  .manual-chat-aurora,.manual-chat-aurora::before,.manual-chat-aurora::after{animation:none}
+  .manual-chat-panel::before,.manual-chat-panel::after,.manual-chat-log::before{animation:none}
 }
 .mchat-msg{display:flex;gap:8px;max-width:100%}
 .mchat-user{flex-direction:row-reverse}
@@ -1504,6 +1497,14 @@ body.sidebar-collapsed .modal-backdrop{left:66px}
   backdrop-filter:blur(14px) saturate(1.15);
   box-shadow:0 6px 22px rgba(0,0,0,.22),inset 0 1px 0 rgba(255,255,255,.07);
 }
+/* Botões de escolha de modo (Uso do sistema / Conversa técnica) */
+.mchat-modes{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+.mchat-mode-btn{display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:10px;
+  border:1px solid rgba(110,231,183,.35);background:rgba(16,185,129,.14);color:#eafff4;
+  font-size:12.5px;font-weight:600;cursor:pointer;text-align:left;
+  transition:background .15s,border-color .15s,transform .12s}
+.mchat-mode-btn:hover{background:rgba(16,185,129,.26);border-color:rgba(167,243,208,.6);transform:translateY(-1px)}
+.mchat-mode-btn svg{color:#7ee0a8;flex-shrink:0}
 .mchat-user .mchat-bubble{
   background:linear-gradient(135deg,rgba(22,163,94,.85),rgba(16,120,70,.85));
   color:#fff;border-color:rgba(134,239,172,.4);

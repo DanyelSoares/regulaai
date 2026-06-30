@@ -5868,7 +5868,15 @@
           ])+
           '<p>Cada provedor guarda sua própria chave e modelo. A chave fica armazenada <b>apenas no navegador</b> (localStorage) — nunca é enviada ao servidor nem ao código-fonte.</p>'+
           '<p><b>Importante para os demais perfis:</b> Auditor, Enfermeiro e Gestor <b>não veem</b> esta aba, mas <b>usam o chat normalmente</b> com a chave que o Administrador configurou. Caso a chave ainda não esteja configurada naquele dispositivo, o chat orienta a contatar o Administrador.</p>'+
-          '<p style="padding:9px 12px;background:#fef9e7;border:1px solid #f5e2a3;border-radius:8px;font-size:12.5px"><b>'+ico('info',12)+' Chave por dispositivo:</b> a chave é salva por navegador/dispositivo. Para habilitar a RAI em um novo computador, o <b>Administrador</b> deve abrir o sistema naquele dispositivo e inserir a chave uma vez — os demais usuários daquele navegador passam a usar o assistente sem precisar da chave. <i>(A análise de aderência das guias é local e funciona para todos, independentemente da chave.)</i></p>');
+          '<p style="padding:9px 12px;background:#fef9e7;border:1px solid #f5e2a3;border-radius:8px;font-size:12.5px"><b>'+ico('info',12)+' Chave por dispositivo:</b> a chave é salva por navegador/dispositivo. Para habilitar a RAI em um novo computador, o <b>Administrador</b> deve abrir o sistema naquele dispositivo e inserir a chave uma vez — os demais usuários daquele navegador passam a usar o assistente sem precisar da chave. <i>(A análise de aderência das guias é local e funciona para todos, independentemente da chave.)</i></p>')+
+        manualBox('Assistente RAI: modos de atendimento',
+          '<p>Ao abrir o chat, a RAI se apresenta e oferece <b>dois modos</b>. O usuário escolhe um pelos botões:</p>'+
+          manualTable(['Modo','O que faz'],[
+            ['Uso do sistema','Atua como o manual interativo — tira dúvidas sobre telas, fluxos, aderência, pontuações e usabilidade da plataforma.'],
+            ['Conversa técnica','Apoio técnico-assistencial sobre uma guia específica: esclarece o parecer, discute a indicação técnica dos serviços solicitados, contraindicações e alternativas possíveis.'],
+          ])+
+          '<p>No modo <b>Conversa técnica</b>, a RAI primeiro solicita o <b>número da guia</b>. Ao informar, ela carrega automaticamente os dados da guia (procedimentos, aderência, parecer da IA, pendências e alertas) e passa a responder com base nesse contexto.</p>'+
+          '<p style="padding:9px 12px;background:var(--g-50);border-radius:8px;font-size:12.5px"><b>'+ico('info',12)+' Apoio à decisão:</b> no modo técnico a RAI <b>não autoriza nem nega</b> procedimentos — é apoio ao auditor. A decisão final é exclusiva da operadora. Para trocar de modo ou de guia, inicie uma <b>nova conversa</b> (botão de histórico → fechar).</p>');
     }
 
     else if(sec==='perfis'){
@@ -6079,7 +6087,7 @@
 
     var chatHistory=[];
     var maxLevel=0;            // 0=normal, 1=largo, 2=muito largo
-    var WELCOME='Olá! Sou a RAI, sua assistente virtual. Estou aqui para ajudar com dúvidas sobre o sistema. Como posso te ajudar hoje?';
+    var WELCOME='Olá! Sou a RAI, sua assistente virtual.';
 
     /* === Persistência de sessões de chat === */
     var sessions=JSON.parse(localStorage.getItem('regula_chat_sessions')||'[]');
@@ -6096,6 +6104,8 @@
       var s=findSession(currentSessionId);
       if(!s) return;
       s.history=chatHistory.slice();
+      s.mode=chatMode;
+      s.guiaNum=chatGuia?chatGuia.numero:null;
       s.updated=Date.now();
       persistSessions();
     }
@@ -6108,19 +6118,67 @@
       chatHistory=[];
     }
 
-    var SYSTEM_CONTEXT='Você é a RAI, assistente virtual do RegulaAI Saúde, plataforma de auditoria assistencial para operadoras de saúde. '+
+    // Base de identidade comum aos dois modos
+    var CTX_BASE='Você é a RAI, assistente virtual do RegulaAI Saúde, plataforma de auditoria assistencial para operadoras de saúde. '+
       'NÃO se apresente nem use saudações como "Olá! Sou a RAI" nas respostas — a apresentação já foi feita na abertura do chat. Vá direto ao ponto. '+
       'Se o usuário perguntar o que significa RAI ou o motivo do nome, responda: "RAI é a combinação da primeira letra de Regulação (R) + AI (Artificial Intelligence)." '+
-      'Responda em português, de forma objetiva, técnica e acolhedora. '+
+      'Responda em português, de forma objetiva, técnica e acolhedora. ';
+
+    // Modo "Uso do sistema" — manual + dúvidas de usabilidade
+    var CTX_SISTEMA=CTX_BASE+
+      'MODO: USO DO SISTEMA. Você atua como o manual interativo do RegulaAI Saúde, tirando dúvidas sobre usabilidade, telas, fluxos de trabalho e funcionamento da plataforma. NÃO emita pareceres clínicos neste modo; se o usuário quiser análise técnica de uma guia, oriente-o a iniciar uma "Conversa técnica". '+
       'Conhecimento do sistema: '+
       '1) GUIAS: cada guia possui número, tipo (internação/ambulatorial), regime, natureza, fluxo, status (triagem/análise/complemento/parecer/concluída). '+
       '2) ADERÊNCIA: calculada pela IA com critérios ponderados por pesos configuráveis. O TETO é dinâmico — soma apenas critérios aplicáveis à guia específica (ex.: DUT só entra se a guia tem procedimentos com DUT obrigatória; pacotes só se vinculados). '+
-      '3) CRITÉRIOS DE ADERÊNCIA: Documental (documentação anexada), DUT (Diretriz de Utilização), Procedimentos vinculados, Pacotes, Mat/Med, Diárias/Taxas, Contratual/Histórico. '+
+      '3) CRITÉRIOS DE ADERÊNCIA: Documental, DUT (Diretriz de Utilização), Procedimentos vinculados, Pacotes, Mat/Med, Diárias/Taxas, Contratual/Histórico. '+
       '4) PESOS: configuráveis em Parametrização → cada aba (Procedimentos, Pacotes, Mat/Med, Diárias/Taxas) tem campo Peso de 0 a 10. '+
       '5) REPROCESSAR: reanalisa a guia passando itens desmarcados pelo auditor, observações e parecer da operadora como contexto de aprendizado. '+
       '6) PERFIS: Administrador (acesso a tudo, incluindo gerenciar usuários), Gestor (mesmos acessos do Administrador, exceto gerenciar usuários), Auditor (análise e parecer), Enfermeiro (triagem e complemento). '+
       '7) FLUXOS: F1-Eletivo, F2-Alta Complexidade, F3-Oncologia, etc. '+
-      'Se não souber algo específico do sistema, oriente o usuário a consultar o manual ou contatar o administrador.';
+      'Se não souber algo específico, oriente a consultar o Manual ou o administrador.';
+
+    // Modo "Conversa técnica" — recebe os dados da guia como contexto
+    function ctxTecnico(resumoGuia){
+      return CTX_BASE+
+        'MODO: CONVERSA TÉCNICA. Você atua como apoio técnico-assistencial ao auditor sobre uma guia específica: esclarece o parecer, discute indicação técnica dos serviços solicitados, contraindicações, alternativas terapêuticas possíveis, e pontos de atenção regulatórios. '+
+        'IMPORTANTE: você é apoio à decisão — NÃO autoriza nem nega procedimentos. A decisão final é exclusiva da operadora/auditor. Baseie-se nos dados fornecidos da guia e em boas práticas clínicas/regulatórias; quando faltar informação, declare a limitação. '+
+        'DADOS DA GUIA EM ANÁLISE:\n'+resumoGuia;
+    }
+
+    // Estado do modo de atendimento
+    var chatMode=null;        // null | 'sistema' | 'tecnica'
+    var chatGuia=null;        // guia carregada no modo técnico
+    var aguardandoGuia=false; // true quando esperamos o usuário digitar o nº da guia
+
+    // System context conforme o modo atual
+    function systemContextAtual(){
+      if(chatMode==='tecnica' && chatGuia) return ctxTecnico(resumoGuiaTexto(chatGuia));
+      return CTX_SISTEMA;
+    }
+
+    // Monta um resumo textual da guia + análise da IA para o contexto técnico
+    function resumoGuiaTexto(g){
+      var ia=g._cache||AI.analisarGuiaComIA(g,{pesos:getFluxoPesos(g.fluxo&&g.fluxo.id)});
+      g._cache=ia;
+      var L=[];
+      L.push('Número: '+g.numero);
+      L.push('Beneficiário: '+(g.beneficiario&&g.beneficiario.nome||'—'));
+      L.push('Tipo/Regime/Natureza: '+g.tipo+' / '+g.regime+' / '+g.natureza);
+      L.push('Fluxo: '+(g.fluxo&&g.fluxo.nome||'—'));
+      L.push('Status: '+g.status);
+      L.push('Risco: '+(g.risco||'—'));
+      var procs=(g.procedimentos||[]).map(function(p){return p.cod+' '+p.desc+(p.dut?' [DUT]':'');});
+      L.push('Procedimentos solicitados: '+(procs.length?procs.join('; '):'nenhum'));
+      if((g.pacotes||[]).length) L.push('Pacotes: '+g.pacotes.map(function(p){return p.cod+' '+p.desc;}).join('; '));
+      if((g.matmed||[]).length) L.push('Mat/Med: '+g.matmed.map(function(p){return p.cod+' '+p.desc+(p.opme?' [OPME]':'');}).join('; '));
+      if((g.diariasTaxas||[]).length) L.push('Diárias/Taxas: '+g.diariasTaxas.map(function(p){return p.cod+' '+p.desc;}).join('; '));
+      L.push('Aderência calculada: '+ia.aderencia+'% ('+ia.classificacao.label+')');
+      L.push('Parecer da IA (apoio): '+ia.parecerGeral);
+      if((ia.pendencias||[]).length) L.push('Pendências: '+ia.pendencias.join('; '));
+      if((ia.alertas||[]).length) L.push('Alertas: '+ia.alertas.join('; '));
+      L.push('Próxima ação sugerida: '+ia.proximaAcao);
+      return L.join('\n');
+    }
 
     // Monta estrutura uma única vez
     chatRoot.className='manual-chat-panel';
@@ -6170,14 +6228,67 @@
       return '⚠️ O assistente ainda não está disponível. Solicite ao <b>Administrador</b> a configuração da chave de API.';
     }
 
+    // Adiciona os botões de escolha de modo dentro do log
+    function addModePicker(){
+      var d=el('div',{class:'mchat-msg mchat-bot'});
+      d.innerHTML=
+        '<div class="mchat-avatar rai-msg-avatar">'+RAI_AVATAR+'</div>'+
+        '<div class="mchat-bubble-wrap"><span class="mchat-sender">RAI</span>'+
+          '<div class="mchat-bubble">Como posso te ajudar? Escolha uma opção:'+
+            '<div class="mchat-modes">'+
+              '<button class="mchat-mode-btn" data-mode="sistema">'+ico('book-open',14)+' Uso do sistema</button>'+
+              '<button class="mchat-mode-btn" data-mode="tecnica">'+ico('stethoscope',14)+' Conversa técnica</button>'+
+            '</div>'+
+          '</div>'+
+        '</div>';
+      chatLog.appendChild(d);
+      chatLog.scrollTop=chatLog.scrollHeight;
+      lcIcons();
+      d.querySelectorAll('.mchat-mode-btn').forEach(function(b){
+        b.onclick=function(){ escolherModo(b.getAttribute('data-mode')); };
+      });
+    }
+
     // Renderiza o log a partir do chatHistory atual
     function renderLog(){
       chatLog.innerHTML='';
       addMsg('bot',WELCOME);
-      if(!getIaCfg().key) addMsg('bot',msgSemChave());
+      if(!getIaCfg().key){ addMsg('bot',msgSemChave()); return; }
+      // Conversa nova e sem modo definido → mostra os botões de escolha
+      if(!chatMode && chatHistory.length===0){ addModePicker(); return; }
       for(var i=0;i<chatHistory.length;i++){
         addMsg(chatHistory[i].role==='user'?'user':'bot', chatHistory[i].parts[0].text);
       }
+    }
+
+    // Define o modo escolhido e instrui o próximo passo
+    function escolherModo(modo){
+      // remove o picker (se existir)
+      var pk=chatLog.querySelector('.mchat-modes'); if(pk){ var m=pk.closest('.mchat-msg'); if(m) m.remove(); }
+      if(modo==='sistema'){
+        chatMode='sistema'; aguardandoGuia=false; chatGuia=null;
+        addMsg('bot','Perfeito! Estou no modo <b>Uso do sistema</b>. Pode perguntar sobre telas, fluxos, aderência, pontuações e qualquer dúvida de usabilidade. Como funciona o que você precisa?');
+        chatInp.focus();
+      } else if(modo==='tecnica'){
+        chatMode='tecnica'; chatGuia=null; aguardandoGuia=true;
+        addMsg('bot','Modo <b>Conversa técnica</b> ativado. Para começar, informe o <b>número da guia</b> que deseja analisar.');
+        chatInp.placeholder='Digite o número da guia...';
+        chatInp.focus();
+      }
+    }
+
+    // Tenta carregar a guia pelo número informado
+    function carregarGuiaTecnica(num){
+      var alvo=String(num).replace(/\D/g,'');
+      var g=State.guias.find(function(gg){ return String(gg.numero)===String(num).trim() || String(gg.numero).replace(/\D/g,'')===alvo; });
+      if(!g){
+        addMsg('bot','Não encontrei a guia <b>'+esc(num)+'</b>. Confira o número e tente novamente.');
+        return;
+      }
+      chatGuia=g; aguardandoGuia=false;
+      chatInp.placeholder='Digite sua mensagem...';
+      addMsg('bot','Guia <b>'+esc(g.numero)+'</b> carregada — '+esc(g.beneficiario&&g.beneficiario.nome||'')+' · '+esc(g.tipo)+' · aderência '+ (g._cache?g._cache.aderencia:AI.analisarGuiaComIA(g,{pesos:getFluxoPesos(g.fluxo&&g.fluxo.id)}).aderencia) +'%.<br>Pode perguntar sobre a indicação técnica dos serviços, o parecer, contraindicações ou alternativas. <i>Lembre-se: sou apoio à decisão — a palavra final é da operadora.</i>');
+      chatInp.focus();
     }
 
     // Carrega uma sessão pelo id
@@ -6186,13 +6297,19 @@
       if(!s) return;
       currentSessionId=id;
       chatHistory=s.history.slice();
+      chatMode=s.mode||null;
+      aguardandoGuia=false;
+      chatGuia=null;
+      if(s.guiaNum){ chatGuia=State.guias.find(function(gg){ return String(gg.numero)===String(s.guiaNum); })||null; }
       renderLog();
       closeHist();
     }
 
-    // Inicia conversa nova (limpa log)
+    // Inicia conversa nova (limpa log + reseta modo)
     function startNew(){
       newSession();
+      chatMode=null; chatGuia=null; aguardandoGuia=false;
+      chatInp.placeholder='Digite sua mensagem...';
       renderLog();
       closeHist();
       chatInp.focus();
@@ -6272,6 +6389,7 @@
     // Chama a API do provedor selecionado; history no formato canônico Gemini
     // ({role:'user'|'model', parts:[{text}]}). Retorna o texto da resposta.
     async function callIA(cfg,history){
+      var SYS=systemContextAtual();
       if(cfg.prov==='claude'){
         var msgs=history.map(function(m){ return {role:m.role==='model'?'assistant':'user',content:m.parts[0].text}; });
         var r=await fetch('https://api.anthropic.com/v1/messages',{
@@ -6282,14 +6400,14 @@
             'anthropic-version':'2023-06-01',
             'anthropic-dangerous-direct-browser-access':'true'
           },
-          body:JSON.stringify({model:cfg.model,max_tokens:1024,system:SYSTEM_CONTEXT,messages:msgs})
+          body:JSON.stringify({model:cfg.model,max_tokens:1024,system:SYS,messages:msgs})
         });
         var d=await r.json();
         if(d.content&&d.content[0]&&d.content[0].text) return {ok:true,text:d.content[0].text};
         return {ok:false,text:(d.error&&d.error.message)||'Sem resposta do Claude.'};
       }
       if(cfg.prov==='openai'){
-        var omsgs=[{role:'system',content:SYSTEM_CONTEXT}].concat(history.map(function(m){
+        var omsgs=[{role:'system',content:SYS}].concat(history.map(function(m){
           return {role:m.role==='model'?'assistant':'user',content:m.parts[0].text};
         }));
         var ro=await fetch('https://api.openai.com/v1/chat/completions',{
@@ -6304,7 +6422,7 @@
       // Gemini (padrão)
       var rg=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+cfg.model+':generateContent?key='+cfg.key,{
         method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({system_instruction:{parts:[{text:SYSTEM_CONTEXT}]},contents:history})
+        body:JSON.stringify({system_instruction:{parts:[{text:SYS}]},contents:history})
       });
       var dg=await rg.json();
       if(dg.candidates&&dg.candidates[0]) return {ok:true,text:dg.candidates[0].content.parts[0].text};
@@ -6317,6 +6435,11 @@
       chatInp.value='';
       chatInp.style.height='auto';
       addMsg('user',q);
+
+      // Modo técnico aguardando o número da guia: trata a entrada como nº da guia
+      if(aguardandoGuia){ carregarGuiaTecnica(q); return; }
+      // Sem modo escolhido ainda → pede para escolher
+      if(!chatMode){ addMsg('bot','Antes, escolha como posso ajudar:'); addModePicker(); return; }
 
       var cfg=getIaCfg();
       if(!cfg.key){
