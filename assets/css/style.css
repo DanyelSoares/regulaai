@@ -380,6 +380,17 @@ body.pl--blurring .pl--blur-target{filter:blur(5px)}
 .rel-kpi-click{cursor:pointer;transition:box-shadow .15s,transform .12s,border-color .15s}
 .rel-kpi-click:hover{border-color:#fca5a5;box-shadow:0 4px 14px rgba(220,38,38,.14);transform:translateY(-1px)}
 .rel-kpi-click .rel-kpi-s{color:#dc2626;font-weight:600;display:inline-flex;align-items:center;gap:3px}
+/* Linhas de ranking clicáveis (drill para detalhe das guias) */
+.rel-rank-row{cursor:pointer}
+.rel-rank-row:hover td{background:var(--g-50)}
+/* Detalhe (modal) das guias de uma entidade */
+.rel-drill-guia{border:1px solid var(--g-200);border-radius:10px;margin-bottom:14px;overflow:hidden}
+.rel-drill-hd{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;background:var(--g-50);border-bottom:1px solid var(--g-100)}
+.rel-drill-num{display:inline-flex;align-items:center;gap:6px;font-size:13.5px;font-weight:700;color:var(--g-800)}
+.rel-drill-meta{display:flex;flex-wrap:wrap;gap:8px 20px;padding:10px 14px;font-size:12.5px;color:var(--ink-2)}
+.rel-drill-meta b{color:var(--g-700)}
+.rel-drill-tab{margin:0}
+.rel-drill .table-wrap{border:none;box-shadow:none;border-top:1px solid var(--g-100);border-radius:0}
 .rel-grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 @media(max-width:880px){.rel-grid2{grid-template-columns:1fr}}
 .rel-dist-row{display:grid;grid-template-columns:120px 1fr 48px;align-items:center;gap:10px;padding:5px 0}

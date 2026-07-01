@@ -124,8 +124,8 @@
 
       // Médico solicitante
       var med = g.solicitante || '—';
-      var m = porMedico[med] || (porMedico[med]={nome:med,guias:0,custo:0,benefs:{},prestadores:{},opme:0,negadas:0,aprovadas:0});
-      m.guias++; m.custo+=c; m.benefs[bid]=1;
+      var m = porMedico[med] || (porMedico[med]={nome:med,guias:0,custo:0,benefs:{},prestadores:{},opme:0,negadas:0,aprovadas:0,guiasRef:[]});
+      m.guias++; m.custo+=c; m.benefs[bid]=1; m.guiasRef.push(g);
       if(g.prestadorExe&&g.prestadorExe.nome) m.prestadores[g.prestadorExe.nome]=1;
       m.opme+=(g.matmed||[]).filter(function(x){return x.opme;}).length;
       if(g.status==='Negada') m.negadas++;
@@ -133,8 +133,8 @@
 
       // Prestador executante
       var pn = g.prestadorExe && g.prestadorExe.nome || '—';
-      var pr = porPrestador[pn] || (porPrestador[pn]={nome:pn,guias:0,custo:0,opme:0,medicos:{},internacoes:0});
-      pr.guias++; pr.custo+=c; pr.opme+=(g.matmed||[]).filter(function(x){return x.opme;}).length;
+      var pr = porPrestador[pn] || (porPrestador[pn]={nome:pn,guias:0,custo:0,opme:0,medicos:{},internacoes:0,guiasRef:[]});
+      pr.guias++; pr.custo+=c; pr.opme+=(g.matmed||[]).filter(function(x){return x.opme;}).length; pr.guiasRef.push(g);
       if(g.solicitante) pr.medicos[g.solicitante]=1;
       if(g.tipo&&/Interna/i.test(g.tipo)) pr.internacoes++;
 
@@ -149,11 +149,11 @@
       (g.matmed||[]).forEach(function(mm){
         if(!mm.opme) return;
         var oc=custoOpme(mm);
-        var oo=porOpme[mm.cod]||(porOpme[mm.cod]={cod:mm.cod,desc:mm.desc,fornecedor:oc.fornecedor,qtd:0,autorizado:0,cobrado:0,varMax:0,benefs:{},medicos:{},guias:[]});
+        var oo=porOpme[mm.cod]||(porOpme[mm.cod]={cod:mm.cod,desc:mm.desc,fornecedor:oc.fornecedor,qtd:0,autorizado:0,cobrado:0,varMax:0,benefs:{},medicos:{},guias:[],guiasRef:[]});
         oo.qtd++; oo.autorizado+=oc.autorizado; oo.cobrado+=oc.cobrado;
         oo.varMax=Math.max(oo.varMax,oc.varPct);
         oo.benefs[bid]=1; if(g.solicitante) oo.medicos[g.solicitante]=1;
-        if(oo.guias.indexOf(g.numero)<0) oo.guias.push(g.numero);
+        if(oo.guias.indexOf(g.numero)<0){ oo.guias.push(g.numero); oo.guiasRef.push(g); }
       });
     });
 
@@ -252,7 +252,10 @@
     opts=opts||{};
     var head=cols.map(function(c){return '<th'+(c.num?' style="text-align:right"':'')+'>'+esc(c.h)+'</th>';}).join('');
     var body=rows.map(function(r,i){
-      return '<tr>'+cols.map(function(c){ var v=c.f(r,i); return '<td'+(c.num?' style="text-align:right"':'')+'>'+v+'</td>'; }).join('')+'</tr>';
+      // opts.rowDrill: função (r,i) → chave para abrir detalhe; torna a linha clicável
+      var drill = opts.rowDrill ? opts.rowDrill(r,i) : null;
+      var trAttr = drill!=null ? ' class="rel-rank-row" data-drill="'+esc(drill)+'"' : '';
+      return '<tr'+trAttr+'>'+cols.map(function(c){ var v=c.f(r,i); return '<td'+(c.num?' style="text-align:right"':'')+'>'+v+'</td>'; }).join('')+'</tr>';
     }).join('');
     var hd='<div class="rel-card-hd">'+esc(titulo)+(opts.count?'<span class="rel-card-count">'+rows.length+'</span>':'')+'</div>';
     // No modo scroll usamos só .rel-scroll (sem .table-wrap, que tem overflow:hidden e cortaria a barra)
@@ -541,13 +544,13 @@
       {h:'Médico',f:function(r){return esc(r.nome);}},
       {h:'Guias',num:true,f:function(r){return r.guias;}},
       {h:'Custo',num:true,f:function(r){return moeda(r.custo);}}
-    ],rkMedicos,{scroll:true,count:true});
+    ],rkMedicos,{scroll:true,count:true,rowDrill:function(r){return 'med:'+r.nome;}});
     var rkPrest=rankTable('Ranking de prestadores por custo',[
       {h:'#',f:function(r,i){return '<b>'+(i+1)+'</b>';}},
       {h:'Prestador',f:function(r){return esc(r.nome);}},
       {h:'Guias',num:true,f:function(r){return r.guias;}},
       {h:'Custo',num:true,f:function(r){return moeda(r.custo);}}
-    ],rkPrestadores,{scroll:true,count:true});
+    ],rkPrestadores,{scroll:true,count:true,rowDrill:function(r){return 'prest:'+r.nome;}});
     var rkOpme=rankTable('Ranking de OPME por valor',[
       {h:'#',f:function(r,i){return '<b>'+(i+1)+'</b>';}},
       {h:'OPME',f:function(r){return esc(r.desc);}},
@@ -555,13 +558,67 @@
       {h:'Fornecedor',f:function(r){return esc(r.fornecedor||'—');}},
       {h:'Qtd',num:true,f:function(r){return r.qtd;}},
       {h:'Valor cobrado',num:true,f:function(r){return moeda(r.cobrado);}}
-    ],rkOpmes,{scroll:true,count:true});
+    ],rkOpmes,{scroll:true,count:true,rowDrill:function(r){return 'opme:'+r.cod;}});
 
     return '<div class="rel-section">'+
       kpis+ riscoKpis+ distRisco+
       '<div class="rel-grid2">'+rkMed+rkPrest+'</div>'+
       rkOpme+
     '</div>';
+  }
+
+  // ── Detalhe (modal) das guias de uma entidade do ranking ──────────
+  function abrirDetalhe(drill){
+    var M=analitico();
+    var tipo=drill.split(':')[0], chave=drill.split(':').slice(1).join(':');
+    var titulo='', sub='', ent=null;
+    if(tipo==='med'){ ent=M.medicos.filter(function(x){return x.nome===chave;})[0]; titulo='Médico: '+chave; }
+    else if(tipo==='prest'){ ent=M.prestadores.filter(function(x){return x.nome===chave;})[0]; titulo='Prestador: '+chave; }
+    else if(tipo==='opme'){ ent=M.opmes.filter(function(x){return x.cod===chave;})[0]; titulo='OPME: '+(ent?ent.desc:chave); }
+    if(!ent){ return; }
+    var guias=ent.guiasRef||[];
+    sub=guias.length+' guia(s) relacionada(s)';
+
+    // Monta um bloco por guia, com seus procedimentos (código, nome, valor, qtd)
+    var blocos=guias.map(function(g){
+      // procedimentos: agrega por código (qtd) e soma valor
+      var procMap={};
+      (g.procedimentos||[]).forEach(function(p){
+        var k=p.cod; if(!procMap[k]) procMap[k]={cod:p.cod,desc:p.desc,qtd:0,valor:0};
+        procMap[k].qtd++; procMap[k].valor+=custoProc(p);
+      });
+      // OPME também como "serviço" (relevante, especialmente no drill de OPME)
+      (g.matmed||[]).forEach(function(m){ if(!m.opme) return; var k=m.cod; if(!procMap[k]) procMap[k]={cod:m.cod,desc:m.desc,qtd:0,valor:0,opme:true}; procMap[k].qtd++; procMap[k].valor+=custoOpme(m).cobrado; });
+      var linhas=Object.keys(procMap).map(function(k){var p=procMap[k];
+        return '<tr><td>'+esc(p.cod)+(p.opme?' <span class="badge warn" style="font-size:9px">OPME</span>':'')+'</td><td>'+esc(p.desc)+'</td><td style="text-align:center">'+p.qtd+'</td><td style="text-align:right">'+moeda(p.valor)+'</td></tr>';
+      }).join('');
+      if(!linhas) linhas='<tr><td colspan="4" style="color:var(--muted)">Sem procedimentos.</td></tr>';
+      return '<div class="rel-drill-guia">'+
+        '<div class="rel-drill-hd">'+
+          '<span class="rel-drill-num">'+ico('file-text',13)+' Guia '+esc(g.numero)+'</span>'+
+          '<span class="'+statusCls(g.status)+'">'+esc(g.status)+'</span>'+
+        '</div>'+
+        '<div class="rel-drill-meta">'+
+          '<span><b>Solicitante:</b> '+esc(g.solicitante||'—')+'</span>'+
+          '<span><b>Prestador:</b> '+esc((g.prestadorExe&&g.prestadorExe.nome)||'—')+'</span>'+
+          '<span><b>Beneficiário:</b> '+esc((g.beneficiario&&g.beneficiario.nome)||'—')+'</span>'+
+          '<span><b>Custo total:</b> '+moeda(custoGuia(g))+'</span>'+
+        '</div>'+
+        '<div class="table-wrap"><table class="cfg-table rel-drill-tab"><thead><tr><th>Código</th><th>Procedimento / Serviço</th><th style="text-align:center">Qtd</th><th style="text-align:right">Valor</th></tr></thead><tbody>'+linhas+'</tbody></table></div>'+
+      '</div>';
+    }).join('');
+
+    var body='<div class="rel-drill">'+
+      '<div class="rel-note" style="margin-bottom:12px">'+ico('info',13)+' <span>Guias relacionadas a esta seleção, com procedimentos e serviços (código, descrição, quantidade e valor <b>simulado</b>).</span></div>'+
+      (blocos||'<div style="padding:16px;color:var(--muted)">Nenhuma guia.</div>')+
+    '</div>';
+
+    var m = ctxRef().modal ? ctxRef().modal(titulo, sub, body) : null;
+    return m;
+  }
+  function statusCls(s){
+    var map={'Negada':'badge danger','Liberada':'badge','Analisada':'badge','Em análise':'badge info','Em junta médica':'badge warn','Aguardando complemento':'badge muted','Cotação de OPME':'badge warn'};
+    return (map[s]||'badge')+'" style="font-size:10px';
   }
 
   // ── Custos — análises financeiras ─────────────────────────────────
@@ -764,6 +821,10 @@
     // botões de exportação CSV
     container.querySelectorAll('[data-export]').forEach(function(btn){
       btn.onclick=function(){ exportarCSV(btn.getAttribute('data-export')); };
+    });
+    // linhas de ranking clicáveis → detalhe das guias (modal)
+    container.querySelectorAll('.rel-rank-row[data-drill]').forEach(function(row){
+      row.onclick=function(){ abrirDetalhe(row.getAttribute('data-drill')); };
     });
   }
 

@@ -817,7 +817,7 @@
       return el('div',{class:'panel',style:'padding:24px'},ico('alert-triangle',18)+' Módulo Relatórios não carregado.');
     }
     return window.RELATORIOS.view({
-      el:el, ico:ico, esc:esc, lcIcons:lcIcons,
+      el:el, ico:ico, esc:esc, lcIcons:lcIcons, modal:modal,
       guias: guiasVisiveis(), State: State
     });
   }
