@@ -549,7 +549,6 @@
     ],rkOpmes,{scroll:true,count:true});
 
     return '<div class="rel-section">'+
-      '<div class="rel-note">'+ico('info',13)+' <span>Visão da diretoria. KPIs e rankings calculados sobre as guias que entraram para análise no período. <b>Valores em R$ e fornecedores de OPME são simulados</b> para demonstração (sem tabela de preços/cadastro real conectado). Passe o mouse sobre os KPIs para ver como cada um é calculado.</span></div>'+
       kpis+ riscoKpis+ distRisco+
       '<div class="rel-grid2">'+rkMed+rkPrest+'</div>'+
       rkOpme+
