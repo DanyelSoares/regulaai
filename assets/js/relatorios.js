@@ -88,13 +88,16 @@
     if(_cache) return _cache;
     var guias = (ctxRef().guias) || [];
     var porBenef={}, porMedico={}, porPrestador={}, porProc={}, porOpme={};
-    var totalCusto=0, evitavel=0;
+    var totalCusto=0, custoNegadas=0, qtdNegadas=0, qtdEmAberto=0;
     var riscoCnt={baixo:0,medio:0,alto:0,critico:0};
+    var ABERTO={'Em análise':1,'Aguardando complemento':1,'Em junta médica':1,'Cotação de OPME':1};
 
     guias.forEach(function(g){
       var c = custoGuia(g);
       totalCusto += c;
-      if(g.risco==='alto'||g.risco==='critico') evitavel += Math.round(c*0.18);
+      // Métricas REAIS (sem estimativa arbitrária):
+      if(g.status==='Negada'){ qtdNegadas++; custoNegadas+=c; } // economia concreta já realizada
+      if(ABERTO[g.status]) qtdEmAberto++;                        // ainda sujeitas a decisão
       if(riscoCnt[g.risco]!=null) riscoCnt[g.risco]++;
 
       // Beneficiário
@@ -166,7 +169,8 @@
     var opmes=toArr(porOpme,function(o){o.varPreco=o.autorizado?Math.round((o.cobrado-o.autorizado)/o.autorizado*100):0;o.nBenefs=Object.keys(o.benefs).length;o.nMedicos=Object.keys(o.medicos).length;o.score=clamp(Math.max(0,o.varPreco)*1.2 + o.qtd*8);});
 
     _cache = {
-      guias:guias, totalGuias:guias.length, totalCusto:totalCusto, evitavel:evitavel, riscoCnt:riscoCnt,
+      guias:guias, totalGuias:guias.length, totalCusto:totalCusto,
+      custoNegadas:custoNegadas, qtdNegadas:qtdNegadas, qtdEmAberto:qtdEmAberto, riscoCnt:riscoCnt,
       benefs:benefs, medicos:medicos, prestadores:prestadores, procs:procs, opmes:opmes
     };
     _cache.alertas = detectarAlertas(_cache);
@@ -500,8 +504,8 @@
         'Volume de guias que entraram para análise no período selecionado — independentemente do status atual (em análise, liberada, negada etc.).')+
       kpiCard('Custo total analisado',moedaK(M.totalCusto),'estimado','#0f766e',
         'Soma dos custos estimados de todos os procedimentos, OPME, diárias e UTI das guias do período. Valores simulados.')+
-      kpiCard('Custo potencialmente evitável',moedaK(M.evitavel),'~18% do risco alto/crítico','#b45309',
-        'Estimativa: 18% do custo das guias classificadas como risco ALTO ou CRÍTICO — parcela sujeita a glosa, negativa ou revisão que poderia ser evitada. É uma estimativa demonstrativa (percentual parametrizável).')+
+      kpiCard('Custo de guias negadas',moedaK(M.custoNegadas),M.qtdNegadas+' guia(s) negada(s)','#15803d',
+        'Soma do custo estimado das guias efetivamente NEGADAS no período — economia concreta já realizada pela auditoria. Baseado no status real das guias (não é estimativa por percentual).')+
       kpiCard('Alertas ativos',M.alertas.length,'Alertas Inteligentes','#dc2626',
         'Quantidade de alertas gerados pelo motor de detecção (concentração, recorrência, alto custo, inconsistência de OPME). Clique para abrir a aba Alertas Inteligentes.','alertas')+
     '</div>';
@@ -554,14 +558,15 @@
     // guia de maior custo
     var guiasC=M.guias.map(function(g){return {numero:g.numero,nome:(g.beneficiario&&g.beneficiario.nome)||'—',tipo:g.tipo,risco:g.risco,custo:custoGuia(g)};}).sort(function(a,b){return b.custo-a.custo;});
     var maiorCusto=guiasC[0]||{custo:0,numero:'—'};
-    var glosaEst=Math.round(M.totalCusto*0.06);
-    var desperdicio=Math.round(M.evitavel*0.4);
+    var custoMedioGuia=M.totalGuias?Math.round(M.totalCusto/M.totalGuias):0;
 
     var kpis='<div class="rel-kpi-grid">'+
-      kpiCard('Custo total',moedaK(M.totalCusto),'estimado','#0f766e')+
+      kpiCard('Custo total',moedaK(M.totalCusto),'estimado','#0f766e',
+        'Soma dos custos estimados de todas as guias do período. Valores simulados.')+
+      kpiCard('Custo médio por guia',moeda(custoMedioGuia),'no período','#0f766e')+
       kpiCard('Maior custo (guia)',moeda(maiorCusto.custo),'guia '+maiorCusto.numero,'#b91c1c')+
-      kpiCard('Economia potencial',moedaK(M.evitavel),'risco alto/crítico','#15803d')+
-      kpiCard('Glosa estimada',moedaK(glosaEst),'~6% do total','#b45309')+
+      kpiCard('Custo de guias negadas',moedaK(M.custoNegadas),M.qtdNegadas+' negada(s)','#15803d',
+        'Custo estimado das guias efetivamente negadas — economia concreta já realizada (baseado no status real).')+
     '</div>';
 
     var rkGuias=rankTable('Guias de maior custo',[
