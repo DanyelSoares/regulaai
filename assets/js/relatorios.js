@@ -646,6 +646,14 @@
       var secOpme = '<div class="rel-drill-sec"><div class="rel-drill-sec-hd">'+ico('bone',13)+' OPME</div>'+tabOpme()+'</div>';
       var secMat = temMat ? '<div class="rel-drill-sec"><div class="rel-drill-sec-hd">'+ico('pill',13)+' Mat/Med</div>'+tabMat()+'</div>' : '';
       var secDt  = temDt  ? '<div class="rel-drill-sec"><div class="rel-drill-sec-hd">'+ico('calendar-days',13)+' Diárias / Taxas</div>'+tab4(dtMap,'Diária/Taxa','')+'</div>' : '';
+      // Observações do ERP (leitura) — impressas + não impressas
+      var obs = (window.MOCK&&window.MOCK.observacoesGuia)?window.MOCK.observacoesGuia(g.numero):{impressas:'',naoImpressas:[]};
+      var secObsImp = '<div class="rel-drill-sec"><div class="rel-drill-sec-hd">'+ico('printer',13)+' Observações impressas</div>'+
+        '<div style="padding:8px 14px 14px;font-size:12.5px;color:var(--ink-2);white-space:pre-wrap">'+(obs.impressas?esc(obs.impressas):'<span style="color:var(--muted)">Sem observações impressas.</span>')+'</div></div>';
+      var secObsNi = obs.naoImpressas.length ? '<div class="rel-drill-sec"><div class="rel-drill-sec-hd">'+ico('eye-off',13)+' Observações não impressas</div>'+
+        '<div class="table-wrap"><table class="cfg-table rel-drill-tab"><thead><tr><th>Data</th><th>Operador</th><th style="text-align:center">Pode Inf. Usuár.</th><th>Observação</th></tr></thead><tbody>'+
+        obs.naoImpressas.map(function(o){return '<tr><td style="white-space:nowrap">'+esc(o.data)+'</td><td>'+esc(o.operador)+'</td><td style="text-align:center">'+esc(o.podeInformar)+'</td><td>'+esc(o.texto)+'</td></tr>';}).join('')+
+        '</tbody></table></div></div>' : '';
 
       return '<div class="rel-drill-guia">'+
         '<div class="rel-drill-hd">'+
@@ -659,7 +667,7 @@
           '<div class="rel-drill-linha"><span class="rel-drill-k">Custo total</span><span class="rel-drill-v"><b>'+moeda(custoGuia(g))+'</b></span></div>'+
         '</div>'+
         '<div class="rel-drill-sec"><div class="rel-drill-sec-hd">'+ico('clipboard-list',13)+' Procedimentos</div>'+tab4(procMap,'Procedimento','Sem procedimentos nesta guia.')+'</div>'+
-        secOpme + secMat + secDt +
+        secOpme + secMat + secDt + secObsImp + secObsNi +
       '</div>';
     }).join('');
 

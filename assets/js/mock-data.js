@@ -336,6 +336,40 @@
     };
   }
 
+  // ── Observações do ERP por guia (impressas + não impressas) ──
+  // Determinístico por número da guia. Simula o que viria do Solus.
+  var _OPERADORES = ['YASMINFREITAS','CARLOSMENDES','ANAPAULA','ROBERTASILVA','MARCOSLIMA'];
+  var _OBS_NI = [
+    'Informar a paciente que ela já pode ir tomar a medicação no Cancer Center.',
+    'Aguardando retorno do prestador sobre documentação complementar.',
+    'Beneficiário orientado sobre necessidade de laudo atualizado.',
+    'Contato telefônico realizado — paciente ciente do agendamento.',
+    'Pendência de cotação de OPME enviada ao setor responsável.',
+    'Guia liberada mediante apresentação de relatório médico.',
+    'Solicitado parecer da junta médica para o procedimento.'
+  ];
+  function observacoesGuia(numero){
+    var s=_mmSeed('obs'+numero);
+    var n = 1 + (s % 3); // 1 a 3 observações não impressas
+    var naoImpressas=[];
+    var hh=9+(s%8), mm=(s%6)*10;
+    for(var i=0;i<n;i++){
+      var si=_mmSeed('obs'+numero+'#'+i);
+      var min=(mm+i*23)%60, hora=(hh+i)%24;
+      naoImpressas.push({
+        data:'22/05/2026 '+String(hora).padStart(2,'0')+':'+String(min).padStart(2,'0'),
+        operador:_OPERADORES[si % _OPERADORES.length],
+        podeInformar: (si%3===0) ? 'Sim' : 'Não',
+        texto:_OBS_NI[si % _OBS_NI.length],
+        // "cabeçalho" técnico como no ERP (protocolo interno)
+        ref: (395480+ (si%9000)) + ' - 20260522 - ' + (200000+(si%99999))
+      });
+    }
+    var protocolo = '395480' + '20260522' + (215000 + (s%999));
+    var impressas = 'Protocolo de atendimento: ' + protocolo;
+    return {impressas:impressas, protocolo:protocolo, naoImpressas:naoImpressas};
+  }
+
   global.MOCK = {
     FLUXOS:FLUXOS, IA_POR_ETAPA:IA_POR_ETAPA,
     PROCEDIMENTOS:PROCEDIMENTOS, PACOTES:PACOTES, MATMED:MATMED, DIARIAS_TAXAS:DIARIAS_TAXAS,
@@ -343,6 +377,6 @@
     PRESTADORES:PRESTADORES, BENEFICIARIOS:BENEFICIARIOS, USUARIOS:USUARIOS,
     STATUS:STATUS, ORIGENS:ORIGENS, CATEGORIAS_ANEXO:CATEGORIAS_ANEXO,
     MOTIVOS_COMP:MOTIVOS_COMP, MOTIVOS_REPR:MOTIVOS_REPR, MOTIVOS_RESS:MOTIVOS_RESS,
-    LOGS:LOGS, buildGuias: hydrate, matmedDetalhe: matmedDetalhe
+    LOGS:LOGS, buildGuias: hydrate, matmedDetalhe: matmedDetalhe, observacoesGuia: observacoesGuia
   };
 })(window);

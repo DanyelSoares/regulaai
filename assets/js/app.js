@@ -4432,6 +4432,8 @@
       {id:'criticas',      label:'Críticas',          ico:'triangle-alert',   grp:2},
       {id:'ia',            label:'Parecer Técnico',   ico:'bot',              grp:2},
       {id:'operadora',     label:'Parecer Operadora', ico:'file-check-2',     grp:2},
+      {id:'obsimp',        label:'Obs. Impressas',    ico:'printer',          grp:2},
+      {id:'obsnaoimp',     label:'Obs. Não Impressas',ico:'eye-off',          grp:2},
       {id:'historico',     label:'Histórico',         ico:'history',          grp:2},
       {id:'logs',          label:'Logs',              ico:'scroll-text',      grp:2},
     ];
@@ -4617,6 +4619,10 @@
         d.innerHTML='<div class="ai-box"><div class="hd"><div class="tt">Parecer da Operadora</div><span class="badge dark">'+esc(p.decisao)+'</span></div><dl class="kv"><dt>Motivo</dt><dd>'+esc(p.motivo||'—')+'</dd><dt>Justificativa</dt><dd>'+esc(p.justificativa||'—')+'</dd><dt>Observações impressas</dt><dd>'+esc(p.obsImp||'—')+'</dd><dt>Observações não impressas</dt><dd>'+esc(p.obsInt||'—')+'</dd><dt>Emitido por</dt><dd>'+esc(p.user)+' · '+esc(p.ts)+'</dd></dl></div>';
       }
       setTimeout(function(){ var b2=d.querySelector('#emPar'); if(b2) b2.onclick=function(){openParecer(g)}; },0);
+    } else if(t==='obsimp'){
+      d.appendChild(renderObsImpressas(g));
+    } else if(t==='obsnaoimp'){
+      d.appendChild(renderObsNaoImpressas(g));
     } else if(t==='logs'){
       var ul2=el('div');
       MOCK.LOGS.filter(function(l){return l.ref.indexOf(g.numero)>=0}).forEach(function(l){
@@ -4700,6 +4706,99 @@
     });
     return wrap;
   }
+
+  // Combina: adicionadas pelo auditor (localStorage) + do Parecer da Operadora + do ERP (simuladas)
+  function getObsNaoImpressas(g){
+    var base=(MOCK.observacoesGuia?MOCK.observacoesGuia(g.numero).naoImpressas:[]).slice();
+    var add=JSON.parse(localStorage.getItem('regula_obs_'+g.numero)||'[]');
+    var doParecer=[];
+    if(g.parecerOperadora && g.parecerOperadora.obsInt){
+      doParecer.push({data:g.parecerOperadora.ts||'—',operador:g.parecerOperadora.user||'Operadora',podeInformar:'Não',texto:g.parecerOperadora.obsInt,origem:'Parecer da Operadora'});
+    }
+    // ordem: adicionadas → do parecer → do ERP
+    return add.concat(doParecer).concat(base);
+  }
+  function getObsImpressas(g){
+    var erp=MOCK.observacoesGuia?MOCK.observacoesGuia(g.numero).impressas:'';
+    // acrescenta a observação impressa do Parecer (vai para o prestador), se houver
+    if(g.parecerOperadora && g.parecerOperadora.obsImp){
+      return 'Do Parecer da Operadora:\n'+g.parecerOperadora.obsImp+'\n\n'+erp;
+    }
+    return erp;
+  }
+
+  // Aba: Observações Impressas (texto por extenso — leitura)
+  function renderObsImpressas(g){
+    var wrap=el('div');
+    var txt=getObsImpressas(g);
+    wrap.innerHTML=
+      '<div class="obs-imp-box">'+
+        '<div class="obs-imp-hd">'+ico('printer',14)+' Observações impressas <span class="badge muted" style="font-size:10px">somente leitura</span></div>'+
+        '<div class="obs-imp-txt">'+(txt?esc(txt):'<span style="color:var(--muted)">Sem observações impressas para esta guia.</span>')+'</div>'+
+      '</div>';
+    return wrap;
+  }
+
+  // Aba: Observações Não Impressas (tabela + detalhe + adicionar)
+  function renderObsNaoImpressas(g){
+    var wrap=el('div',{class:'obs-ni-wrap'});
+    var lista=getObsNaoImpressas(g);
+    var sel=0;
+
+    function pinta(){
+      var rows=lista.map(function(o,i){
+        return '<tr class="obs-ni-row'+(i===sel?' sel':'')+'" data-i="'+i+'">'+
+          '<td>'+esc(o.data)+(o.origem?' <span class="badge info" style="font-size:8.5px">'+esc(o.origem)+'</span>':'')+'</td>'+
+          '<td>'+esc(o.operador)+'</td>'+
+          '<td style="text-align:center">'+(o.podeInformar==='Sim'?'<span class="badge">Sim</span>':'<span class="badge muted">Não</span>')+'</td>'+
+        '</tr>';
+      }).join('');
+      var atual=lista[sel]||null;
+      var detalhe = atual
+        ? '<div class="obs-ni-det-hd">'+ico('message-square',13)+' Observação selecionada</div>'+
+          (atual.ref?'<div class="obs-ni-ref">'+esc(atual.ref)+(atual.guia?'':'')+'</div>':'')+
+          '<div class="obs-ni-txt">'+esc(atual.texto)+'</div>'+
+          '<div class="obs-ni-meta"><span><b>Operador:</b> '+esc(atual.operador)+'</span><span><b>Data:</b> '+esc(atual.data)+'</span><span><b>Pode informar ao usuário:</b> '+esc(atual.podeInformar)+'</span></div>'
+        : '<div style="color:var(--muted);padding:14px">Nenhuma observação. Adicione a primeira abaixo.</div>';
+
+      wrap.innerHTML=
+        '<div class="obs-ni-grid">'+
+          '<div class="obs-ni-tab"><table class="cfg-table"><thead><tr><th>Data</th><th>Operador</th><th style="text-align:center">Pode Inf. Usuár.</th></tr></thead><tbody>'+
+            (rows||'<tr><td colspan="3" style="color:var(--muted)">Sem observações.</td></tr>')+
+          '</tbody></table></div>'+
+          '<div class="obs-ni-det">'+detalhe+'</div>'+
+        '</div>'+
+        '<div class="obs-ni-add">'+
+          '<div class="obs-ni-add-hd">'+ico('plus',13)+' Adicionar observação não impressa</div>'+
+          '<textarea id="obsNiTxt" class="obs-ni-input" rows="2" placeholder="Digite a observação..."></textarea>'+
+          '<div class="obs-ni-add-row">'+
+            '<label class="obs-ni-lbl">Pode informar ao usuário? '+
+              '<select id="obsNiPode"><option value="Não">Não</option><option value="Sim">Sim</option></select>'+
+            '</label>'+
+            '<button class="btn" id="obsNiSalvar">'+ico('save',13)+' Gravar</button>'+
+          '</div>'+
+        '</div>';
+
+      // binds
+      wrap.querySelectorAll('.obs-ni-row').forEach(function(r){ r.onclick=function(){ sel=+r.getAttribute('data-i'); pinta(); }; });
+      wrap.querySelector('#obsNiSalvar').onclick=function(){
+        var txt=wrap.querySelector('#obsNiTxt').value.trim();
+        if(!txt){ toast('Digite a observação','err'); return; }
+        var pode=wrap.querySelector('#obsNiPode').value;
+        var now=new Date();
+        var user=(perfilDef[State.perfil]&&perfilDef[State.perfil].nome)||State.perfil;
+        var nova={data:pad2(now.getDate())+'/'+pad2(now.getMonth()+1)+'/'+now.getFullYear()+' '+pad2(now.getHours())+':'+pad2(now.getMinutes()),operador:user,podeInformar:pode,texto:txt};
+        var add=JSON.parse(localStorage.getItem('regula_obs_'+g.numero)||'[]');
+        add.unshift(nova); localStorage.setItem('regula_obs_'+g.numero,JSON.stringify(add));
+        lista=getObsNaoImpressas(g); sel=0; pinta();
+        toast('Observação gravada','ok');
+      };
+      lcIcons();
+    }
+    pinta();
+    return wrap;
+  }
+  function pad2(n){ return String(n).padStart(2,'0'); }
 
   function renderAnexos(g){
     var wrap=el('div');
