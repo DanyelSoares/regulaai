@@ -55,6 +55,13 @@
     if(v>=1e3) return 'R$ '+(v/1e3).toLocaleString('pt-BR',{maximumFractionDigits:0})+' mil';
     return moeda(v);
   }
+  // Formata a(s) guia(s) de um item: nº único, ou 1ª + "(+N)" com todas no title
+  function fmtGuias(gs){
+    gs=gs||[];
+    if(!gs.length) return '—';
+    if(gs.length===1) return esc(gs[0]);
+    return '<span title="'+esc(gs.join(', '))+'">'+esc(gs[0])+' <span style="color:var(--muted)">(+'+(gs.length-1)+')</span></span>';
+  }
 
   // Custo simulado de um procedimento/OPME a partir do código (determinístico)
   function custoProc(p){
@@ -142,10 +149,11 @@
       (g.matmed||[]).forEach(function(mm){
         if(!mm.opme) return;
         var oc=custoOpme(mm);
-        var oo=porOpme[mm.cod]||(porOpme[mm.cod]={cod:mm.cod,desc:mm.desc,fornecedor:oc.fornecedor,qtd:0,autorizado:0,cobrado:0,varMax:0,benefs:{},medicos:{}});
+        var oo=porOpme[mm.cod]||(porOpme[mm.cod]={cod:mm.cod,desc:mm.desc,fornecedor:oc.fornecedor,qtd:0,autorizado:0,cobrado:0,varMax:0,benefs:{},medicos:{},guias:[]});
         oo.qtd++; oo.autorizado+=oc.autorizado; oo.cobrado+=oc.cobrado;
         oo.varMax=Math.max(oo.varMax,oc.varPct);
         oo.benefs[bid]=1; if(g.solicitante) oo.medicos[g.solicitante]=1;
+        if(oo.guias.indexOf(g.numero)<0) oo.guias.push(g.numero);
       });
     });
 
@@ -485,7 +493,7 @@
     else if(tipo==='medicos'){ head=['Medico','Guias','Beneficiarios','Prestadores','OPME','TaxaAprov','Custo','Score']; rows=M.medicos.map(function(m){return [m.nome,m.guias,m.nBenefs,m.nPrestadores,m.opme,m.taxaAprov+'%',m.custo,m.score];}); }
     else if(tipo==='prestadores'){ head=['Prestador','Guias','Internacoes','OPME','Medicos','CustoMedio','CustoTotal','Score']; rows=M.prestadores.map(function(p){return [p.nome,p.guias,p.internacoes,p.opme,p.nMedicos,p.custoMedio,p.custo,p.score];}); }
     else if(tipo==='procedimentos'){ head=['Codigo','Descricao','Qtd','Negadas','TaxaNeg','CustoTotal','CustoMedio']; rows=M.procs.map(function(p){return [p.cod,p.desc,p.qtd,p.negadas,p.taxaNeg+'%',p.custo,p.custoMedio];}); }
-    else if(tipo==='opme'){ head=['Codigo','Descricao','Fornecedor','Qtd','Autorizado','Cobrado','Variacao','Score']; rows=M.opmes.map(function(o){return [o.cod,o.desc,o.fornecedor||'',o.qtd,o.autorizado,o.cobrado,o.varPreco+'%',o.score];}); }
+    else if(tipo==='opme'){ head=['Codigo','Descricao','Guias','Fornecedor','Qtd','Autorizado','Cobrado','Variacao','Score']; rows=M.opmes.map(function(o){return [o.cod,o.desc,(o.guias||[]).join(' | '),o.fornecedor||'',o.qtd,o.autorizado,o.cobrado,o.varPreco+'%',o.score];}); }
     var csv=[head].concat(rows).map(function(r){return r.map(function(c){var s=(''+c).replace(/"/g,'""');return /[";\n]/.test(s)?'"'+s+'"':s;}).join(';');}).join('\r\n');
     var blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8;'});
     var url=URL.createObjectURL(blob); var a=document.createElement('a');
@@ -543,6 +551,7 @@
     var rkOpme=rankTable('Ranking de OPME por valor',[
       {h:'#',f:function(r,i){return '<b>'+(i+1)+'</b>';}},
       {h:'OPME',f:function(r){return esc(r.desc);}},
+      {h:'Guia',f:function(r){return fmtGuias(r.guias);}},
       {h:'Fornecedor',f:function(r){return esc(r.fornecedor||'—');}},
       {h:'Qtd',num:true,f:function(r){return r.qtd;}},
       {h:'Valor cobrado',num:true,f:function(r){return moeda(r.cobrado);}}
@@ -618,6 +627,7 @@
 
     var tab=rankTable('OPME — autorizado x cobrado',[
       {h:'OPME',f:function(r){return esc(r.desc);}},
+      {h:'Guia',f:function(r){return fmtGuias(r.guias);}},
       {h:'Fornecedor',f:function(r){return esc(r.fornecedor||'—');}},
       {h:'Qtd',num:true,f:function(r){return r.qtd;}},
       {h:'Autorizado',num:true,f:function(r){return moeda(r.autorizado);}},
