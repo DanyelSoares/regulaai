@@ -4440,7 +4440,6 @@
     var TABS_DEF=[
       {id:'resumo',        label:'Resumo',           ico:'layout-dashboard', grp:0},
       {id:'beneficiario',  label:'Beneficiário',      ico:'user',             grp:0},
-      {id:'solicitacao',   label:'Solicitação',       ico:'file-text',        grp:0},
       {id:'etapas',        label:'Etapas',            ico:'git-branch',       grp:1},
       {id:'procedimentos', label:'Procedimentos',     ico:'stethoscope',      grp:1},
       {id:'pacotes',       label:'Pacotes',           ico:'package',          grp:1},
@@ -4553,39 +4552,42 @@
             '<span class="guia-metric-val" style="font-size:12px">'+esc(g.fluxo.nome)+'</span>'+
           '</div>'+
         '</div>'+
-        '<div class="g2" style="gap:12px">'+
+        '<div class="guia-risk-grid guia-risk-grid--row">'+
+          RISKS.map(function(r){
+            return '<div class="guia-risk-card risk-'+r.val+'">'+
+              '<span class="guia-risk-ico">'+ico(r.ico,15)+'</span>'+
+              '<div class="guia-risk-body">'+
+                '<div class="guia-risk-name">'+r.label+'</div>'+
+                riskPill(r.val)+
+              '</div>'+
+            '</div>';
+          }).join('')+
+        '</div>'+
+        '<div class="g2" style="gap:12px;margin-top:14px">'+
           '<dl class="kv">'+
-            '<dt>Guia</dt><dd>'+esc(g.numero)+'</dd>'+
-            '<dt>Data emissão</dt><dd>'+esc(g.dataEmissao)+'</dd>'+
             '<dt>Beneficiário</dt><dd>'+esc(g.beneficiario.nome)+'</dd>'+
             '<dt>Data de nascimento</dt><dd>'+esc(g.beneficiario.dataNascimento||'—')+(MOCK.calcIdade(g.beneficiario.dataNascimento)!=null?' <span style="color:var(--muted)">('+MOCK.calcIdade(g.beneficiario.dataNascimento)+' anos)</span>':'')+'</dd>'+
             '<dt>Carteirinha</dt><dd>'+esc(g.beneficiario.carteirinha||'—')+'</dd>'+
             '<dt>Plano / Contrato</dt><dd>'+esc(g.beneficiario.plano)+' · '+esc(g.beneficiario.contrato)+'</dd>'+
             '<dt>Data de inclusão</dt><dd>'+esc(g.beneficiario.dataInclusao||'—')+(MOCK.anosContrato(g.beneficiario.dataInclusao)!=null?' <span style="color:var(--muted)">('+MOCK.anosContrato(g.beneficiario.dataInclusao)+' '+(MOCK.anosContrato(g.beneficiario.dataInclusao)===1?'ano':'anos')+' de contrato)</span>':'')+'</dd>'+
+          '</dl>'+
+          '<dl class="kv">'+
+            '<dt>Guia</dt><dd>'+esc(g.numero)+'</dd>'+
+            '<dt>Data emissão</dt><dd>'+esc(g.dataEmissao)+'</dd>'+
             '<dt>Solicitante</dt><dd>'+esc(g.solicitante)+'</dd>'+
             '<dt>Executante</dt><dd>'+esc(g.prestadorExe.nome)+'</dd>'+
             '<dt>Local do atendimento</dt><dd>'+esc(g.prestadorExe.nome)+'</dd>'+
             '<dt>Especialidade</dt><dd>'+esc(MOCK.especialidadeDaGuia(g))+'</dd>'+
             '<dt>Natureza</dt><dd>'+esc(g.natureza)+'</dd>'+
             '<dt>Regime</dt><dd>'+esc(g.regime)+'</dd>'+
+            '<dt>Origem</dt><dd><span class="badge muted">'+esc(g.origem)+'</span></dd>'+
+            '<dt>CID</dt><dd>'+esc(MOCK.cidGuia(g))+'</dd>'+
+            '<dt>Observações</dt><dd>'+esc(g.observacoes||'—')+'</dd>'+
           '</dl>'+
-          '<div class="guia-risk-grid">'+
-            RISKS.map(function(r){
-              return '<div class="guia-risk-card risk-'+r.val+'">'+
-                '<span class="guia-risk-ico">'+ico(r.ico,15)+'</span>'+
-                '<div class="guia-risk-body">'+
-                  '<div class="guia-risk-name">'+r.label+'</div>'+
-                  riskPill(r.val)+
-                '</div>'+
-              '</div>';
-            }).join('')+
-          '</div>'+
         '</div>'+
         '<div class="ai-warn" style="margin-top:14px">'+ia.avisoLegal+'</div>';
     } else if(t==='beneficiario'){
       d.innerHTML='<dl class="kv"><dt>Nome</dt><dd>'+esc(g.beneficiario.nome)+'</dd><dt>CPF</dt><dd>'+mask(g.beneficiario.cpf)+'</dd><dt>Cartão</dt><dd>'+mask(g.beneficiario.cartao)+'</dd><dt>Data de nascimento</dt><dd>'+esc(g.beneficiario.dataNascimento||'—')+(MOCK.calcIdade(g.beneficiario.dataNascimento)!=null?' ('+MOCK.calcIdade(g.beneficiario.dataNascimento)+' anos)':'')+'</dd><dt>Plano</dt><dd>'+esc(g.beneficiario.plano)+'</dd><dt>Contrato</dt><dd>'+esc(g.beneficiario.contrato)+'</dd></dl>';
-    } else if(t==='solicitacao'){
-      d.innerHTML='<dl class="kv"><dt>Tipo</dt><dd>'+esc(g.tipo)+'</dd><dt>Natureza</dt><dd>'+esc(g.natureza)+'</dd><dt>Regime</dt><dd>'+esc(g.regime)+'</dd><dt>Origem</dt><dd><span class="badge muted">'+esc(g.origem)+'</span></dd><dt>Observações</dt><dd>'+esc(g.observacoes)+'</dd></dl>';
     } else if(t==='etapas'){
       var tl=el('div',{class:'timeline'});
       g.etapas.forEach(function(e){
@@ -5587,7 +5589,6 @@
           {id:'cabecalho',    label:'Cabeçalho'},
           {id:'resumo',       label:'Resumo'},
           {id:'beneficiario', label:'Beneficiário'},
-          {id:'solicitacao',  label:'Solicitação'},
           {id:'etapas',       label:'Etapas'},
           {id:'procedimentos',label:'Procedimentos'},
           {id:'pacotes',      label:'Pacotes'},
@@ -5617,32 +5618,42 @@
               ['Parecer da Operadora','Abre o formulário de decisão oficial da operadora'],
             ]),
           resumo:
-            '<p>Visão consolidada dos principais indicadores da guia:</p>'+
+            '<p>Visão consolidada da guia. No topo, quatro indicadores; logo abaixo, o grid de risco (cada dimensão alinhada sob seu indicador); e, na sequência, os dados em duas colunas — beneficiário à esquerda, guia/solicitação à direita.</p>'+
+            '<p style="margin-top:8px"><b>Indicadores (topo):</b></p>'+
             manualTable(['Campo','Descrição'],[
               ['STATUS','Badge com o status atual da guia (Ex.: Em análise, Liberada, Negada)'],
               ['DIAS EM AUDITORIA','Número de dias desde a emissão até hoje'],
               ['ADERÊNCIA À DUT','Percentual de aderência às Diretrizes de Utilização — verde (alta), amarelo (moderada), laranja (baixa), vermelho (crítica)'],
               ['FLUXO','Nome do fluxo assistencial vinculado (Ex.: Auditoria Urgência/Emergência)'],
-              ['GUIA','Número identificador da guia'],
-              ['DATA EMISSÃO','Data de emissão da guia'],
-              ['BENEFICIÁRIO','Nome completo do paciente'],
-              ['DATA DE NASCIMENTO','Data de nascimento (consultada no cadastro); a idade é calculada automaticamente e exibida entre parênteses'],
-              ['CARTEIRINHA','Número da carteirinha do beneficiário'],
-              ['PLANO / CONTRATO','Nome do plano e código do contrato'],
-              ['DATA DE INCLUSÃO','Data em que o beneficiário entrou no plano; o tempo de contrato (anos) é calculado automaticamente e exibido entre parênteses'],
-              ['SOLICITANTE','Médico que solicitou o procedimento'],
-              ['EXECUTANTE','Prestador (estabelecimento) que realizará o procedimento'],
-              ['LOCAL DO ATENDIMENTO','Onde o atendimento será realizado (nos dados atuais, igual ao executante)'],
-              ['ESPECIALIDADE','Especialidade médica (derivada do tipo da guia)'],
-              ['NATUREZA','Natureza do atendimento (Internação, Ambulatorial)'],
-              ['REGIME','Regime (Urgência, Eletivo)'],
             ])+
-            '<p style="margin-top:12px"><b>Grid de Risco (4 dimensões):</b></p>'+
+            '<p style="margin-top:12px"><b>Grid de Risco (4 dimensões, alinhadas sob os indicadores):</b></p>'+
             manualTable(['Dimensão','Descrição'],[
-              ['Regulatório','Urgência, UTI, OPME, prazo vencido etc.'],
-              ['Assistencial','Complexidade do procedimento, oncologia'],
+              ['Regulatório','Urgência, prazo de auditoria vencido, regime de internação etc.'],
+              ['Assistencial','Complexidade do procedimento e do quadro clínico'],
               ['Documental','Aderência à DUT e documentação apresentada'],
               ['Contratual','Cobertura contratual do plano para o procedimento'],
+            ])+
+            '<p style="margin-top:12px"><b>Coluna esquerda — Beneficiário:</b></p>'+
+            manualTable(['Campo','Descrição'],[
+              ['Beneficiário','Nome completo do paciente'],
+              ['Data de nascimento','Data de nascimento (consultada no cadastro); a idade é calculada automaticamente e exibida entre parênteses'],
+              ['Carteirinha','Número da carteirinha do beneficiário'],
+              ['Plano / Contrato','Nome do plano e código do contrato'],
+              ['Data de inclusão','Data em que o beneficiário entrou no plano; o tempo de contrato (anos) é calculado automaticamente e exibido entre parênteses'],
+            ])+
+            '<p style="margin-top:12px"><b>Coluna direita — Guia / Solicitação:</b></p>'+
+            manualTable(['Campo','Descrição'],[
+              ['Guia','Número identificador da guia'],
+              ['Data emissão','Data de emissão da guia'],
+              ['Solicitante','Médico que solicitou o procedimento'],
+              ['Executante','Prestador (estabelecimento) que realizará o procedimento'],
+              ['Local do atendimento','Onde o atendimento será realizado (nos dados atuais, igual ao executante)'],
+              ['Especialidade','Especialidade médica (derivada do tipo da guia)'],
+              ['Natureza','Natureza do atendimento (Internação, Ambulatorial)'],
+              ['Regime','Regime (Urgência, Eletivo)'],
+              ['Origem','Canal de origem da solicitação (badge colorido)'],
+              ['CID','Código internacional de doenças associado à solicitação'],
+              ['Observações','Texto livre com observações do solicitante'],
             ]),
           beneficiario:
             '<p>Dados completos do paciente titular da guia:</p>'+
@@ -5844,16 +5855,6 @@
               ['Idade','Idade calculada automaticamente'],
               ['Plano','Nome comercial do plano de saúde'],
               ['Contrato','Código do contrato empresarial ou individual'],
-            ]))+
-
-          manualBox('Aba: Solicitação',
-            '<p>Detalhes técnicos da solicitação médica:</p>'+
-            manualTable(['Campo','Descrição'],[
-              ['Tipo','Tipo da guia (Internação, Ambulatorial, SADT etc.)'],
-              ['Natureza','Natureza do atendimento (Eletivo, Urgência/Emergência, Acidente etc.)'],
-              ['Regime','Regime de atendimento (Ambulatorial, Internação, Hospital-dia)'],
-              ['Origem','Canal de origem da solicitação (badge colorido)'],
-              ['Observações','Texto livre com observações do solicitante'],
             ]))+
 
           manualBox('Aba: Etapas',

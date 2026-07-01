@@ -423,6 +423,25 @@
   var ESPEC_MAP = {'Internação':'Clínica Médica','Cirurgia':'Cirurgia Geral','Quimioterapia':'Oncologia','Cirurgia neuro':'Neurocirurgia','Cirurgia ortopédica':'Ortopedia','Exame imagem':'Radiologia','Exame':'Clínica Médica','Hemodinâmica':'Cardiologia','Junta médica':'Multiprofissional'};
   function especialidadeDaGuia(g){ return ESPEC_MAP[g&&g.tipo]||'Outros'; }
 
+  // ── CID (simulado, coerente com o tipo da guia) ──
+  var CID_MAP = {
+    'Internação':      ['J18.9 — Pneumonia não especificada','I50.0 — Insuficiência cardíaca congestiva','A41.9 — Sepse não especificada'],
+    'Cirurgia':        ['K35.8 — Apendicite aguda','K80.2 — Colelitíase','K40.9 — Hérnia inguinal'],
+    'Quimioterapia':   ['C50.9 — Neoplasia maligna da mama','C34.9 — Neoplasia maligna dos brônquios/pulmão','C18.9 — Neoplasia maligna do cólon'],
+    'Cirurgia neuro':  ['G91.9 — Hidrocefalia não especificada','I67.1 — Aneurisma cerebral','C71.9 — Neoplasia maligna do encéfalo'],
+    'Cirurgia ortopédica':['M17.1 — Gonartrose primária','S72.0 — Fratura do colo do fêmur','M51.1 — Transtorno de disco lombar'],
+    'Exame imagem':    ['R91 — Achado anormal em imagem de pulmão','R51 — Cefaleia','M54.5 — Dor lombar baixa'],
+    'Exame':           ['Z00.0 — Exame médico geral','R10.4 — Dor abdominal','E11.9 — Diabetes mellitus tipo 2'],
+    'Hemodinâmica':    ['I20.0 — Angina instável','I21.9 — Infarto agudo do miocárdio','I25.1 — Doença aterosclerótica do coração'],
+    'Junta médica':    ['Z02.7 — Emissão de atestado médico','M54.9 — Dorsalgia não especificada','F41.9 — Transtorno de ansiedade']
+  };
+  function cidGuia(g){
+    if(!g) return '—';
+    var lista = CID_MAP[g.tipo] || ['Z76.9 — Contato com serviço de saúde não especificado'];
+    var h = _mmSeed(String(g.numero||g.tipo||''));
+    return lista[h % lista.length];
+  }
+
   // ── Cálculos de tempo (idade e tempo de contrato) a partir de DD/MM/AAAA ──
   function _parseData(s){
     if(!s) return null;
@@ -455,6 +474,6 @@
     STATUS:STATUS, ORIGENS:ORIGENS, CATEGORIAS_ANEXO:CATEGORIAS_ANEXO,
     MOTIVOS_COMP:MOTIVOS_COMP, MOTIVOS_REPR:MOTIVOS_REPR, MOTIVOS_RESS:MOTIVOS_RESS,
     LOGS:LOGS, buildGuias: hydrate, matmedDetalhe: matmedDetalhe, opmeDetalhe: opmeDetalhe, observacoesGuia: observacoesGuia,
-    calcIdade: calcIdade, anosContrato: anosContrato
+    calcIdade: calcIdade, anosContrato: anosContrato, cidGuia: cidGuia
   };
 })(window);

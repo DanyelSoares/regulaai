@@ -715,6 +715,9 @@ body.sidebar-collapsed .modal-backdrop{left:66px}
 .adp-alta{color:var(--g-600)!important}.adp-mod{color:#8a6300!important}.adp-baixa{color:#a85700!important}.adp-crit{color:var(--danger)!important}
 /* Guia — grid de riscos */
 .guia-risk-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-content:start}
+/* Riscos em linha única, alinhados sob Status/Dias/Aderência/Fluxo */
+.guia-risk-grid--row{grid-template-columns:repeat(4,1fr);gap:10px}
+@media(max-width:720px){.guia-risk-grid--row{grid-template-columns:1fr 1fr}}
 .guia-risk-card{display:flex;align-items:center;gap:10px;background:#fff;border:1.5px solid var(--g-100);border-left:3px solid var(--g-300);border-radius:10px;padding:10px 12px}
 .guia-risk-card.risk-baixo{border-left-color:var(--g-500)}
 .guia-risk-card.risk-medio{border-left-color:#d4a017}
