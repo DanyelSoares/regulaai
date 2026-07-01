@@ -4558,8 +4558,9 @@
             '<dt>Número</dt><dd>'+esc(g.numero)+'</dd>'+
             '<dt>Beneficiário</dt><dd>'+esc(g.beneficiario.nome)+' ('+g.beneficiario.idade+' anos)</dd>'+
             '<dt>Plano / Contrato</dt><dd>'+esc(g.beneficiario.plano)+' · '+esc(g.beneficiario.contrato)+'</dd>'+
-            '<dt>Prestador solicitante</dt><dd>'+esc(g.prestadorSol.nome)+'</dd>'+
-            '<dt>Prestador executante</dt><dd>'+esc(g.prestadorExe.nome)+'</dd>'+
+            '<dt>Solicitante</dt><dd>'+esc(g.prestadorSol.nome)+'</dd>'+
+            '<dt>Executante</dt><dd>'+esc(g.prestadorExe.nome)+'</dd>'+
+            '<dt>Local do atendimento</dt><dd>'+esc(g.prestadorExe.nome)+'</dd>'+
             '<dt>Natureza / Regime</dt><dd>'+esc(g.natureza)+' · '+esc(g.regime)+'</dd>'+
             '<dt>Tipo</dt><dd>'+esc(g.tipo)+'</dd>'+
             '<dt>Especialidade</dt><dd>'+esc(MOCK.especialidadeDaGuia(g))+'</dd>'+
@@ -5622,10 +5623,12 @@
               ['NÚMERO','Número identificador da guia'],
               ['BENEFICIÁRIO','Nome completo e idade do paciente'],
               ['PLANO / CONTRATO','Nome do plano e código do contrato'],
-              ['PRESTADOR SOLICITANTE','Prestador que abriu a solicitação'],
-              ['PRESTADOR EXECUTANTE','Prestador que realizará o procedimento'],
+              ['SOLICITANTE','Prestador que abriu a solicitação'],
+              ['EXECUTANTE','Prestador que realizará o procedimento'],
+              ['LOCAL DO ATENDIMENTO','Onde o atendimento será realizado (nos dados atuais, igual ao executante)'],
               ['NATUREZA / REGIME','Natureza (Internação, Ambulatorial) e regime (Urgência, Eletivo)'],
               ['TIPO','Tipo da guia'],
+              ['ESPECIALIDADE','Especialidade médica (derivada do tipo da guia)'],
               ['DATA EMISSÃO','Data de emissão da guia'],
             ])+
             '<p style="margin-top:12px"><b>Grid de Risco (4 dimensões):</b></p>'+
@@ -5807,10 +5810,12 @@
               ['NÚMERO','Número identificador da guia'],
               ['BENEFICIÁRIO','Nome completo e idade do paciente'],
               ['PLANO / CONTRATO','Nome do plano e código do contrato'],
-              ['PRESTADOR SOLICITANTE','Nome do prestador que solicitou a autorização'],
-              ['PRESTADOR EXECUTANTE','Nome do prestador que executará o procedimento'],
+              ['SOLICITANTE','Nome do prestador que solicitou a autorização'],
+              ['EXECUTANTE','Nome do prestador que executará o procedimento'],
+              ['LOCAL DO ATENDIMENTO','Onde o atendimento será realizado (nos dados atuais, igual ao executante)'],
               ['NATUREZA / REGIME','Natureza do atendimento (Ex.: Internação) e regime (Ex.: Urgência, Eletivo)'],
               ['TIPO','Tipo da guia (Ex.: Internação, Ambulatorial)'],
+              ['ESPECIALIDADE','Especialidade médica (derivada do tipo da guia)'],
               ['DATA EMISSÃO','Data em que a guia foi emitida'],
             ])+
             '<p style="margin-top:12px">Abaixo dos dados cadastrais, um <b>grid de 4 cards</b> exibe os níveis de risco por dimensão:</p>'+
