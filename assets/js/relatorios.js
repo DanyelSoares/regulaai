@@ -582,29 +582,46 @@
     // Monta um bloco por guia, com seus procedimentos (código, nome, valor, qtd)
     var blocos=guias.map(function(g){
       // procedimentos: agrega por código (qtd) e soma valor
+      // Procedimentos (agregados por código)
       var procMap={};
       (g.procedimentos||[]).forEach(function(p){
         var k=p.cod; if(!procMap[k]) procMap[k]={cod:p.cod,desc:p.desc,qtd:0,valor:0};
         procMap[k].qtd++; procMap[k].valor+=custoProc(p);
       });
-      // OPME também como "serviço" (relevante, especialmente no drill de OPME)
-      (g.matmed||[]).forEach(function(m){ if(!m.opme) return; var k=m.cod; if(!procMap[k]) procMap[k]={cod:m.cod,desc:m.desc,qtd:0,valor:0,opme:true}; procMap[k].qtd++; procMap[k].valor+=custoOpme(m).cobrado; });
-      var linhas=Object.keys(procMap).map(function(k){var p=procMap[k];
-        return '<tr><td>'+esc(p.cod)+(p.opme?' <span class="badge warn" style="font-size:9px">OPME</span>':'')+'</td><td>'+esc(p.desc)+'</td><td style="text-align:center">'+p.qtd+'</td><td style="text-align:right">'+moeda(p.valor)+'</td></tr>';
-      }).join('');
-      if(!linhas) linhas='<tr><td colspan="4" style="color:var(--muted)">Sem procedimentos.</td></tr>';
+      // OPME (separado dos procedimentos)
+      var opmeMap={};
+      (g.matmed||[]).forEach(function(m){ if(!m.opme) return; var k=m.cod; var oc=custoOpme(m);
+        if(!opmeMap[k]) opmeMap[k]={cod:m.cod,desc:m.desc,forn:oc.fornecedor,qtd:0,valor:0}; opmeMap[k].qtd++; opmeMap[k].valor+=oc.cobrado; });
+
+      function tabProc(){
+        var ls=Object.keys(procMap).map(function(k){var p=procMap[k];
+          return '<tr><td>'+esc(p.cod)+'</td><td>'+esc(p.desc)+'</td><td style="text-align:center">'+p.qtd+'</td><td style="text-align:right">'+moeda(p.valor)+'</td></tr>';
+        }).join('');
+        if(!ls) return '<div class="rel-drill-empty">Sem procedimentos nesta guia.</div>';
+        return '<div class="table-wrap"><table class="cfg-table rel-drill-tab"><thead><tr><th>Código</th><th>Procedimento</th><th style="text-align:center">Qtd</th><th style="text-align:right">Valor</th></tr></thead><tbody>'+ls+'</tbody></table></div>';
+      }
+      function tabOpme(){
+        var ks=Object.keys(opmeMap);
+        if(!ks.length) return '<div class="rel-drill-empty">Sem OPME nesta guia.</div>';
+        var ls=ks.map(function(k){var o=opmeMap[k];
+          return '<tr><td>'+esc(o.cod)+'</td><td>'+esc(o.desc)+'</td><td>'+esc(o.forn||'—')+'</td><td style="text-align:center">'+o.qtd+'</td><td style="text-align:right">'+moeda(o.valor)+'</td></tr>';
+        }).join('');
+        return '<div class="table-wrap"><table class="cfg-table rel-drill-tab"><thead><tr><th>Código</th><th>OPME</th><th>Fornecedor</th><th style="text-align:center">Qtd</th><th style="text-align:right">Valor</th></tr></thead><tbody>'+ls+'</tbody></table></div>';
+      }
+
       return '<div class="rel-drill-guia">'+
         '<div class="rel-drill-hd">'+
           '<span class="rel-drill-num">'+ico('file-text',13)+' Guia '+esc(g.numero)+'</span>'+
           '<span class="'+statusCls(g.status)+'">'+esc(g.status)+'</span>'+
         '</div>'+
         '<div class="rel-drill-meta">'+
-          '<span><b>Solicitante:</b> '+esc(g.solicitante||'—')+'</span>'+
-          '<span><b>Prestador:</b> '+esc((g.prestadorExe&&g.prestadorExe.nome)||'—')+'</span>'+
-          '<span><b>Beneficiário:</b> '+esc((g.beneficiario&&g.beneficiario.nome)||'—')+'</span>'+
-          '<span><b>Custo total:</b> '+moeda(custoGuia(g))+'</span>'+
+          '<div class="rel-drill-linha"><span class="rel-drill-k">Solicitante</span><span class="rel-drill-v">'+esc(g.solicitante||'—')+'</span></div>'+
+          '<div class="rel-drill-linha"><span class="rel-drill-k">Prestador</span><span class="rel-drill-v">'+esc((g.prestadorExe&&g.prestadorExe.nome)||'—')+'</span></div>'+
+          '<div class="rel-drill-linha"><span class="rel-drill-k">Beneficiário</span><span class="rel-drill-v">'+esc((g.beneficiario&&g.beneficiario.nome)||'—')+'</span></div>'+
+          '<div class="rel-drill-linha"><span class="rel-drill-k">Custo total</span><span class="rel-drill-v"><b>'+moeda(custoGuia(g))+'</b></span></div>'+
         '</div>'+
-        '<div class="table-wrap"><table class="cfg-table rel-drill-tab"><thead><tr><th>Código</th><th>Procedimento / Serviço</th><th style="text-align:center">Qtd</th><th style="text-align:right">Valor</th></tr></thead><tbody>'+linhas+'</tbody></table></div>'+
+        '<div class="rel-drill-sec"><div class="rel-drill-sec-hd">'+ico('clipboard-list',13)+' Procedimentos</div>'+tabProc()+'</div>'+
+        '<div class="rel-drill-sec"><div class="rel-drill-sec-hd">'+ico('bone',13)+' OPME</div>'+tabOpme()+'</div>'+
       '</div>';
     }).join('');
 
