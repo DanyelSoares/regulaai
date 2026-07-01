@@ -4586,9 +4586,10 @@
       });
       d.appendChild(tl);
     } else if(t==='matmed'){
-      // Aba Mat/Med com detalhamento completo (campos estilo Solus) por item
-      if(!g.matmed.length) d.innerHTML='<div class="empty"><div class="ico">'+icoLg('folder-open')+'</div>Sem Mat/Med vinculado a esta guia.</div>';
-      else d.appendChild(renderMatMedDetalhado(g.matmed));
+      // Aba Mat/Med: apenas medicamentos/materiais (OPME tem aba própria)
+      var _mm=(g.matmed||[]).filter(function(m){return !m.opme;});
+      if(!_mm.length) d.innerHTML='<div class="empty"><div class="ico">'+icoLg('folder-open')+'</div>Sem medicamentos/materiais nesta guia.<br><span style="font-size:12px">Itens OPME aparecem na aba OPME.</span></div>';
+      else d.appendChild(renderMatMedDetalhado(_mm));
     } else if(t==='procedimentos'||t==='pacotes'||t==='diariastaxas'){
       var arr = t==='procedimentos'?g.procedimentos:(t==='pacotes'?g.pacotes:g.diariasTaxas);
       if(!arr.length) d.innerHTML='<div class="empty"><div class="ico">'+icoLg('folder-open')+'</div>Sem itens vinculados. <br><span style="font-size:12px">Sem parametrização cadastrada.</span></div>';
@@ -4604,7 +4605,7 @@
     } else if(t==='opme'){
       var opmes=g.matmed.filter(function(m){return m.opme});
       if(!opmes.length) d.innerHTML='<div class="empty"><div class="ico">'+icoLg('activity')+'</div>Sem OPME nesta guia.</div>';
-      else { var tt2=el('table'); tt2.innerHTML='<thead><tr><th>Código</th><th>Descrição</th><th>Peso</th></tr></thead>'; var tb2=el('tbody'); opmes.forEach(function(p){tb2.appendChild(el('tr',{},'<td>'+p.cod+'</td><td>'+p.desc+'</td><td>'+p.peso+'</td>'))}); tt2.appendChild(tb2); d.appendChild(tt2); }
+      else d.appendChild(renderMatMedDetalhado(opmes)); // mesmo detalhamento completo (campos Solus)
     } else if(t==='anexos'){
       d.appendChild(renderAnexos(g));
     } else if(t==='historico'){
