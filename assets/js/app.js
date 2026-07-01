@@ -4557,10 +4557,11 @@
           '<dl class="kv">'+
             '<dt>Guia</dt><dd>'+esc(g.numero)+'</dd>'+
             '<dt>Data emissão</dt><dd>'+esc(g.dataEmissao)+'</dd>'+
-            '<dt>Beneficiário</dt><dd>'+esc(g.beneficiario.nome)+' ('+g.beneficiario.idade+' anos)</dd>'+
+            '<dt>Beneficiário</dt><dd>'+esc(g.beneficiario.nome)+'</dd>'+
+            '<dt>Data de nascimento</dt><dd>'+esc(g.beneficiario.dataNascimento||'—')+(MOCK.calcIdade(g.beneficiario.dataNascimento)!=null?' <span style="color:var(--muted)">('+MOCK.calcIdade(g.beneficiario.dataNascimento)+' anos)</span>':'')+'</dd>'+
             '<dt>Carteirinha</dt><dd>'+esc(g.beneficiario.carteirinha||'—')+'</dd>'+
             '<dt>Plano / Contrato</dt><dd>'+esc(g.beneficiario.plano)+' · '+esc(g.beneficiario.contrato)+'</dd>'+
-            '<dt>Data de inclusão</dt><dd>'+esc(g.beneficiario.dataInclusao||'—')+'</dd>'+
+            '<dt>Data de inclusão</dt><dd>'+esc(g.beneficiario.dataInclusao||'—')+(MOCK.anosContrato(g.beneficiario.dataInclusao)!=null?' <span style="color:var(--muted)">('+MOCK.anosContrato(g.beneficiario.dataInclusao)+' '+(MOCK.anosContrato(g.beneficiario.dataInclusao)===1?'ano':'anos')+' de contrato)</span>':'')+'</dd>'+
             '<dt>Solicitante</dt><dd>'+esc(g.solicitante)+'</dd>'+
             '<dt>Executante</dt><dd>'+esc(g.prestadorExe.nome)+'</dd>'+
             '<dt>Local do atendimento</dt><dd>'+esc(g.prestadorExe.nome)+'</dd>'+
@@ -4582,7 +4583,7 @@
         '</div>'+
         '<div class="ai-warn" style="margin-top:14px">'+ia.avisoLegal+'</div>';
     } else if(t==='beneficiario'){
-      d.innerHTML='<dl class="kv"><dt>Nome</dt><dd>'+esc(g.beneficiario.nome)+'</dd><dt>CPF</dt><dd>'+mask(g.beneficiario.cpf)+'</dd><dt>Cartão</dt><dd>'+mask(g.beneficiario.cartao)+'</dd><dt>Idade</dt><dd>'+g.beneficiario.idade+'</dd><dt>Plano</dt><dd>'+esc(g.beneficiario.plano)+'</dd><dt>Contrato</dt><dd>'+esc(g.beneficiario.contrato)+'</dd></dl>';
+      d.innerHTML='<dl class="kv"><dt>Nome</dt><dd>'+esc(g.beneficiario.nome)+'</dd><dt>CPF</dt><dd>'+mask(g.beneficiario.cpf)+'</dd><dt>Cartão</dt><dd>'+mask(g.beneficiario.cartao)+'</dd><dt>Data de nascimento</dt><dd>'+esc(g.beneficiario.dataNascimento||'—')+(MOCK.calcIdade(g.beneficiario.dataNascimento)!=null?' ('+MOCK.calcIdade(g.beneficiario.dataNascimento)+' anos)':'')+'</dd><dt>Plano</dt><dd>'+esc(g.beneficiario.plano)+'</dd><dt>Contrato</dt><dd>'+esc(g.beneficiario.contrato)+'</dd></dl>';
     } else if(t==='solicitacao'){
       d.innerHTML='<dl class="kv"><dt>Tipo</dt><dd>'+esc(g.tipo)+'</dd><dt>Natureza</dt><dd>'+esc(g.natureza)+'</dd><dt>Regime</dt><dd>'+esc(g.regime)+'</dd><dt>Origem</dt><dd><span class="badge muted">'+esc(g.origem)+'</span></dd><dt>Observações</dt><dd>'+esc(g.observacoes)+'</dd></dl>';
     } else if(t==='etapas'){
@@ -5624,10 +5625,11 @@
               ['FLUXO','Nome do fluxo assistencial vinculado (Ex.: Auditoria Urgência/Emergência)'],
               ['GUIA','Número identificador da guia'],
               ['DATA EMISSÃO','Data de emissão da guia'],
-              ['BENEFICIÁRIO','Nome completo e idade do paciente'],
+              ['BENEFICIÁRIO','Nome completo do paciente'],
+              ['DATA DE NASCIMENTO','Data de nascimento (consultada no cadastro); a idade é calculada automaticamente e exibida entre parênteses'],
               ['CARTEIRINHA','Número da carteirinha do beneficiário'],
               ['PLANO / CONTRATO','Nome do plano e código do contrato'],
-              ['DATA DE INCLUSÃO','Data em que o beneficiário entrou no plano'],
+              ['DATA DE INCLUSÃO','Data em que o beneficiário entrou no plano; o tempo de contrato (anos) é calculado automaticamente e exibido entre parênteses'],
               ['SOLICITANTE','Médico que solicitou o procedimento'],
               ['EXECUTANTE','Prestador (estabelecimento) que realizará o procedimento'],
               ['LOCAL DO ATENDIMENTO','Onde o atendimento será realizado (nos dados atuais, igual ao executante)'],
@@ -5813,10 +5815,11 @@
               ['FLUXO','Nome do fluxo assistencial vinculado à guia (Ex.: Auditoria Urgência/Emergência)'],
               ['GUIA','Número identificador da guia'],
               ['DATA EMISSÃO','Data em que a guia foi emitida'],
-              ['BENEFICIÁRIO','Nome completo e idade do paciente'],
+              ['BENEFICIÁRIO','Nome completo do paciente'],
+              ['DATA DE NASCIMENTO','Data de nascimento (consultada no cadastro); a idade é calculada automaticamente e exibida entre parênteses'],
               ['CARTEIRINHA','Número da carteirinha do beneficiário'],
               ['PLANO / CONTRATO','Nome do plano e código do contrato'],
-              ['DATA DE INCLUSÃO','Data em que o beneficiário entrou no plano'],
+              ['DATA DE INCLUSÃO','Data em que o beneficiário entrou no plano; o tempo de contrato (anos) é calculado automaticamente e exibido entre parênteses'],
               ['SOLICITANTE','Médico que solicitou o procedimento'],
               ['EXECUTANTE','Prestador (estabelecimento) que executará o procedimento'],
               ['LOCAL DO ATENDIMENTO','Onde o atendimento será realizado (nos dados atuais, igual ao executante)'],

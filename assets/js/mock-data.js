@@ -138,14 +138,14 @@
   ];
 
   var BENEFICIARIOS = [
-    {id:'B1',nome:'ANDRESSA GIMENEZ FERREIRA SOARES',cpf:'123.456.789-00',cartao:'9876543210001',carteirinha:'0739961.01',dataInclusao:'12/03/2019',idade:54,plano:'PREMIUM PROMO',contrato:'C-001',cidade:'Maceió'},
-    {id:'B2',nome:'CARLOS ROBERTO OLIVEIRA SANTOS',cpf:'234.567.890-11',cartao:'9876543210002',carteirinha:'0814522.03',dataInclusao:'05/07/2016',idade:62,plano:'PLATINUM PROMO',contrato:'C-002',cidade:'Arapiraca'},
-    {id:'B3',nome:'BEATRIZ SOUZA LIMA FERREIRA',cpf:'345.678.901-22',cartao:'9876543210003',carteirinha:'0655190.02',dataInclusao:'23/11/2020',idade:38,plano:'MOBI',contrato:'C-003',cidade:'João Pessoa'},
-    {id:'B4',nome:'DIEGO FIGUEIREDO SOUZA MENDONCA',cpf:'456.789.012-33',cartao:'9876543210004',carteirinha:'0721438.01',dataInclusao:'18/02/2022',idade:45,plano:'EASY',contrato:'C-004',cidade:'Campina Grande'},
-    {id:'B5',nome:'EDUARDA PEREIRA COSTA ALVES',cpf:'567.890.123-44',cartao:'9876543210005',carteirinha:'0903277.04',dataInclusao:'30/09/2018',idade:29,plano:'PREMIUM PROMO',contrato:'C-005',cidade:'Natal'},
-    {id:'B6',nome:'FABIO TEIXEIRA ALMEIDA JUNIOR',cpf:'678.901.234-55',cartao:'9876543210006',carteirinha:'0587013.02',dataInclusao:'14/06/2015',idade:71,plano:'PLATINUM PROMO',contrato:'C-006',cidade:'Brasília'},
-    {id:'B7',nome:'GIOVANA RODRIGUES MENDES CAVALCANTE',cpf:'789.012.345-66',cartao:'9876543210007',carteirinha:'0668904.01',dataInclusao:'27/04/2021',idade:33,plano:'MOBI',contrato:'C-007',cidade:'Maceió'},
-    {id:'B8',nome:'HEITOR BORGES CARDOSO NETO',cpf:'890.123.456-77',cartao:'9876543210008',carteirinha:'0790115.03',dataInclusao:'09/01/2017',idade:58,plano:'EASY',contrato:'C-008',cidade:'Arapiraca'}
+    {id:'B1',nome:'ANDRESSA GIMENEZ FERREIRA SOARES',cpf:'123.456.789-00',cartao:'9876543210001',carteirinha:'0739961.01',dataNascimento:'15/04/1971',dataInclusao:'12/03/2019',plano:'PREMIUM PROMO',contrato:'C-001',cidade:'Maceió'},
+    {id:'B2',nome:'CARLOS ROBERTO OLIVEIRA SANTOS',cpf:'234.567.890-11',cartao:'9876543210002',carteirinha:'0814522.03',dataNascimento:'22/08/1963',dataInclusao:'05/07/2016',plano:'PLATINUM PROMO',contrato:'C-002',cidade:'Arapiraca'},
+    {id:'B3',nome:'BEATRIZ SOUZA LIMA FERREIRA',cpf:'345.678.901-22',cartao:'9876543210003',carteirinha:'0655190.02',dataNascimento:'03/12/1987',dataInclusao:'23/11/2020',plano:'MOBI',contrato:'C-003',cidade:'João Pessoa'},
+    {id:'B4',nome:'DIEGO FIGUEIREDO SOUZA MENDONCA',cpf:'456.789.012-33',cartao:'9876543210004',carteirinha:'0721438.01',dataNascimento:'19/06/1980',dataInclusao:'18/02/2022',plano:'EASY',contrato:'C-004',cidade:'Campina Grande'},
+    {id:'B5',nome:'EDUARDA PEREIRA COSTA ALVES',cpf:'567.890.123-44',cartao:'9876543210005',carteirinha:'0903277.04',dataNascimento:'28/01/1997',dataInclusao:'30/09/2018',plano:'PREMIUM PROMO',contrato:'C-005',cidade:'Natal'},
+    {id:'B6',nome:'FABIO TEIXEIRA ALMEIDA JUNIOR',cpf:'678.901.234-55',cartao:'9876543210006',carteirinha:'0587013.02',dataNascimento:'07/03/1954',dataInclusao:'14/06/2015',plano:'PLATINUM PROMO',contrato:'C-006',cidade:'Brasília'},
+    {id:'B7',nome:'GIOVANA RODRIGUES MENDES CAVALCANTE',cpf:'789.012.345-66',cartao:'9876543210007',carteirinha:'0668904.01',dataNascimento:'11/09/1992',dataInclusao:'27/04/2021',plano:'MOBI',contrato:'C-007',cidade:'Maceió'},
+    {id:'B8',nome:'HEITOR BORGES CARDOSO NETO',cpf:'890.123.456-77',cartao:'9876543210008',carteirinha:'0790115.03',dataNascimento:'25/10/1967',dataInclusao:'09/01/2017',plano:'EASY',contrato:'C-008',cidade:'Arapiraca'}
   ];
 
   var USUARIOS = [
@@ -228,6 +228,7 @@
     for(var i=0;i<GUIAS_RAW.length;i++){
       var g=GUIAS_RAW[i];
       var ben = BENEFICIARIOS.filter(function(b){return b.id===g.benId})[0];
+      if(ben && ben.idade==null) ben.idade = calcIdade(ben.dataNascimento); // idade calculada da data de nascimento
       var ps = PRESTADORES.filter(function(p){return p.id===g.presS})[0];
       var pe = PRESTADORES.filter(function(p){return p.id===g.presE})[0];
       var fluxo = FLUXOS.filter(function(f){return f.id===g.fluxoId})[0];
@@ -422,6 +423,30 @@
   var ESPEC_MAP = {'Internação':'Clínica Médica','Cirurgia':'Cirurgia Geral','Quimioterapia':'Oncologia','Cirurgia neuro':'Neurocirurgia','Cirurgia ortopédica':'Ortopedia','Exame imagem':'Radiologia','Exame':'Clínica Médica','Hemodinâmica':'Cardiologia','Junta médica':'Multiprofissional'};
   function especialidadeDaGuia(g){ return ESPEC_MAP[g&&g.tipo]||'Outros'; }
 
+  // ── Cálculos de tempo (idade e tempo de contrato) a partir de DD/MM/AAAA ──
+  function _parseData(s){
+    if(!s) return null;
+    var p = String(s).split('/');
+    if(p.length!==3) return null;
+    var d = parseInt(p[0],10), m = parseInt(p[1],10), y = parseInt(p[2],10);
+    if(isNaN(d)||isNaN(m)||isNaN(y)) return null;
+    return {d:d,m:m,y:y};
+  }
+  // anos completos entre a data informada e hoje
+  function _anosDecorridos(s){
+    var p = _parseData(s);
+    if(!p) return null;
+    var hoje = new Date();
+    var anos = hoje.getFullYear() - p.y;
+    var mHoje = hoje.getMonth()+1, dHoje = hoje.getDate();
+    if(mHoje < p.m || (mHoje===p.m && dHoje < p.d)) anos--; // ainda não fez aniversário no ano
+    return anos<0 ? 0 : anos;
+  }
+  // idade do beneficiário calculada da data de nascimento
+  function calcIdade(dataNasc){ return _anosDecorridos(dataNasc); }
+  // tempo de contrato (anos completos desde a data de inclusão no plano)
+  function anosContrato(dataInc){ return _anosDecorridos(dataInc); }
+
   global.MOCK = {
     FLUXOS:FLUXOS, IA_POR_ETAPA:IA_POR_ETAPA, ESPEC_MAP:ESPEC_MAP, especialidadeDaGuia:especialidadeDaGuia,
     PROCEDIMENTOS:PROCEDIMENTOS, PACOTES:PACOTES, MATMED:MATMED, DIARIAS_TAXAS:DIARIAS_TAXAS,
@@ -429,6 +454,7 @@
     PRESTADORES:PRESTADORES, BENEFICIARIOS:BENEFICIARIOS, USUARIOS:USUARIOS,
     STATUS:STATUS, ORIGENS:ORIGENS, CATEGORIAS_ANEXO:CATEGORIAS_ANEXO,
     MOTIVOS_COMP:MOTIVOS_COMP, MOTIVOS_REPR:MOTIVOS_REPR, MOTIVOS_RESS:MOTIVOS_RESS,
-    LOGS:LOGS, buildGuias: hydrate, matmedDetalhe: matmedDetalhe, opmeDetalhe: opmeDetalhe, observacoesGuia: observacoesGuia
+    LOGS:LOGS, buildGuias: hydrate, matmedDetalhe: matmedDetalhe, opmeDetalhe: opmeDetalhe, observacoesGuia: observacoesGuia,
+    calcIdade: calcIdade, anosContrato: anosContrato
   };
 })(window);
