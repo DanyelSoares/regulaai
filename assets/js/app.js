@@ -4552,17 +4552,6 @@
             '<span class="guia-metric-val" style="font-size:12px">'+esc(g.fluxo.nome)+'</span>'+
           '</div>'+
         '</div>'+
-        '<div class="guia-risk-grid guia-risk-grid--row">'+
-          RISKS.map(function(r){
-            return '<div class="guia-risk-card risk-'+r.val+'">'+
-              '<span class="guia-risk-ico">'+ico(r.ico,15)+'</span>'+
-              '<div class="guia-risk-body">'+
-                '<div class="guia-risk-name">'+r.label+'</div>'+
-                riskPill(r.val)+
-              '</div>'+
-            '</div>';
-          }).join('')+
-        '</div>'+
         '<div class="g2" style="gap:12px;margin-top:14px">'+
           '<dl class="kv">'+
             '<dt>Beneficiário</dt><dd>'+esc(g.beneficiario.nome)+'</dd>'+
@@ -4584,6 +4573,17 @@
             '<dt>CID</dt><dd>'+esc(MOCK.cidGuia(g))+'</dd>'+
             '<dt>Observações</dt><dd>'+esc(g.observacoes||'—')+'</dd>'+
           '</dl>'+
+        '</div>'+
+        '<div class="guia-risk-grid guia-risk-grid--row" style="margin-top:14px">'+
+          RISKS.map(function(r){
+            return '<div class="guia-risk-card risk-'+r.val+'">'+
+              '<span class="guia-risk-ico">'+ico(r.ico,15)+'</span>'+
+              '<div class="guia-risk-body">'+
+                '<div class="guia-risk-name">'+r.label+'</div>'+
+                riskPill(r.val)+
+              '</div>'+
+            '</div>';
+          }).join('')+
         '</div>'+
         '<div class="ai-warn" style="margin-top:14px">'+ia.avisoLegal+'</div>';
     } else if(t==='beneficiario'){
