@@ -370,8 +370,12 @@
     return {impressas:impressas, protocolo:protocolo, naoImpressas:naoImpressas};
   }
 
+  // ── Especialidade médica (derivada do tipo da guia) ──
+  var ESPEC_MAP = {'Internação':'Clínica Médica','Cirurgia':'Cirurgia Geral','Quimioterapia':'Oncologia','Cirurgia neuro':'Neurocirurgia','Cirurgia ortopédica':'Ortopedia','Exame imagem':'Radiologia','Exame':'Clínica Médica','Hemodinâmica':'Cardiologia','Junta médica':'Multiprofissional'};
+  function especialidadeDaGuia(g){ return ESPEC_MAP[g&&g.tipo]||'Outros'; }
+
   global.MOCK = {
-    FLUXOS:FLUXOS, IA_POR_ETAPA:IA_POR_ETAPA,
+    FLUXOS:FLUXOS, IA_POR_ETAPA:IA_POR_ETAPA, ESPEC_MAP:ESPEC_MAP, especialidadeDaGuia:especialidadeDaGuia,
     PROCEDIMENTOS:PROCEDIMENTOS, PACOTES:PACOTES, MATMED:MATMED, DIARIAS_TAXAS:DIARIAS_TAXAS,
     REGRAS_DUT:REGRAS_DUT, REGRAS_DOC:REGRAS_DOC,
     PRESTADORES:PRESTADORES, BENEFICIARIOS:BENEFICIARIOS, USUARIOS:USUARIOS,

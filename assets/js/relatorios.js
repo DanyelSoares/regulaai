@@ -127,10 +127,14 @@
       if(g.solicitante) b.medicos[g.solicitante]=1;
       if(g.prestadorExe&&g.prestadorExe.nome) b.prestadores[g.prestadorExe.nome]=1;
 
+      // Especialidade da guia (derivada do tipo)
+      var espec = (window.MOCK&&window.MOCK.especialidadeDaGuia)?window.MOCK.especialidadeDaGuia(g):'Outros';
+
       // Médico solicitante
       var med = g.solicitante || '—';
-      var m = porMedico[med] || (porMedico[med]={nome:med,guias:0,custo:0,benefs:{},prestadores:{},opme:0,negadas:0,aprovadas:0,guiasRef:[]});
+      var m = porMedico[med] || (porMedico[med]={nome:med,guias:0,custo:0,benefs:{},prestadores:{},opme:0,negadas:0,aprovadas:0,guiasRef:[],especCnt:{}});
       m.guias++; m.custo+=c; m.benefs[bid]=1; m.guiasRef.push(g);
+      m.especCnt[espec]=(m.especCnt[espec]||0)+1;
       if(g.prestadorExe&&g.prestadorExe.nome) m.prestadores[g.prestadorExe.nome]=1;
       m.opme+=(g.matmed||[]).filter(function(x){return x.opme;}).length;
       if(g.status==='Negada') m.negadas++;
@@ -175,8 +179,24 @@
       o.taxaAprov=o.guias?Math.round(o.aprovadas/o.guias*100):0;
       o.taxaNeg=o.guias?Math.round(o.negadas/o.guias*100):0;
       o.custoMedio=o.guias?Math.round(o.custo/o.guias):0;
+      // especialidade predominante do médico (maior nº de guias)
+      var melhor='Outros',max=-1;
+      Object.keys(o.especCnt).forEach(function(e){ if(o.especCnt[e]>max){max=o.especCnt[e];melhor=e;} });
+      o.especialidade=melhor;
       // score de risco do médico: concentração + volume + OPME + negativas
       o.score=clamp((o.nPrestadores===1&&o.guias>1?35:0) + o.guias*8 + o.opme*9 + o.taxaNeg*0.4);
+    });
+    // Médias por especialidade (para detectar desvio de cada médico vs. pares)
+    var especStats={};
+    medicos.forEach(function(m){
+      var e=m.especialidade; if(!especStats[e]) especStats[e]={nMed:0,guias:0,custo:0};
+      especStats[e].nMed++; especStats[e].guias+=m.guias; especStats[e].custo+=m.custo;
+    });
+    Object.keys(especStats).forEach(function(e){ var s=especStats[e]; s.mediaGuias=s.nMed?s.guias/s.nMed:0; s.mediaCusto=s.nMed?s.custo/s.nMed:0; });
+    // Marca desvio: médico acima da média da própria especialidade (com ≥2 médicos na especialidade)
+    medicos.forEach(function(m){
+      var s=especStats[m.especialidade]; m.especMediaGuias=s?Math.round(s.mediaGuias*10)/10:0; m.especMediaCusto=s?Math.round(s.mediaCusto):0;
+      m.desvio = !!(s && s.nMed>=2 && (m.guias>s.mediaGuias*1.3 || m.custo>s.mediaCusto*1.3));
     });
     var prestadores=toArr(porPrestador,function(o){
       o.nMedicos=Object.keys(o.medicos).length; o.custoMedio=o.guias?Math.round(o.custo/o.guias):0;
@@ -188,7 +208,7 @@
     _cache = {
       guias:guias, totalGuias:guias.length, totalCusto:totalCusto,
       custoNegado:custoNegado, qtdNegadas:qtdNegadas, servNegados:servNegados, qtdEmAberto:qtdEmAberto, riscoCnt:riscoCnt,
-      benefs:benefs, medicos:medicos, prestadores:prestadores, procs:procs, opmes:opmes
+      benefs:benefs, medicos:medicos, prestadores:prestadores, procs:procs, opmes:opmes, especStats:especStats
     };
     _cache.alertas = detectarAlertas(_cache);
     return _cache;
@@ -209,6 +229,15 @@
           desc:'Médico '+m.nome+' concentra 100% das '+m.guias+' solicitações em um único prestador.',
           acao:'Encaminhar para auditoria médica'});
       }
+    });
+    // 1b) Desvio vs. especialidade: médico acima da média dos pares da mesma especialidade
+    M.medicos.forEach(function(m){
+      if(!m.desvio) return;
+      var s=M.especStats[m.especialidade];
+      novo({sev:'media',tipo:'concentracao',score:70+Math.min(20,Math.round((m.guias/(s.mediaGuias||1))*10)),medico:m.nome,
+        prestador:'—',valor:moeda(m.custo),benef:'Vários',guia:'—',
+        desc:'Médico '+m.nome+' ('+m.especialidade+') solicitou '+m.guias+' guia(s), enquanto a média da especialidade é '+m.especMediaGuias+'. Volume/custo acima do padrão dos pares (base comparativa da própria especialidade).',
+        acao:'Comparar com pares da especialidade e revisar pertinência'});
     });
     // 2) Recorrência: beneficiário com >=2 guias no período
     M.benefs.forEach(function(b){
@@ -344,24 +373,26 @@
     var M=analitico();
     var ms=M.medicos.slice().sort(function(a,b){return b.score-a.score;});
     var mediaGuias=ms.length?(M.totalGuias/ms.length):0;
+    var comDesvio=ms.filter(function(m){return m.desvio;}).length;
     var kpis='<div class="rel-kpi-grid">'+
       kpiCard('Médicos solicitantes',ms.length,'no período','var(--g-700)')+
       kpiCard('Volume médio',mediaGuias.toFixed(1),'guias/médico','#0f766e')+
-      kpiCard('Acima da média',ms.filter(function(m){return m.guias>mediaGuias;}).length,'volume','#c2410c')+
+      kpiCard('Acima da especialidade',comDesvio,'desvio vs. pares','#c2410c')+
       kpiCard('Maior score',ms.length?ms[0].score:0,ms.length?ms[0].nome:'','#b91c1c')+
     '</div>';
     var tab=rankTable('Médicos — perfil de solicitação',[
       {h:'Médico',f:function(r){return esc(r.nome);}},
-      {h:'Guias',num:true,f:function(r){return r.guias;}},
+      {h:'Especialidade',f:function(r){return esc(r.especialidade)+(r.desvio?' <span class="rel-desvio" title="Acima da média da especialidade (média: '+r.especMediaGuias+' guias)">▲ desvio</span>':'');}},
+      {h:'Guias',num:true,f:function(r){return r.guias+(r.desvio?' <span style="color:#c2410c;font-size:10px">(méd. '+r.especMediaGuias+')</span>':'');}},
       {h:'Benef.',num:true,f:function(r){return r.nBenefs;}},
       {h:'Prest.',num:true,f:function(r){return r.nPrestadores+(r.nPrestadores===1&&r.guias>1?' ⚠':'');}},
       {h:'OPME',num:true,f:function(r){return r.opme;}},
       {h:'Aprov.',num:true,f:function(r){return r.taxaAprov+'%';}},
       {h:'Custo',num:true,f:function(r){return moeda(r.custo);}},
       {h:'Score',num:true,f:function(r){return scoreBadge(r.score);}}
-    ],ms);
-    var nota='<div class="rel-note">'+ico('info',13)+' <span>O símbolo ⚠ indica médico com <b>todas as solicitações concentradas em um único prestador</b> (gera alerta de concentração). Comparação por especialidade entra na próxima fase (requer cadastro de especialidade do médico).</span></div>';
-    return '<div class="rel-section">'+notaSim()+kpis+nota+tab+'</div>';
+    ],ms,{scroll:true,count:true});
+    var nota='<div class="rel-note">'+ico('info',13)+' <span><b>▲ desvio</b> = médico com volume/custo acima da média dos pares da <b>mesma especialidade</b> (comparação estatística, requer ≥2 médicos na especialidade) — gera alerta na central. <b>⚠</b> = todas as solicitações concentradas em um único prestador.</span></div>';
+    return '<div class="rel-section">'+kpis+nota+tab+'</div>';
   }
 
   // ── Prestadores ───────────────────────────────────────────────────

@@ -420,6 +420,8 @@ body.pl--blurring .pl--blur-target{filter:blur(5px)}
 .rel-alert-meta span{display:inline-flex;align-items:center;gap:5px}
 /* Score badge */
 .rel-score{display:inline-block;min-width:30px;text-align:center;font-size:11.5px;font-weight:800;padding:2px 8px;border-radius:20px}
+/* Selo de desvio de especialidade */
+.rel-desvio{display:inline-block;font-size:10px;font-weight:700;color:#c2410c;background:#ffedd5;border-radius:20px;padding:1px 7px;margin-left:4px;white-space:nowrap}
 /* Comparativos */
 .rel-cmp{padding:8px 0 4px;border-bottom:1px solid var(--g-50)}
 .rel-cmp:last-child{border-bottom:none}

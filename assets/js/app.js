@@ -67,7 +67,7 @@
       function iso(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
       return { de:iso(hj), ate:iso(de) };
     })(),
-    kanbanFiltros: { colunas:[], uti:'', regime:'', tipo:'' },
+    kanbanFiltros: { colunas:[], uti:'', regime:'', tipo:'', especialidade:'' },
     fluxoSLAConfig: JSON.parse(localStorage.getItem('regula_fluxo_sla')||'null') || {},
     fluxoWeights: JSON.parse(localStorage.getItem('regula_fluxo_weights')||'null') || {},
     permOverrides: JSON.parse(localStorage.getItem('regula_perm_overrides')||'null') || {}
@@ -1395,7 +1395,7 @@
   function viewGuias(){
     var wrap=el('div');
     var guias=guiasVisiveis();
-    var _especMap={'Internação':'Clínica Médica','Cirurgia':'Cirurgia Geral','Quimioterapia':'Oncologia','Cirurgia neuro':'Neurocirurgia','Cirurgia ortopédica':'Ortopedia','Exame imagem':'Radiologia','Exame':'Clínica Médica','Hemodinâmica':'Cardiologia','Junta médica':'Multiprofissional'};
+    var _especMap=MOCK.ESPEC_MAP||{'Internação':'Clínica Médica','Cirurgia':'Cirurgia Geral','Quimioterapia':'Oncologia','Cirurgia neuro':'Neurocirurgia','Cirurgia ortopédica':'Ortopedia','Exame imagem':'Radiologia','Exame':'Clínica Médica','Hemodinâmica':'Cardiologia','Junta médica':'Multiprofissional'};
     wrap.appendChild(el('div',{class:'page-title'},'<div><h1>Relação de Guias</h1><p>Filtre, audite e emita parecer da operadora com apoio da análise técnica.</p></div><div style="display:flex;gap:8px;align-items:center"><button class="btn ghost" id="btnClear">'+ico('x',13)+' Limpar filtros</button><button class="btn-animated" id="btnExport">'+ico('download')+' Exportar Excel</button></div>'));
 
     // Banner de contexto de perfil
@@ -2095,6 +2095,7 @@
       if(kf.uti==='nao'&&g.uti) return false;
       if(kf.regime&&g.regime!==kf.regime) return false;
       if(kf.tipo&&g.tipo!==kf.tipo) return false;
+      if(kf.especialidade&&MOCK.especialidadeDaGuia(g)!==kf.especialidade) return false;
       return true;
     });
     var total=guias.length;
@@ -2132,7 +2133,7 @@
       'Cotação de OPME':'Cotação OPME','Analisada':'Analisada',
       'Liberada':'Liberada','Negada':'Negada'
     };
-    var hasKF=kf.colunas.length||kf.uti||kf.regime||kf.tipo;
+    var hasKF=kf.colunas.length||kf.uti||kf.regime||kf.tipo||kf.especialidade;
 
     function closeFltDrops(){
       var ds=document.querySelectorAll('.k-flt-drop');
@@ -2221,10 +2222,23 @@
       });
     }));
 
+    // Especialidade (derivada do tipo da guia)
+    var especOpts=(function(){var s={};guias.forEach(function(g){var e=MOCK.especialidadeDaGuia(g);if(e)s[e]=1;});return Object.keys(s).sort();}());
+    var especLabel=kf.especialidade||'Especialidade';
+    fbar.appendChild(makeFltWrap('stethoscope',especLabel,kf.especialidade!=='',function(drop){
+      drop.appendChild(fltItem('Todas',kf.especialidade==='',function(){ State.kanbanFiltros.especialidade=''; render(); }));
+      drop.appendChild(el('div',{class:'k-flt-sep'}));
+      especOpts.forEach(function(e){
+        drop.appendChild(fltItem(e,kf.especialidade===e,(function(v){
+          return function(){ State.kanbanFiltros.especialidade=v; render(); };
+        })(e)));
+      });
+    }));
+
     if(hasKF){
       var btnClearKF=el('button',{class:'btn ghost',style:'font-size:12px;padding:4px 10px;height:auto;display:flex;align-items:center;gap:4px;margin-left:4px'});
       btnClearKF.innerHTML=ico('x',12)+' Limpar';
-      btnClearKF.onclick=function(){ State.kanbanFiltros={colunas:[],uti:'',regime:'',tipo:''}; render(); };
+      btnClearKF.onclick=function(){ State.kanbanFiltros={colunas:[],uti:'',regime:'',tipo:'',especialidade:''}; render(); };
       fbar.appendChild(btnClearKF);
     }
 
