@@ -91,9 +91,12 @@
 
       // Beneficiário
       var bid = g.beneficiario && g.beneficiario.id || '?';
-      var b = porBenef[bid] || (porBenef[bid]={id:bid,nome:(g.beneficiario&&g.beneficiario.nome)||'—',guias:0,custo:0,opme:0,medicos:{},prestadores:{},procs:0});
+      var b = porBenef[bid] || (porBenef[bid]={id:bid,nome:(g.beneficiario&&g.beneficiario.nome)||'—',idade:(g.beneficiario&&g.beneficiario.idade)||null,guias:0,custo:0,opme:0,medicos:{},prestadores:{},procs:0,negadas:0,internacoes:0,altoRisco:0});
       b.guias++; b.custo+=c; b.opme+=(g.matmed||[]).filter(function(m){return m.opme;}).length;
       b.procs+=(g.procedimentos||[]).length;
+      if(g.status==='Negada') b.negadas++;
+      if(g.tipo&&/Interna/i.test(g.tipo)) b.internacoes++;
+      if(g.risco==='alto'||g.risco==='critico') b.altoRisco++;
       if(g.solicitante) b.medicos[g.solicitante]=1;
       if(g.prestadorExe&&g.prestadorExe.nome) b.prestadores[g.prestadorExe.nome]=1;
 
@@ -132,11 +135,27 @@
     });
 
     function toArr(obj,extra){ return Object.keys(obj).map(function(k){ var o=obj[k]; if(extra) extra(o); return o; }); }
-    var benefs=toArr(porBenef,function(o){o.nMedicos=Object.keys(o.medicos).length;o.nPrestadores=Object.keys(o.prestadores).length;});
-    var medicos=toArr(porMedico,function(o){o.nBenefs=Object.keys(o.benefs).length;o.nPrestadores=Object.keys(o.prestadores).length;o.taxaAprov=o.guias?Math.round(o.aprovadas/o.guias*100):0;});
-    var prestadores=toArr(porPrestador,function(o){o.nMedicos=Object.keys(o.medicos).length;o.custoMedio=o.guias?Math.round(o.custo/o.guias):0;});
-    var procs=toArr(porProc);
-    var opmes=toArr(porOpme,function(o){o.varPreco=o.autorizado?Math.round((o.cobrado-o.autorizado)/o.autorizado*100):0;o.nBenefs=Object.keys(o.benefs).length;o.nMedicos=Object.keys(o.medicos).length;});
+    function clamp(v){ return Math.max(0,Math.min(100,Math.round(v))); }
+    var benefs=toArr(porBenef,function(o){
+      o.nMedicos=Object.keys(o.medicos).length; o.nPrestadores=Object.keys(o.prestadores).length;
+      o.custoMedio=o.guias?Math.round(o.custo/o.guias):0;
+      // score de risco do beneficiário: recorrência + alto risco + OPME + negativas
+      o.score=clamp(o.guias*12 + o.altoRisco*18 + o.opme*10 + o.negadas*8 + (o.nPrestadores>1?10:0));
+    });
+    var medicos=toArr(porMedico,function(o){
+      o.nBenefs=Object.keys(o.benefs).length; o.nPrestadores=Object.keys(o.prestadores).length;
+      o.taxaAprov=o.guias?Math.round(o.aprovadas/o.guias*100):0;
+      o.taxaNeg=o.guias?Math.round(o.negadas/o.guias*100):0;
+      o.custoMedio=o.guias?Math.round(o.custo/o.guias):0;
+      // score de risco do médico: concentração + volume + OPME + negativas
+      o.score=clamp((o.nPrestadores===1&&o.guias>1?35:0) + o.guias*8 + o.opme*9 + o.taxaNeg*0.4);
+    });
+    var prestadores=toArr(porPrestador,function(o){
+      o.nMedicos=Object.keys(o.medicos).length; o.custoMedio=o.guias?Math.round(o.custo/o.guias):0;
+      o.score=clamp(o.opme*10 + (o.nMedicos===1&&o.guias>1?25:0) + o.internacoes*8);
+    });
+    var procs=toArr(porProc,function(o){o.custoMedio=o.qtd?Math.round(o.custo/o.qtd):0;o.taxaNeg=o.qtd?Math.round(o.negadas/o.qtd*100):0;});
+    var opmes=toArr(porOpme,function(o){o.varPreco=o.autorizado?Math.round((o.cobrado-o.autorizado)/o.autorizado*100):0;o.nBenefs=Object.keys(o.benefs).length;o.nMedicos=Object.keys(o.medicos).length;o.score=clamp(Math.max(0,o.varPreco)*1.2 + o.qtd*8);});
 
     _cache = {
       guias:guias, totalGuias:guias.length, totalCusto:totalCusto, evitavel:evitavel, riscoCnt:riscoCnt,
@@ -213,6 +232,12 @@
     return '<div class="rel-card"><div class="rel-card-hd">'+esc(titulo)+'</div>'+
       '<div class="table-wrap"><table class="cfg-table"><thead><tr>'+head+'</tr></thead><tbody>'+body+'</tbody></table></div></div>';
   }
+  // Selo de score (0-100) com cor por faixa
+  function scoreBadge(s){
+    var cor = s>=70?'#b91c1c':(s>=45?'#c2410c':(s>=25?'#a16207':'#16a34a'));
+    var bg  = s>=70?'#fee2e2':(s>=45?'#ffedd5':(s>=25?'#fef9c3':'#dcfce7'));
+    return '<span class="rel-score" style="color:'+cor+';background:'+bg+'">'+s+'</span>';
+  }
   // Mini barra de distribuição
   function distRow(label, valor, max, cor){
     var pct=max?Math.round(valor/max*100):0;
@@ -243,15 +268,209 @@
   }
 
   function renderTabResto(id){
-    if(id==='beneficiarios') return emBreve('Análise por Beneficiário','Visão individual e consolidada por beneficiário.',['Total de guias, procedimentos e OPME','Custo acumulado e custo médio por guia','Negativas, reanálises, internações, exames repetidos','Nº de médicos e prestadores diferentes','Score de risco do beneficiário']);
-    if(id==='medicos') return emBreve('Análise por Médico Solicitante','Ranking e perfil de comportamento dos solicitantes, comparados aos pares da mesma especialidade.',['Volume, custo, taxa de aprovação/negativa','Procedimentos e OPME mais solicitados','Concentração em prestador/fornecedor','Score de risco do médico','Alertas de desvio estatístico vs. especialidade']);
-    if(id==='prestadores') return emBreve('Análise por Prestador','Visão consolidada por hospital, clínica e laboratório.',['Custo total e médio (por guia, procedimento, internação)','Tempo médio de internação e reinternações','Concentração de OPME e de médicos','Alertas de custo/glosa/uso incomum de diárias']);
-    if(id==='procedimentos') return emBreve('Análise por Procedimento','Mineração estatística dos procedimentos solicitados.',['Mais solicitados, mais caros, mais negados/glosados','Crescimento e associação a OPME','Cortes por especialidade, CID, faixa etária, sexo','Alertas de incompatibilidade (CID/idade/sexo) e repetição']);
+    if(id==='beneficiarios') return renderBeneficiarios();
+    if(id==='medicos') return renderMedicos();
+    if(id==='prestadores') return renderPrestadores();
+    if(id==='procedimentos') return renderProcedimentos();
     if(id==='alertas') return renderAlertas();
-    if(id==='tendencias') return emBreve('Tendências','Crescimento, redução, sazonalidade e previsão.',['Evolução mensal e tendência futura','Sazonalidade por procedimento/especialidade','Projeções e pontos de inflexão']);
-    if(id==='comparativos') return emBreve('Comparativos Estatísticos','Comparações lado a lado.',['Hospital A x Hospital B','Médico x média da especialidade','OPME x referência de mercado','Procedimento x equivalentes']);
-    if(id==='exportacoes') return emBreve('Exportações','Geração e download de relatórios.',['Exportar para Excel/CSV/PDF','Relatórios agendados','Seleção de período e filtros']);
+    if(id==='tendencias') return renderTendencias();
+    if(id==='comparativos') return renderComparativos();
+    if(id==='exportacoes') return renderExportacoes();
     return '';
+  }
+
+  // ── Beneficiários ─────────────────────────────────────────────────
+  function renderBeneficiarios(){
+    var M=analitico();
+    var bs=M.benefs.slice().sort(function(a,b){return b.score-a.score;});
+    var comRec=bs.filter(function(b){return b.guias>=2;}).length;
+    var kpis='<div class="rel-kpi-grid">'+
+      kpiCard('Beneficiários',bs.length,'no período','var(--g-700)')+
+      kpiCard('Com recorrência',comRec,'≥2 guias','#c2410c')+
+      kpiCard('Custo médio/benef.',moeda(bs.length?Math.round(M.totalCusto/bs.length):0),'','#0f766e')+
+      kpiCard('Maior score',bs.length?bs[0].score:0,bs.length?bs[0].nome:'','#b91c1c')+
+    '</div>';
+    var tab=rankTable('Beneficiários — visão consolidada',[
+      {h:'Beneficiário',f:function(r){return esc(r.nome)+(r.idade?' <span style="color:var(--muted)">('+r.idade+')</span>':'');}},
+      {h:'Guias',num:true,f:function(r){return r.guias;}},
+      {h:'Proc.',num:true,f:function(r){return r.procs;}},
+      {h:'OPME',num:true,f:function(r){return r.opme;}},
+      {h:'Médicos',num:true,f:function(r){return r.nMedicos;}},
+      {h:'Negadas',num:true,f:function(r){return r.negadas;}},
+      {h:'Custo',num:true,f:function(r){return moeda(r.custo);}},
+      {h:'Score',num:true,f:function(r){return scoreBadge(r.score);}}
+    ],bs);
+    return '<div class="rel-section">'+notaSim()+kpis+tab+'</div>';
+  }
+
+  // ── Médicos Solicitantes ──────────────────────────────────────────
+  function renderMedicos(){
+    var M=analitico();
+    var ms=M.medicos.slice().sort(function(a,b){return b.score-a.score;});
+    var mediaGuias=ms.length?(M.totalGuias/ms.length):0;
+    var kpis='<div class="rel-kpi-grid">'+
+      kpiCard('Médicos solicitantes',ms.length,'no período','var(--g-700)')+
+      kpiCard('Volume médio',mediaGuias.toFixed(1),'guias/médico','#0f766e')+
+      kpiCard('Acima da média',ms.filter(function(m){return m.guias>mediaGuias;}).length,'volume','#c2410c')+
+      kpiCard('Maior score',ms.length?ms[0].score:0,ms.length?ms[0].nome:'','#b91c1c')+
+    '</div>';
+    var tab=rankTable('Médicos — perfil de solicitação',[
+      {h:'Médico',f:function(r){return esc(r.nome);}},
+      {h:'Guias',num:true,f:function(r){return r.guias;}},
+      {h:'Benef.',num:true,f:function(r){return r.nBenefs;}},
+      {h:'Prest.',num:true,f:function(r){return r.nPrestadores+(r.nPrestadores===1&&r.guias>1?' ⚠':'');}},
+      {h:'OPME',num:true,f:function(r){return r.opme;}},
+      {h:'Aprov.',num:true,f:function(r){return r.taxaAprov+'%';}},
+      {h:'Custo',num:true,f:function(r){return moeda(r.custo);}},
+      {h:'Score',num:true,f:function(r){return scoreBadge(r.score);}}
+    ],ms);
+    var nota='<div class="rel-note">'+ico('info',13)+' <span>O símbolo ⚠ indica médico com <b>todas as solicitações concentradas em um único prestador</b> (gera alerta de concentração). Comparação por especialidade entra na próxima fase (requer cadastro de especialidade do médico).</span></div>';
+    return '<div class="rel-section">'+notaSim()+kpis+nota+tab+'</div>';
+  }
+
+  // ── Prestadores ───────────────────────────────────────────────────
+  function renderPrestadores(){
+    var M=analitico();
+    var ps=M.prestadores.slice().sort(function(a,b){return b.custo-a.custo;});
+    var custoMedioGeral=ps.length?Math.round(M.totalCusto/M.totalGuias):0;
+    var kpis='<div class="rel-kpi-grid">'+
+      kpiCard('Prestadores',ps.length,'no período','var(--g-700)')+
+      kpiCard('Custo médio/guia',moeda(custoMedioGeral),'geral','#0f766e')+
+      kpiCard('Acima da média',ps.filter(function(p){return p.custoMedio>custoMedioGeral;}).length,'custo/guia','#c2410c')+
+      kpiCard('Maior custo',ps.length?moedaK(ps[0].custo):'R$ 0',ps.length?ps[0].nome:'','#b91c1c')+
+    '</div>';
+    var tab=rankTable('Prestadores — visão consolidada',[
+      {h:'Prestador',f:function(r){return esc(r.nome);}},
+      {h:'Guias',num:true,f:function(r){return r.guias;}},
+      {h:'Internações',num:true,f:function(r){return r.internacoes;}},
+      {h:'OPME',num:true,f:function(r){return r.opme;}},
+      {h:'Médicos',num:true,f:function(r){return r.nMedicos+(r.nMedicos===1&&r.guias>1?' ⚠':'');}},
+      {h:'Custo médio',num:true,f:function(r){var alto=r.custoMedio>custoMedioGeral;return '<span style="'+(alto?'color:#c2410c;font-weight:700':'')+'">'+moeda(r.custoMedio)+'</span>';}},
+      {h:'Custo total',num:true,f:function(r){return moeda(r.custo);}},
+      {h:'Score',num:true,f:function(r){return scoreBadge(r.score);}}
+    ],ps);
+    return '<div class="rel-section">'+notaSim()+kpis+tab+'</div>';
+  }
+
+  // ── Procedimentos ─────────────────────────────────────────────────
+  function renderProcedimentos(){
+    var M=analitico();
+    var pr=M.procs.slice();
+    var maisSolic=pr.slice().sort(function(a,b){return b.qtd-a.qtd;}).slice(0,5);
+    var maisCaros=pr.slice().sort(function(a,b){return b.custoMedio-a.custoMedio;}).slice(0,5);
+    var maisNeg=pr.slice().sort(function(a,b){return b.taxaNeg-a.taxaNeg;}).slice(0,5);
+    var kpis='<div class="rel-kpi-grid">'+
+      kpiCard('Procedimentos distintos',pr.length,'no período','var(--g-700)')+
+      kpiCard('Total solicitado',pr.reduce(function(s,p){return s+p.qtd;},0),'ocorrências','#0f766e')+
+      kpiCard('Mais caro',maisCaros.length?moeda(maisCaros[0].custoMedio):'R$ 0','médio','#b45309')+
+      kpiCard('Maior negativa',maisNeg.length?maisNeg[0].taxaNeg+'%':'0%',maisNeg.length?maisNeg[0].cod:'','#b91c1c')+
+    '</div>';
+    var rkA=rankTable('Mais solicitados',[
+      {h:'Procedimento',f:function(r){return esc(r.desc);}},
+      {h:'Qtd',num:true,f:function(r){return r.qtd;}}
+    ],maisSolic);
+    var rkB=rankTable('Mais caros (custo médio)',[
+      {h:'Procedimento',f:function(r){return esc(r.desc);}},
+      {h:'Custo médio',num:true,f:function(r){return moeda(r.custoMedio);}}
+    ],maisCaros);
+    var tab=rankTable('Procedimentos — visão completa',[
+      {h:'Código',f:function(r){return esc(r.cod);}},
+      {h:'Descrição',f:function(r){return esc(r.desc);}},
+      {h:'Qtd',num:true,f:function(r){return r.qtd;}},
+      {h:'Negadas',num:true,f:function(r){return r.negadas;}},
+      {h:'Taxa neg.',num:true,f:function(r){return r.taxaNeg+'%';}},
+      {h:'Custo total',num:true,f:function(r){return moeda(r.custo);}}
+    ],pr.sort(function(a,b){return b.custo-a.custo;}));
+    return '<div class="rel-section">'+notaSim()+kpis+'<div class="rel-grid2">'+rkA+rkB+'</div>'+tab+'</div>';
+  }
+
+  function notaSim(){ return '<div class="rel-note">'+ico('info',13)+' <span>Análise sobre as guias do período. <b>Valores em R$ são simulados</b> (determinísticos por código) para demonstração.</span></div>'; }
+
+  // ── Tendências (honesto: base de 1 mês) ───────────────────────────
+  function renderTendencias(){
+    var M=analitico();
+    // Distribui as guias por dia de emissão (único campo temporal disponível)
+    var porDia={};
+    M.guias.forEach(function(g){ var d=(g.dataEmissao||'').slice(-2)||'?'; porDia[d]=(porDia[d]||0)+1; });
+    var dias=Object.keys(porDia).sort();
+    var maxD=Math.max.apply(null,dias.map(function(d){return porDia[d];}).concat([1]));
+    var serie=dias.map(function(d){return distRow('Dia '+d, porDia[d], maxD, 'var(--g-500)');}).join('');
+    return '<div class="rel-section">'+
+      '<div class="rel-note">'+ico('alert-triangle',13)+' <span><b>Dados insuficientes para tendência real:</b> a base atual cobre um único período (mesmo mês). Evolução mensal, sazonalidade e previsão exigem histórico de vários meses. Abaixo, a distribuição diária do período disponível como demonstração.</span></div>'+
+      '<div class="rel-card"><div class="rel-card-hd">Guias por dia de emissão (período atual)</div><div style="padding:8px 14px 14px">'+(serie||'<div style="padding:14px;color:var(--muted);font-size:12.5px">Sem dados.</div>')+'</div></div>'+
+      emBreve('Tendências — requer histórico','Quando houver dados de múltiplos meses, esta aba mostrará:',['Evolução mensal de guias e de custo','Crescimento/redução percentual','Sazonalidade por procedimento/especialidade','Projeção e tendência futura'])+
+    '</div>';
+  }
+
+  // ── Comparativos (entidade x média do grupo) ──────────────────────
+  function renderComparativos(){
+    var M=analitico();
+    var ms=M.medicos.slice().sort(function(a,b){return b.guias-a.guias;});
+    var ps=M.prestadores.slice().sort(function(a,b){return b.custo-a.custo;});
+    var mediaGuiasMed=ms.length?(M.totalGuias/ms.length):0;
+    var mediaCustoMed=ms.length?(M.totalCusto/ms.length):0;
+    var mediaCustoPrest=ps.length?(M.totalCusto/ps.length):0;
+
+    function barCompare(label, valor, media, fmt){
+      var max=Math.max(valor,media,1);
+      var f=fmt||function(x){return x;};
+      return '<div class="rel-cmp">'+
+        '<div class="rel-cmp-lbl">'+esc(label)+'</div>'+
+        '<div class="rel-cmp-bars">'+
+          '<div class="rel-cmp-row"><span>Este</span><span class="rel-cmp-bar"><span style="width:'+Math.round(valor/max*100)+'%;background:var(--g-600)"></span></span><b>'+f(valor)+'</b></div>'+
+          '<div class="rel-cmp-row"><span>Média</span><span class="rel-cmp-bar"><span style="width:'+Math.round(media/max*100)+'%;background:var(--g-300)"></span></span><b>'+f(Math.round(media))+'</b></div>'+
+        '</div>'+
+        '<div class="rel-cmp-delta '+(valor>media?'up':'down')+'">'+(valor>media?'▲ ':'▼ ')+Math.abs(Math.round((valor-media)/(media||1)*100))+'% vs. média</div>'+
+      '</div>';
+    }
+    var topMed=ms[0], topPrest=ps[0];
+    var cmpMed = topMed ? '<div class="rel-card"><div class="rel-card-hd">'+esc(topMed.nome)+' vs. média dos médicos</div><div style="padding:12px 16px">'+
+        barCompare('Volume de guias', topMed.guias, mediaGuiasMed)+
+        barCompare('Custo total', topMed.custo, mediaCustoMed, moeda)+
+      '</div></div>' : '';
+    var cmpPrest = topPrest ? '<div class="rel-card"><div class="rel-card-hd">'+esc(topPrest.nome)+' vs. média dos prestadores</div><div style="padding:12px 16px">'+
+        barCompare('Custo total', topPrest.custo, mediaCustoPrest, moeda)+
+        barCompare('Custo médio/guia', topPrest.custoMedio, mediaCustoPrest/(topPrest.guias||1), moeda)+
+      '</div></div>' : '';
+    return '<div class="rel-section">'+
+      '<div class="rel-note">'+ico('info',13)+' <span>Comparativos do destaque de cada grupo contra a <b>média do próprio grupo</b>. Comparação por especialidade e contra referência de mercado entram quando esses cadastros existirem.</span></div>'+
+      '<div class="rel-grid2">'+cmpMed+cmpPrest+'</div>'+
+    '</div>';
+  }
+
+  // ── Exportações (CSV real do que está agregado) ───────────────────
+  function renderExportacoes(){
+    return '<div class="rel-section">'+
+      '<div class="rel-note">'+ico('info',13)+' <span>Exporte os dados consolidados do período em <b>CSV</b> (abre no Excel). PDF e agendamento entram em fase futura.</span></div>'+
+      '<div class="rel-card"><div class="rel-card-hd">Conjuntos disponíveis para exportação</div>'+
+      '<div class="rel-export-grid">'+
+        exportBtn('alertas','Alertas detectados','bell-ring')+
+        exportBtn('beneficiarios','Beneficiários','users')+
+        exportBtn('medicos','Médicos solicitantes','stethoscope')+
+        exportBtn('prestadores','Prestadores','hospital')+
+        exportBtn('procedimentos','Procedimentos','clipboard-list')+
+        exportBtn('opme','OPME','bone')+
+      '</div></div>'+
+    '</div>';
+  }
+  function exportBtn(tipo,label,icone){
+    return '<button class="rel-export-btn" data-export="'+tipo+'">'+ico(icone,16)+' <span>'+esc(label)+'</span>'+ico('download',14)+'</button>';
+  }
+
+  // Gera e baixa um CSV do conjunto pedido
+  function exportarCSV(tipo){
+    var M=analitico(); var rows=[], head=[];
+    if(tipo==='alertas'){ head=['ID','Data','Guia','Medico','Severidade','Tipo','Score','Valor','Status','Descricao']; rows=M.alertas.map(function(a){return [a.id,a.data,a.guia,a.medico,SEV_LBL[a.sev],TIPO_LBL[a.tipo]||a.tipo,a.score,a.valor,STATUS_LBL[a.status]||a.status,a.desc];}); }
+    else if(tipo==='beneficiarios'){ head=['Nome','Idade','Guias','Procedimentos','OPME','Medicos','Negadas','Custo','Score']; rows=M.benefs.map(function(b){return [b.nome,b.idade||'',b.guias,b.procs,b.opme,b.nMedicos,b.negadas,b.custo,b.score];}); }
+    else if(tipo==='medicos'){ head=['Medico','Guias','Beneficiarios','Prestadores','OPME','TaxaAprov','Custo','Score']; rows=M.medicos.map(function(m){return [m.nome,m.guias,m.nBenefs,m.nPrestadores,m.opme,m.taxaAprov+'%',m.custo,m.score];}); }
+    else if(tipo==='prestadores'){ head=['Prestador','Guias','Internacoes','OPME','Medicos','CustoMedio','CustoTotal','Score']; rows=M.prestadores.map(function(p){return [p.nome,p.guias,p.internacoes,p.opme,p.nMedicos,p.custoMedio,p.custo,p.score];}); }
+    else if(tipo==='procedimentos'){ head=['Codigo','Descricao','Qtd','Negadas','TaxaNeg','CustoTotal','CustoMedio']; rows=M.procs.map(function(p){return [p.cod,p.desc,p.qtd,p.negadas,p.taxaNeg+'%',p.custo,p.custoMedio];}); }
+    else if(tipo==='opme'){ head=['Codigo','Descricao','Qtd','Autorizado','Cobrado','Variacao','Score']; rows=M.opmes.map(function(o){return [o.cod,o.desc,o.qtd,o.autorizado,o.cobrado,o.varPreco+'%',o.score];}); }
+    var csv=[head].concat(rows).map(function(r){return r.map(function(c){var s=(''+c).replace(/"/g,'""');return /[";\n]/.test(s)?'"'+s+'"':s;}).join(';');}).join('\r\n');
+    var blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8;'});
+    var url=URL.createObjectURL(blob); var a=document.createElement('a');
+    a.href=url; a.download='relatorio-'+tipo+'-'+new Date().toISOString().slice(0,10)+'.csv';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
   }
 
   // ── Painel Executivo (KPIs + rankings reais) ──────────────────────
@@ -490,12 +709,17 @@
 
   // Expande/recolhe a explicação do alerta ao clicar na linha
   function bindAlertas(container){
+    // linhas de alerta (expandir explicação)
     container.querySelectorAll('.rel-alert-row').forEach(function(row){
       row.onclick=function(){
         var id=row.getAttribute('data-alert');
         var det=container.querySelector('.rel-alert-detail[data-detail="'+id+'"]');
         if(det) det.style.display = det.style.display==='none'?'table-row':'none';
       };
+    });
+    // botões de exportação CSV
+    container.querySelectorAll('[data-export]').forEach(function(btn){
+      btn.onclick=function(){ exportarCSV(btn.getAttribute('data-export')); };
     });
   }
 
