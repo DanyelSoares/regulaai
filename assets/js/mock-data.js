@@ -436,10 +436,12 @@
     'Junta médica':    ['Z02.7 — Emissão de atestado médico','M54.9 — Dorsalgia não especificada','F41.9 — Transtorno de ansiedade']
   };
   function cidGuia(g){
-    if(!g) return '—';
+    if(!g) return {codigo:'—', descricao:'—'};
     var lista = CID_MAP[g.tipo] || ['Z76.9 — Contato com serviço de saúde não especificado'];
     var h = _mmSeed(String(g.numero||g.tipo||''));
-    return lista[h % lista.length];
+    var raw = lista[h % lista.length];
+    var parts = raw.split('—');
+    return { codigo:(parts[0]||'').trim(), descricao:(parts[1]||parts[0]||'').trim() };
   }
 
   // ── Cálculos de tempo (idade e tempo de contrato) a partir de DD/MM/AAAA ──

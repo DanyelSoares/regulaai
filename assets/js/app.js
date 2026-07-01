@@ -4569,9 +4569,9 @@
             '<dt>Especialidade</dt><dd>'+esc(MOCK.especialidadeDaGuia(g))+'</dd>'+
             '<dt>Natureza</dt><dd>'+esc(g.natureza)+'</dd>'+
             '<dt>Regime</dt><dd>'+esc(g.regime)+'</dd>'+
+            '<dt>CID</dt><dd>'+esc(MOCK.cidGuia(g).codigo)+'</dd>'+
+            '<dt>Indicação clínica / Hipótese diagnóstica</dt><dd>'+esc(MOCK.cidGuia(g).descricao)+'</dd>'+
             '<dt>Origem</dt><dd><span class="badge muted">'+esc(g.origem)+'</span></dd>'+
-            '<dt>CID</dt><dd>'+esc(MOCK.cidGuia(g))+'</dd>'+
-            '<dt>Observações</dt><dd>'+esc(g.observacoes||'—')+'</dd>'+
           '</dl>'+
         '</div>'+
         '<div class="guia-risk-grid guia-risk-grid--row" style="margin-top:14px">'+
@@ -5651,9 +5651,9 @@
               ['Especialidade','Especialidade médica (derivada do tipo da guia)'],
               ['Natureza','Natureza do atendimento (Internação, Ambulatorial)'],
               ['Regime','Regime (Urgência, Eletivo)'],
+              ['CID','Código internacional de doenças (CID-10) associado à solicitação'],
+              ['Indicação clínica / Hipótese diagnóstica','Descrição do diagnóstico correspondente ao CID informado'],
               ['Origem','Canal de origem da solicitação (badge colorido)'],
-              ['CID','Código internacional de doenças associado à solicitação'],
-              ['Observações','Texto livre com observações do solicitante'],
             ]),
           beneficiario:
             '<p>Dados completos do paciente titular da guia:</p>'+
