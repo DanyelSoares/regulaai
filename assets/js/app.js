@@ -6,19 +6,13 @@
     ativo: true,
     pesos: {
       urgencia:         10,
-      uti:              8,
-      opme:             7,
       prazoVencido:     7,
-      aderenciaCrit:    8,
-      aderenciaBaixa:   3,
-      altaComplexidade: 3,
-      oncologia:        5,
       intCirurgica:     6,
       intClinica:       4,
       ambulatorial:     2
     },
-    // Teto = soma simples dos pesos acima = 75 pontos
-    limiares: { baixo: 7, medio: 15, alto: 23 }
+    // Teto = soma simples dos pesos acima = 29 pontos
+    limiares: { baixo: 5, medio: 11, alto: 17 }
   };
 
   var FLUXO_SLA_DEFAULTS = {
@@ -38,7 +32,14 @@
     perfil: localStorage.getItem('regula_perfil') || 'auditor',
     visaoPerfil: '',        // gestor only: ''|'enfermeiro'|'auditor'
     visaoEnfermeiros: [],  // gestor only: []=todas | ['E1','E2'...]
-    riscoConfig: JSON.parse(localStorage.getItem('regula_risco_cfg')||'null') || DEFAULT_RISCO_CFG,
+    riscoConfig: (function(){
+      var saved=JSON.parse(localStorage.getItem('regula_risco_cfg')||'null');
+      // Migração: config antiga (tinha fatores removidos como 'uti'/'oncologia') → usa novo padrão
+      if(saved && saved.pesos && (saved.pesos.uti!=null || saved.pesos.oncologia!=null || saved.pesos.aderenciaCrit!=null)){
+        localStorage.removeItem('regula_risco_cfg'); saved=null;
+      }
+      return saved || DEFAULT_RISCO_CFG;
+    })(),
     etapaInstrucoes: JSON.parse(localStorage.getItem('regula_etapa_instr')||'null') || {},
     vincConfig: JSON.parse(localStorage.getItem('regula_vinc_cfg')||'null') || {},
     customDutRules: JSON.parse(localStorage.getItem('regula_custom_dut')||'null') || [],
@@ -322,22 +323,35 @@
     var lim=State.riscoConfig.limiares;
     var nivel=calcRisco(g);
     var nivelLabel={baixo:'Baixo',medio:'Médio',alto:'Alto',critico:'Crítico'}[nivel]||nivel;
-    var rows=det.itens.map(function(it){
-      return '<tr style="'+(it.aplica?'':'opacity:.45')+'">'+
-        '<td style="padding:7px 10px;font-size:12.5px">'+(it.aplica?ico('check-circle',13):ico('minus',13))+' '+esc(it.label)+'</td>'+
-        '<td style="padding:7px 10px;text-align:right;font-size:12.5px;font-weight:700">'+(it.aplica?'+'+it.peso:'0')+'</td>'+
-      '</tr>';
-    }).join('');
+    var aplicaveis=det.itens.filter(function(it){return it.aplica;});
+    var naoAplic=det.itens.filter(function(it){return !it.aplica;});
+    function linhaAplic(it){
+      return '<tr><td style="padding:7px 10px;font-size:12.5px">'+ico('check-circle',13)+' '+esc(it.label)+'</td>'+
+        '<td style="padding:7px 10px;text-align:right;font-size:12.5px;font-weight:700;color:var(--g-700)">+'+it.peso+'</td></tr>';
+    }
+    function linhaNao(it){
+      return '<tr style="opacity:.55"><td style="padding:6px 10px;font-size:12px">'+ico('minus',12)+' '+esc(it.label)+'</td>'+
+        '<td style="padding:6px 10px;text-align:right;font-size:12px;color:var(--muted)">0</td></tr>';
+    }
+    var rowsAplic = aplicaveis.length
+      ? aplicaveis.map(linhaAplic).join('')
+      : '<tr><td colspan="2" style="padding:10px;color:var(--muted);font-size:12.5px">Nenhum fator de risco presente nesta guia.</td></tr>';
+
     var body=
-      '<p style="font-size:13px;color:var(--muted);margin:0 0 14px">Soma dos fatores presentes nesta guia, conforme pesos configurados em <b>Configurações → Classificação de Risco</b>.</p>'+
-      '<table style="width:100%;border-collapse:collapse;margin-bottom:14px">'+
+      '<p style="font-size:13px;color:var(--muted);margin:0 0 14px">Soma dos fatores <b>presentes</b> nesta guia, conforme pesos configurados em <b>Configurações → Classificação de Risco</b>.</p>'+
+      '<div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--g-700);margin-bottom:4px">Fatores presentes</div>'+
+      '<table style="width:100%;border-collapse:collapse;margin-bottom:8px">'+
         '<thead><tr><th style="text-align:left;padding:0 10px 8px;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)">Fator</th>'+
         '<th style="text-align:right;padding:0 10px 8px;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)">Pontos</th></tr></thead>'+
-        '<tbody>'+rows+
+        '<tbody>'+rowsAplic+
         '<tr style="border-top:1.5px solid var(--g-100)"><td style="padding:9px 10px;font-weight:700">Total</td>'+
         '<td style="padding:9px 10px;text-align:right;font-weight:800;font-size:14px;color:var(--g-700)">'+det.score+'</td></tr>'+
         '</tbody>'+
       '</table>'+
+      (naoAplic.length
+        ? '<details style="margin-bottom:14px"><summary style="cursor:pointer;font-size:11.5px;color:var(--muted);padding:6px 0">Ver fatores não aplicáveis a esta guia ('+naoAplic.length+')</summary>'+
+          '<table style="width:100%;border-collapse:collapse;margin-top:4px"><tbody>'+naoAplic.map(linhaNao).join('')+'</tbody></table></details>'
+        : '')+
       '<div style="background:var(--g-50);border:1px solid var(--g-100);border-radius:8px;padding:10px 14px;font-size:12.5px;color:var(--ink-2);line-height:1.7">'+
         '<b>Faixas:</b> Baixo até '+lim.baixo+' · Médio até '+lim.medio+' · Alto até '+lim.alto+' · Crítico acima de '+lim.alto+'<br>'+
         '<b>Resultado:</b> '+det.score+' pontos → <span class="risk '+nivel+'" style="margin-left:4px">'+nivelLabel+'</span>'+
@@ -384,21 +398,17 @@
       if(aplica) score+=+peso||0;
       itens.push({label:label,aplica:!!aplica,peso:+peso||0});
     }
+    // Fatores ativos do cálculo de risco (UTI, OPME, aderência, alta complexidade
+    // e oncologia foram removidos — cobertos por indicadores/fluxos próprios).
     add('Regime de urgência',          g.regime==='Urgência',                                       p.urgencia);
-    add('Internação em UTI',           g.uti,                                                        p.uti);
-    add('OPME presente',               g.opme,                                                       p.opme);
     add('Prazo de auditoria vencido',  g.prazoVencido,                                               p.prazoVencido);
-    var ad=guiaAderencia(g);
-    add('Aderência crítica (< 50%)',   ad<50,                                                        p.aderenciaCrit);
-    add('Aderência baixa (50–69%)',    ad>=50 && ad<70,                                              p.aderenciaBaixa);
-    add('Fluxo alta complexidade',     g.fluxo.id==='F2'||g.fluxo.id==='F5',                         p.altaComplexidade);
-    add('Fluxo oncologia / imunobiológico', g.fluxo.id==='F8',                                       p.oncologia);
     var _isIntCir=g.tipo==='Cirurgia'||g.tipo==='Cirurgia neuro'||g.tipo==='Cirurgia ortopédica';
     var _isIntClin=g.natureza==='Internação'&&!_isIntCir&&!g.uti;
     var _isAmb=g.natureza==='Ambulatorial'||(!g.uti&&!_isIntCir&&!_isIntClin&&g.diariasTaxas.length===0);
     add('Internação cirúrgica',        _isIntCir,   p.intCirurgica);
     add('Internação clínica',          _isIntClin,  p.intClinica);
     add('Ambulatorial',                _isAmb,      p.ambulatorial);
+    var ad=guiaAderencia(g);
     return {score:score, itens:itens, aderencia:ad};
   }
   function calcRiscoScore(g){ return calcRiscoDetalhe(g).score; }
@@ -3823,11 +3833,7 @@
     // ── Conteúdo: Classificação de Risco ─────────────────────────────
     var FATORES=[
       {key:'urgencia',         label:'Regime de urgência',              desc:'Guia com regime Urgência/Emergência'},
-      {key:'uti',              label:'Internação em UTI',               desc:'Guia inclui diária de UTI'},
-      {key:'opme',             label:'OPME presente',                   desc:'Material especial (órtese, prótese, etc.)'},
       {key:'prazoVencido',     label:'Prazo de auditoria vencido',      desc:'Guia ultrapassou o prazo de análise'},
-      {key:'altaComplexidade', label:'Fluxo alta complexidade',         desc:'Fluxo F2 (Alta Complexidade) ou F5 (Neuro/Buco/Cardio)'},
-      {key:'oncologia',        label:'Fluxo oncologia / imunobiológico',desc:'Fluxo F8 — medicamentos de alto custo'},
       {key:'intCirurgica',     label:'Internação cirúrgica',            desc:'Guia com tipo de cirurgia (geral, neuro ou ortopédica)'},
       {key:'intClinica',       label:'Internação clínica',              desc:'Internação sem procedimento cirúrgico e sem UTI'},
       {key:'ambulatorial',     label:'Ambulatorial',                    desc:'Atendimento ambulatorial sem diárias ou internação'}
@@ -6119,9 +6125,9 @@
           '<br><p><b>Sub-aba: Limiares por nível</b></p>'+
           '<p>Define os limiares de pontuação para cada nível:</p>'+
           manualTable(['Nível','Pontuação'],[
-            ['Baixo','0 até o limiar baixo (padrão: 7)'],
-            ['Médio','Acima do baixo até o limiar médio (padrão: 15)'],
-            ['Alto','Acima do médio até o limiar alto (padrão: 23)'],
+            ['Baixo','0 até o limiar baixo (padrão: 5)'],
+            ['Médio','Acima do baixo até o limiar médio (padrão: 11)'],
+            ['Alto','Acima do médio até o limiar alto (padrão: 17)'],
             ['Crítico','Acima do limiar alto'],
           ])+
           '<p><i>Validação: os limiares devem estar em ordem crescente. O sistema impede salvar se Baixo ≥ Médio ou Médio ≥ Alto.</i></p>'+
