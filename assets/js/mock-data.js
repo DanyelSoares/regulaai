@@ -138,14 +138,14 @@
   ];
 
   var BENEFICIARIOS = [
-    {id:'B1',nome:'ANDRESSA GIMENEZ FERREIRA SOARES',cpf:'123.456.789-00',cartao:'9876543210001',idade:54,plano:'Pleno',contrato:'C-001',cidade:'Maceió'},
-    {id:'B2',nome:'CARLOS ROBERTO OLIVEIRA SANTOS',cpf:'234.567.890-11',cartao:'9876543210002',idade:62,plano:'Master',contrato:'C-002',cidade:'Arapiraca'},
-    {id:'B3',nome:'BEATRIZ SOUZA LIMA FERREIRA',cpf:'345.678.901-22',cartao:'9876543210003',idade:38,plano:'Pleno',contrato:'C-003',cidade:'João Pessoa'},
-    {id:'B4',nome:'DIEGO FIGUEIREDO SOUZA MENDONCA',cpf:'456.789.012-33',cartao:'9876543210004',idade:45,plano:'Essencial',contrato:'C-004',cidade:'Campina Grande'},
-    {id:'B5',nome:'EDUARDA PEREIRA COSTA ALVES',cpf:'567.890.123-44',cartao:'9876543210005',idade:29,plano:'Pleno',contrato:'C-005',cidade:'Natal'},
-    {id:'B6',nome:'FABIO TEIXEIRA ALMEIDA JUNIOR',cpf:'678.901.234-55',cartao:'9876543210006',idade:71,plano:'Master',contrato:'C-006',cidade:'Brasília'},
-    {id:'B7',nome:'GIOVANA RODRIGUES MENDES CAVALCANTE',cpf:'789.012.345-66',cartao:'9876543210007',idade:33,plano:'Essencial',contrato:'C-007',cidade:'Maceió'},
-    {id:'B8',nome:'HEITOR BORGES CARDOSO NETO',cpf:'890.123.456-77',cartao:'9876543210008',idade:58,plano:'Pleno',contrato:'C-008',cidade:'Arapiraca'}
+    {id:'B1',nome:'ANDRESSA GIMENEZ FERREIRA SOARES',cpf:'123.456.789-00',cartao:'9876543210001',carteirinha:'0739961.01',dataInclusao:'12/03/2019',idade:54,plano:'PREMIUM PROMO',contrato:'C-001',cidade:'Maceió'},
+    {id:'B2',nome:'CARLOS ROBERTO OLIVEIRA SANTOS',cpf:'234.567.890-11',cartao:'9876543210002',carteirinha:'0814522.03',dataInclusao:'05/07/2016',idade:62,plano:'PLATINUM PROMO',contrato:'C-002',cidade:'Arapiraca'},
+    {id:'B3',nome:'BEATRIZ SOUZA LIMA FERREIRA',cpf:'345.678.901-22',cartao:'9876543210003',carteirinha:'0655190.02',dataInclusao:'23/11/2020',idade:38,plano:'MOBI',contrato:'C-003',cidade:'João Pessoa'},
+    {id:'B4',nome:'DIEGO FIGUEIREDO SOUZA MENDONCA',cpf:'456.789.012-33',cartao:'9876543210004',carteirinha:'0721438.01',dataInclusao:'18/02/2022',idade:45,plano:'EASY',contrato:'C-004',cidade:'Campina Grande'},
+    {id:'B5',nome:'EDUARDA PEREIRA COSTA ALVES',cpf:'567.890.123-44',cartao:'9876543210005',carteirinha:'0903277.04',dataInclusao:'30/09/2018',idade:29,plano:'PREMIUM PROMO',contrato:'C-005',cidade:'Natal'},
+    {id:'B6',nome:'FABIO TEIXEIRA ALMEIDA JUNIOR',cpf:'678.901.234-55',cartao:'9876543210006',carteirinha:'0587013.02',dataInclusao:'14/06/2015',idade:71,plano:'PLATINUM PROMO',contrato:'C-006',cidade:'Brasília'},
+    {id:'B7',nome:'GIOVANA RODRIGUES MENDES CAVALCANTE',cpf:'789.012.345-66',cartao:'9876543210007',carteirinha:'0668904.01',dataInclusao:'27/04/2021',idade:33,plano:'MOBI',contrato:'C-007',cidade:'Maceió'},
+    {id:'B8',nome:'HEITOR BORGES CARDOSO NETO',cpf:'890.123.456-77',cartao:'9876543210008',carteirinha:'0790115.03',dataInclusao:'09/01/2017',idade:58,plano:'EASY',contrato:'C-008',cidade:'Arapiraca'}
   ];
 
   var USUARIOS = [

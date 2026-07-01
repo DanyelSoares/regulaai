@@ -4555,16 +4555,18 @@
         '</div>'+
         '<div class="g2" style="gap:12px">'+
           '<dl class="kv">'+
-            '<dt>Número</dt><dd>'+esc(g.numero)+'</dd>'+
+            '<dt>Guia</dt><dd>'+esc(g.numero)+'</dd>'+
+            '<dt>Data emissão</dt><dd>'+esc(g.dataEmissao)+'</dd>'+
             '<dt>Beneficiário</dt><dd>'+esc(g.beneficiario.nome)+' ('+g.beneficiario.idade+' anos)</dd>'+
+            '<dt>Carteirinha</dt><dd>'+esc(g.beneficiario.carteirinha||'—')+'</dd>'+
             '<dt>Plano / Contrato</dt><dd>'+esc(g.beneficiario.plano)+' · '+esc(g.beneficiario.contrato)+'</dd>'+
+            '<dt>Data de inclusão</dt><dd>'+esc(g.beneficiario.dataInclusao||'—')+'</dd>'+
             '<dt>Solicitante</dt><dd>'+esc(g.solicitante)+'</dd>'+
             '<dt>Executante</dt><dd>'+esc(g.prestadorExe.nome)+'</dd>'+
             '<dt>Local do atendimento</dt><dd>'+esc(g.prestadorExe.nome)+'</dd>'+
-            '<dt>Natureza / Regime</dt><dd>'+esc(g.natureza)+' · '+esc(g.regime)+'</dd>'+
-            '<dt>Tipo</dt><dd>'+esc(g.tipo)+'</dd>'+
             '<dt>Especialidade</dt><dd>'+esc(MOCK.especialidadeDaGuia(g))+'</dd>'+
-            '<dt>Data emissão</dt><dd>'+esc(g.dataEmissao)+'</dd>'+
+            '<dt>Natureza</dt><dd>'+esc(g.natureza)+'</dd>'+
+            '<dt>Regime</dt><dd>'+esc(g.regime)+'</dd>'+
           '</dl>'+
           '<div class="guia-risk-grid">'+
             RISKS.map(function(r){
@@ -5620,16 +5622,18 @@
               ['DIAS EM AUDITORIA','Número de dias desde a emissão até hoje'],
               ['ADERÊNCIA À DUT','Percentual de aderência às Diretrizes de Utilização — verde (alta), amarelo (moderada), laranja (baixa), vermelho (crítica)'],
               ['FLUXO','Nome do fluxo assistencial vinculado (Ex.: Auditoria Urgência/Emergência)'],
-              ['NÚMERO','Número identificador da guia'],
+              ['GUIA','Número identificador da guia'],
+              ['DATA EMISSÃO','Data de emissão da guia'],
               ['BENEFICIÁRIO','Nome completo e idade do paciente'],
+              ['CARTEIRINHA','Número da carteirinha do beneficiário'],
               ['PLANO / CONTRATO','Nome do plano e código do contrato'],
+              ['DATA DE INCLUSÃO','Data em que o beneficiário entrou no plano'],
               ['SOLICITANTE','Médico que solicitou o procedimento'],
               ['EXECUTANTE','Prestador (estabelecimento) que realizará o procedimento'],
               ['LOCAL DO ATENDIMENTO','Onde o atendimento será realizado (nos dados atuais, igual ao executante)'],
-              ['NATUREZA / REGIME','Natureza (Internação, Ambulatorial) e regime (Urgência, Eletivo)'],
-              ['TIPO','Tipo da guia'],
               ['ESPECIALIDADE','Especialidade médica (derivada do tipo da guia)'],
-              ['DATA EMISSÃO','Data de emissão da guia'],
+              ['NATUREZA','Natureza do atendimento (Internação, Ambulatorial)'],
+              ['REGIME','Regime (Urgência, Eletivo)'],
             ])+
             '<p style="margin-top:12px"><b>Grid de Risco (4 dimensões):</b></p>'+
             manualTable(['Dimensão','Descrição'],[
@@ -5807,16 +5811,18 @@
               ['DIAS EM AUDITORIA','Número de dias desde a emissão da guia até hoje'],
               ['ADERÊNCIA À DUT','Percentual de aderência às Diretrizes de Utilização — exibido em verde (alta), amarelo (moderada), laranja (baixa) ou vermelho (crítica)'],
               ['FLUXO','Nome do fluxo assistencial vinculado à guia (Ex.: Auditoria Urgência/Emergência)'],
-              ['NÚMERO','Número identificador da guia'],
+              ['GUIA','Número identificador da guia'],
+              ['DATA EMISSÃO','Data em que a guia foi emitida'],
               ['BENEFICIÁRIO','Nome completo e idade do paciente'],
+              ['CARTEIRINHA','Número da carteirinha do beneficiário'],
               ['PLANO / CONTRATO','Nome do plano e código do contrato'],
+              ['DATA DE INCLUSÃO','Data em que o beneficiário entrou no plano'],
               ['SOLICITANTE','Médico que solicitou o procedimento'],
               ['EXECUTANTE','Prestador (estabelecimento) que executará o procedimento'],
               ['LOCAL DO ATENDIMENTO','Onde o atendimento será realizado (nos dados atuais, igual ao executante)'],
-              ['NATUREZA / REGIME','Natureza do atendimento (Ex.: Internação) e regime (Ex.: Urgência, Eletivo)'],
-              ['TIPO','Tipo da guia (Ex.: Internação, Ambulatorial)'],
               ['ESPECIALIDADE','Especialidade médica (derivada do tipo da guia)'],
-              ['DATA EMISSÃO','Data em que a guia foi emitida'],
+              ['NATUREZA','Natureza do atendimento (Ex.: Internação, Ambulatorial)'],
+              ['REGIME','Regime (Ex.: Urgência, Eletivo)'],
             ])+
             '<p style="margin-top:12px">Abaixo dos dados cadastrais, um <b>grid de 4 cards</b> exibe os níveis de risco por dimensão:</p>'+
             manualTable(['Dimensão','Descrição'],[
