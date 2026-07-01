@@ -592,13 +592,23 @@
       var opmeMap={};
       (g.matmed||[]).forEach(function(m){ if(!m.opme) return; var k=m.cod; var oc=custoOpme(m);
         if(!opmeMap[k]) opmeMap[k]={cod:m.cod,desc:m.desc,forn:oc.fornecedor,qtd:0,valor:0}; opmeMap[k].qtd++; opmeMap[k].valor+=oc.cobrado; });
+      // Mat/Med não-OPME (medicamentos/materiais)
+      var matMap={};
+      (g.matmed||[]).forEach(function(m){ if(m.opme) return; var k=m.cod;
+        if(!matMap[k]) matMap[k]={cod:m.cod,desc:m.desc,qtd:0,valor:0}; matMap[k].qtd++; matMap[k].valor+=(400 + seed(m.cod)%6000); });
+      // Diárias e taxas
+      var dtMap={};
+      (g.diariasTaxas||[]).forEach(function(d){ var k=d.cod;
+        if(!dtMap[k]) dtMap[k]={cod:d.cod,desc:d.desc,qtd:0,valor:0}; dtMap[k].qtd++; dtMap[k].valor+=(150 + seed(d.cod)%900); });
+      // UTI (quando aplicável) — mesma fórmula do custo total
+      var custoUti = g.uti ? 2400 * (1 + (g.diasAuditoria||1)%4) : 0;
 
-      function tabProc(){
-        var ls=Object.keys(procMap).map(function(k){var p=procMap[k];
+      function tab4(map, colDesc, emptyMsg){
+        var ls=Object.keys(map).map(function(k){var p=map[k];
           return '<tr><td>'+esc(p.cod)+'</td><td>'+esc(p.desc)+'</td><td style="text-align:center">'+p.qtd+'</td><td style="text-align:right">'+moeda(p.valor)+'</td></tr>';
         }).join('');
-        if(!ls) return '<div class="rel-drill-empty">Sem procedimentos nesta guia.</div>';
-        return '<div class="table-wrap"><table class="cfg-table rel-drill-tab"><thead><tr><th>Código</th><th>Procedimento</th><th style="text-align:center">Qtd</th><th style="text-align:right">Valor</th></tr></thead><tbody>'+ls+'</tbody></table></div>';
+        if(!ls) return '<div class="rel-drill-empty">'+esc(emptyMsg)+'</div>';
+        return '<div class="table-wrap"><table class="cfg-table rel-drill-tab"><thead><tr><th>Código</th><th>'+esc(colDesc)+'</th><th style="text-align:center">Qtd</th><th style="text-align:right">Valor</th></tr></thead><tbody>'+ls+'</tbody></table></div>';
       }
       function tabOpme(){
         var ks=Object.keys(opmeMap);
@@ -608,6 +618,14 @@
         }).join('');
         return '<div class="table-wrap"><table class="cfg-table rel-drill-tab"><thead><tr><th>Código</th><th>OPME</th><th>Fornecedor</th><th style="text-align:center">Qtd</th><th style="text-align:right">Valor</th></tr></thead><tbody>'+ls+'</tbody></table></div>';
       }
+
+      // Só mostra as seções Mat/Med, Diárias/Taxas e UTI quando houver valor
+      var temMat=Object.keys(matMap).length, temDt=Object.keys(dtMap).length;
+      var secOpme = '<div class="rel-drill-sec"><div class="rel-drill-sec-hd">'+ico('bone',13)+' OPME</div>'+tabOpme()+'</div>';
+      var secMat = temMat ? '<div class="rel-drill-sec"><div class="rel-drill-sec-hd">'+ico('pill',13)+' Mat/Med</div>'+tab4(matMap,'Material/Medicamento','')+'</div>' : '';
+      var secDt  = temDt  ? '<div class="rel-drill-sec"><div class="rel-drill-sec-hd">'+ico('calendar-days',13)+' Diárias / Taxas</div>'+tab4(dtMap,'Diária/Taxa','')+'</div>' : '';
+      var secUti = custoUti>0 ? '<div class="rel-drill-sec"><div class="rel-drill-sec-hd">'+ico('bed',13)+' UTI</div>'+
+        '<div class="table-wrap"><table class="cfg-table rel-drill-tab"><thead><tr><th>Item</th><th style="text-align:center">Diárias</th><th style="text-align:right">Valor</th></tr></thead><tbody><tr><td>Diária de UTI</td><td style="text-align:center">'+(1+(g.diasAuditoria||1)%4)+'</td><td style="text-align:right">'+moeda(custoUti)+'</td></tr></tbody></table></div></div>' : '';
 
       return '<div class="rel-drill-guia">'+
         '<div class="rel-drill-hd">'+
@@ -620,13 +638,12 @@
           '<div class="rel-drill-linha"><span class="rel-drill-k">Beneficiário</span><span class="rel-drill-v">'+esc((g.beneficiario&&g.beneficiario.nome)||'—')+'</span></div>'+
           '<div class="rel-drill-linha"><span class="rel-drill-k">Custo total</span><span class="rel-drill-v"><b>'+moeda(custoGuia(g))+'</b></span></div>'+
         '</div>'+
-        '<div class="rel-drill-sec"><div class="rel-drill-sec-hd">'+ico('clipboard-list',13)+' Procedimentos</div>'+tabProc()+'</div>'+
-        '<div class="rel-drill-sec"><div class="rel-drill-sec-hd">'+ico('bone',13)+' OPME</div>'+tabOpme()+'</div>'+
+        '<div class="rel-drill-sec"><div class="rel-drill-sec-hd">'+ico('clipboard-list',13)+' Procedimentos</div>'+tab4(procMap,'Procedimento','Sem procedimentos nesta guia.')+'</div>'+
+        secOpme + secMat + secDt + secUti +
       '</div>';
     }).join('');
 
     var body='<div class="rel-drill">'+
-      '<div class="rel-note" style="margin-bottom:12px">'+ico('info',13)+' <span>Guias relacionadas a esta seleção, com procedimentos e serviços (código, descrição, quantidade e valor <b>simulado</b>).</span></div>'+
       (blocos||'<div style="padding:16px;color:var(--muted)">Nenhuma guia.</div>')+
     '</div>';
 
