@@ -4545,7 +4545,9 @@
           '</div>'+
           '<div class="guia-metric">'+
             '<span class="guia-metric-lbl">'+ico('bar-chart-2',11)+' Aderência à DUT</span>'+
-            '<span class="guia-metric-val guia-metric-num adp-'+adCls+'">'+adp+'%</span>'+
+            (g.dut
+              ? '<span class="guia-metric-val guia-metric-num adp-'+adCls+'">'+adp+'%</span>'
+              : '<span class="guia-metric-val guia-metric-na">Não se aplica</span>')+
           '</div>'+
           '<div class="guia-metric">'+
             '<span class="guia-metric-lbl">'+ico('git-branch',11)+' Fluxo</span>'+
@@ -5623,7 +5625,7 @@
             manualTable(['Campo','Descrição'],[
               ['STATUS','Badge com o status atual da guia (Ex.: Em análise, Liberada, Negada)'],
               ['DIAS EM AUDITORIA','Número de dias desde a emissão até hoje'],
-              ['ADERÊNCIA À DUT','Percentual de aderência às Diretrizes de Utilização — verde (alta), amarelo (moderada), laranja (baixa), vermelho (crítica)'],
+              ['ADERÊNCIA À DUT','Percentual de aderência às Diretrizes de Utilização — verde (alta), amarelo (moderada), laranja (baixa), vermelho (crítica). Exibe "Não se aplica" quando nenhum procedimento da guia possui DUT vinculada'],
               ['FLUXO','Nome do fluxo assistencial vinculado (Ex.: Auditoria Urgência/Emergência)'],
             ])+
             '<p style="margin-top:12px"><b>Grid de Risco (4 dimensões, alinhadas sob os indicadores):</b></p>'+
@@ -5822,7 +5824,7 @@
             manualTable(['Campo','Descrição'],[
               ['STATUS','Badge com o status atual da guia (Ex.: Em análise, Liberada, Negada)'],
               ['DIAS EM AUDITORIA','Número de dias desde a emissão da guia até hoje'],
-              ['ADERÊNCIA À DUT','Percentual de aderência às Diretrizes de Utilização — exibido em verde (alta), amarelo (moderada), laranja (baixa) ou vermelho (crítica)'],
+              ['ADERÊNCIA À DUT','Percentual de aderência às Diretrizes de Utilização — verde (alta), amarelo (moderada), laranja (baixa) ou vermelho (crítica). Exibe "Não se aplica" quando a guia não possui procedimento com DUT vinculada'],
               ['FLUXO','Nome do fluxo assistencial vinculado à guia (Ex.: Auditoria Urgência/Emergência)'],
               ['GUIA','Número identificador da guia'],
               ['DATA EMISSÃO','Data em que a guia foi emitida'],

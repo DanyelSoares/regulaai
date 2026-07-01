@@ -713,6 +713,7 @@ body.sidebar-collapsed .modal-backdrop{left:66px}
 .guia-metric-num{font-size:24px;font-weight:800;color:var(--g-700);line-height:1}
 .guia-metric-num.vencido{color:var(--danger)}
 .adp-alta{color:var(--g-600)!important}.adp-mod{color:#8a6300!important}.adp-baixa{color:#a85700!important}.adp-crit{color:var(--danger)!important}
+.guia-metric-na{font-size:13px;font-weight:600;color:var(--g-400);font-style:italic}
 /* Guia — grid de riscos */
 .guia-risk-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-content:start}
 /* Riscos em linha única, alinhados sob Status/Dias/Aderência/Fluxo */
