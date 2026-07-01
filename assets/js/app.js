@@ -4521,6 +4521,21 @@
     var pb=m.querySelector('#abrirPar'); if(pb) pb.onclick=function(){ openParecer(g) };
   }
 
+  // Mini-tabela compacta para o Resumo (Procedimentos / Pacotes)
+  function resumoMiniTabela(titulo, icone, arr){
+    arr = arr || [];
+    var head='<div class="resumo-mini-hd">'+ico(icone,13)+' '+esc(titulo)+' <span class="resumo-mini-cnt">'+arr.length+'</span></div>';
+    if(!arr.length){
+      return '<div class="resumo-mini"><div class="panel" style="padding:0">'+head+'<div class="resumo-mini-empty">Sem itens vinculados</div></div></div>';
+    }
+    var linhas = arr.map(function(p){
+      var fl=''; if(p.dut) fl+='<span class="badge warn">DUT</span> '; if(p.opme) fl+='<span class="badge warn">OPME</span> '; if(p.obrig) fl+='<span class="badge">Obrig.</span>';
+      return '<tr><td class="rm-cod">'+esc(p.cod)+'</td><td>'+esc(p.desc)+'</td><td class="rm-fl">'+fl+'</td></tr>';
+    }).join('');
+    return '<div class="resumo-mini"><div class="panel" style="padding:0">'+head+
+      '<div class="resumo-mini-tbl"><table><thead><tr><th>Código</th><th>Descrição</th><th>Flags</th></tr></thead><tbody>'+linhas+'</tbody></table></div></div></div>';
+  }
+
   function renderGuiaTab(g, ia, t){
     var d=el('div');
     if(t==='resumo'){
@@ -4586,6 +4601,10 @@
               '</div>'+
             '</div>';
           }).join('')+
+        '</div>'+
+        '<div class="g2" style="gap:12px;margin-top:14px">'+
+          resumoMiniTabela('Procedimentos','stethoscope',g.procedimentos)+
+          resumoMiniTabela('Pacotes','package',g.pacotes)+
         '</div>'+
         '<div class="ai-warn" style="margin-top:14px">'+ia.avisoLegal+'</div>';
     } else if(t==='etapas'){
@@ -5654,7 +5673,8 @@
               ['CID','Código internacional de doenças (CID-10) associado à solicitação'],
               ['Indicação clínica / Hipótese diagnóstica','Descrição do diagnóstico correspondente ao CID informado'],
               ['Origem','Canal de origem da solicitação (badge colorido)'],
-            ]),
+            ])+
+            '<p style="margin-top:12px"><b>Procedimentos e Pacotes (mini-tabelas):</b> abaixo dos cards de risco, duas tabelas resumidas lado a lado importam os itens das abas <b>Procedimentos</b> e <b>Pacotes</b> — código, descrição e flags (DUT, OPME, Obrigatório) — para consulta rápida sem sair do Resumo.</p>',
           prestador:
             '<p>Dois painéis lado a lado com os prestadores envolvidos na guia:</p>'+
             manualTable(['Painel','Descrição'],[
