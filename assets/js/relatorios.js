@@ -336,7 +336,7 @@
       {h:'Custo',num:true,f:function(r){return moeda(r.custo);}},
       {h:'Score',num:true,f:function(r){return scoreBadge(r.score);}}
     ],bs);
-    return '<div class="rel-section">'+notaSim()+kpis+tab+'</div>';
+    return '<div class="rel-section">'+kpis+tab+'</div>';
   }
 
   // ── Médicos Solicitantes ──────────────────────────────────────────
