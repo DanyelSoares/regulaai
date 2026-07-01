@@ -4554,6 +4554,8 @@
         '</div>'+
         '<div class="g2" style="gap:12px;margin-top:14px">'+
           '<dl class="kv">'+
+            '<dt>Guia</dt><dd>'+esc(g.numero)+'</dd>'+
+            '<dt>Data emissão</dt><dd>'+esc(g.dataEmissao)+'</dd>'+
             '<dt>Beneficiário</dt><dd>'+esc(g.beneficiario.nome)+'</dd>'+
             '<dt>Data de nascimento</dt><dd>'+esc(g.beneficiario.dataNascimento||'—')+(MOCK.calcIdade(g.beneficiario.dataNascimento)!=null?' <span style="color:var(--muted)">('+MOCK.calcIdade(g.beneficiario.dataNascimento)+' anos)</span>':'')+'</dd>'+
             '<dt>Carteirinha</dt><dd>'+esc(g.beneficiario.carteirinha||'—')+'</dd>'+
@@ -4561,8 +4563,6 @@
             '<dt>Data de inclusão</dt><dd>'+esc(g.beneficiario.dataInclusao||'—')+(MOCK.anosContrato(g.beneficiario.dataInclusao)!=null?' <span style="color:var(--muted)">('+MOCK.anosContrato(g.beneficiario.dataInclusao)+' '+(MOCK.anosContrato(g.beneficiario.dataInclusao)===1?'ano':'anos')+' de contrato)</span>':'')+'</dd>'+
           '</dl>'+
           '<dl class="kv">'+
-            '<dt>Guia</dt><dd>'+esc(g.numero)+'</dd>'+
-            '<dt>Data emissão</dt><dd>'+esc(g.dataEmissao)+'</dd>'+
             '<dt>Solicitante</dt><dd>'+esc(g.solicitante)+'</dd>'+
             '<dt>Executante</dt><dd>'+esc(g.prestadorExe.nome)+'</dd>'+
             '<dt>Local do atendimento</dt><dd>'+esc(g.prestadorExe.nome)+'</dd>'+
@@ -5633,18 +5633,18 @@
               ['Documental','Aderência à DUT e documentação apresentada'],
               ['Contratual','Cobertura contratual do plano para o procedimento'],
             ])+
-            '<p style="margin-top:12px"><b>Coluna esquerda — Beneficiário:</b></p>'+
+            '<p style="margin-top:12px"><b>Coluna esquerda — Guia e Beneficiário:</b></p>'+
             manualTable(['Campo','Descrição'],[
+              ['Guia','Número identificador da guia'],
+              ['Data emissão','Data de emissão da guia'],
               ['Beneficiário','Nome completo do paciente'],
               ['Data de nascimento','Data de nascimento (consultada no cadastro); a idade é calculada automaticamente e exibida entre parênteses'],
               ['Carteirinha','Número da carteirinha do beneficiário'],
               ['Plano / Contrato','Nome do plano e código do contrato'],
               ['Data de inclusão','Data em que o beneficiário entrou no plano; o tempo de contrato (anos) é calculado automaticamente e exibido entre parênteses'],
             ])+
-            '<p style="margin-top:12px"><b>Coluna direita — Guia / Solicitação:</b></p>'+
+            '<p style="margin-top:12px"><b>Coluna direita — Solicitação:</b></p>'+
             manualTable(['Campo','Descrição'],[
-              ['Guia','Número identificador da guia'],
-              ['Data emissão','Data de emissão da guia'],
               ['Solicitante','Médico que solicitou o procedimento'],
               ['Executante','Prestador (estabelecimento) que realizará o procedimento'],
               ['Local do atendimento','Onde o atendimento será realizado (nos dados atuais, igual ao executante)'],
