@@ -4440,7 +4440,6 @@
     var TABS_DEF=[
       {id:'resumo',        label:'Resumo',           ico:'layout-dashboard', grp:0},
       {id:'beneficiario',  label:'Beneficiário',      ico:'user',             grp:0},
-      {id:'prestador',     label:'Prestador',         ico:'building-2',       grp:0},
       {id:'solicitacao',   label:'Solicitação',       ico:'file-text',        grp:0},
       {id:'etapas',        label:'Etapas',            ico:'git-branch',       grp:1},
       {id:'procedimentos', label:'Procedimentos',     ico:'stethoscope',      grp:1},
@@ -4563,6 +4562,7 @@
             '<dt>Prestador executante</dt><dd>'+esc(g.prestadorExe.nome)+'</dd>'+
             '<dt>Natureza / Regime</dt><dd>'+esc(g.natureza)+' · '+esc(g.regime)+'</dd>'+
             '<dt>Tipo</dt><dd>'+esc(g.tipo)+'</dd>'+
+            '<dt>Especialidade</dt><dd>'+esc(MOCK.especialidadeDaGuia(g))+'</dd>'+
             '<dt>Data emissão</dt><dd>'+esc(g.dataEmissao)+'</dd>'+
           '</dl>'+
           '<div class="guia-risk-grid">'+
@@ -4580,8 +4580,6 @@
         '<div class="ai-warn" style="margin-top:14px">'+ia.avisoLegal+'</div>';
     } else if(t==='beneficiario'){
       d.innerHTML='<dl class="kv"><dt>Nome</dt><dd>'+esc(g.beneficiario.nome)+'</dd><dt>CPF</dt><dd>'+mask(g.beneficiario.cpf)+'</dd><dt>Cartão</dt><dd>'+mask(g.beneficiario.cartao)+'</dd><dt>Idade</dt><dd>'+g.beneficiario.idade+'</dd><dt>Plano</dt><dd>'+esc(g.beneficiario.plano)+'</dd><dt>Contrato</dt><dd>'+esc(g.beneficiario.contrato)+'</dd></dl>';
-    } else if(t==='prestador'){
-      d.innerHTML='<div class="g2"><div class="panel"><h3>Solicitante</h3><dl class="kv"><dt>Nome</dt><dd>'+esc(g.prestadorSol.nome)+'</dd><dt>Tipo</dt><dd>'+esc(g.prestadorSol.tipo)+'</dd></dl></div><div class="panel"><h3>Executante</h3><dl class="kv"><dt>Nome</dt><dd>'+esc(g.prestadorExe.nome)+'</dd><dt>Tipo</dt><dd>'+esc(g.prestadorExe.tipo)+'</dd></dl></div></div>';
     } else if(t==='solicitacao'){
       d.innerHTML='<dl class="kv"><dt>Tipo</dt><dd>'+esc(g.tipo)+'</dd><dt>Natureza</dt><dd>'+esc(g.natureza)+'</dd><dt>Regime</dt><dd>'+esc(g.regime)+'</dd><dt>Origem</dt><dd><span class="badge muted">'+esc(g.origem)+'</span></dd><dt>Observações</dt><dd>'+esc(g.observacoes)+'</dd></dl>';
     } else if(t==='etapas'){
@@ -5585,7 +5583,6 @@
           {id:'cabecalho',    label:'Cabeçalho'},
           {id:'resumo',       label:'Resumo'},
           {id:'beneficiario', label:'Beneficiário'},
-          {id:'prestador',    label:'Prestador'},
           {id:'solicitacao',  label:'Solicitação'},
           {id:'etapas',       label:'Etapas'},
           {id:'procedimentos',label:'Procedimentos'},
@@ -5793,7 +5790,7 @@
 
         guiasContent=
           manualBox('Como abrir',
-            '<p>Clique em qualquer linha da tabela de guias para abrir o modal de detalhes. O modal exibe todas as informações organizadas em <b>16 abas</b>. Selecione uma aba abaixo para ver a explicação detalhada.</p>')+
+            '<p>Clique em qualquer linha da tabela de guias para abrir o modal de detalhes. O modal exibe todas as informações organizadas em <b>abas</b>. Selecione uma aba abaixo para ver a explicação detalhada.</p>')+
           '<div class="manual-det-wrap">'+
             detTabBar+
             '<div class="manual-det-body">'+
@@ -5833,13 +5830,6 @@
               ['Idade','Idade calculada automaticamente'],
               ['Plano','Nome comercial do plano de saúde'],
               ['Contrato','Código do contrato empresarial ou individual'],
-            ]))+
-
-          manualBox('Aba: Prestador',
-            '<p>Exibe dois painéis lado a lado com os dados dos prestadores envolvidos:</p>'+
-            manualTable(['Painel','Campos'],[
-              ['Prestador Solicitante','Nome e tipo do prestador que abriu a solicitação de autorização'],
-              ['Prestador Executante','Nome e tipo do prestador que realizará o procedimento ou internação'],
             ]))+
 
           manualBox('Aba: Solicitação',
@@ -6453,7 +6443,7 @@
       ' - Usuários: cadastro de usuários (Nome, CPF, E-mail, Login, Senha, Perfil, Situação Ativo/Inativo).\n'+
       ' - Assistente IA: provedor (Gemini/Claude/OpenAI) + chave de API + modelo.\n'+
       'PARAMETRIZAÇÃO: selecione um fluxo e use as abas internas. Os PESOS do cálculo de aderência ficam na aba "Pesos IA" (ícone de cérebro) DENTRO do fluxo selecionado — lá há um campo de peso (0 a 10) para cada critério: Documental, DUT, Procedimentos, Pacotes, Mat/Med, Diárias/Taxas, Contratual/Histórico. As Regras DUT ficam na aba "Regras DUT". As vinculações (Procedimentos, Pacotes, Mat/Med, Diárias/Taxas) têm suas próprias abas, cada uma com campo de peso por item.\n'+
-      'GUIAS: a relação tem filtros rápidos e o "Filtro aprofundado"; clicar numa guia abre o modal de detalhes com 16 abas (Cabeçalho, Resumo, Beneficiário, Prestador, Solicitação, Etapas, Procedimentos, Pacotes, Mat/Med, Diárias/Taxas, OPME, Anexos, Críticas, Parecer Técnico, Parecer Operadora, Histórico, Logs). No rodapé do modal: botão "Reprocessar" e "Parecer da Operadora".\n'+
+      'GUIAS: a relação tem filtros rápidos e o "Filtro aprofundado"; clicar numa guia abre o modal de detalhes com abas (Cabeçalho, Resumo, Beneficiário, Solicitação, Etapas, Procedimentos, Pacotes, Mat/Med, Diárias/Taxas, OPME, Anexos, Críticas, Parecer Técnico, Parecer Operadora, Obs. Impressas, Obs. Não Impressas, Histórico, Logs). O Resumo mostra beneficiário, prestador solicitante/executante, especialidade e os riscos. No rodapé do modal: botão "Reprocessar" e "Parecer da Operadora".\n'+
       'DASHBOARD: KPIs clicáveis; o KPI "Etapa com gargalo" abre o "Ranking de Gargalos".\n';
 
     // Modo "Uso do sistema" — manual + dúvidas de usabilidade
