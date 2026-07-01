@@ -377,6 +377,9 @@ body.pl--blurring .pl--blur-target{filter:blur(5px)}
 .rel-scroll::-webkit-scrollbar-thumb:hover{background:var(--g-400)}
 .rel-sticky-head thead th{position:sticky;top:0;z-index:1;background:#fff;box-shadow:0 1px 0 var(--g-100)}
 .rel-kpi-info{display:inline-flex;color:var(--muted);cursor:help;vertical-align:middle}
+.rel-kpi-click{cursor:pointer;transition:box-shadow .15s,transform .12s,border-color .15s}
+.rel-kpi-click:hover{border-color:#fca5a5;box-shadow:0 4px 14px rgba(220,38,38,.14);transform:translateY(-1px)}
+.rel-kpi-click .rel-kpi-s{color:#dc2626;font-weight:600;display:inline-flex;align-items:center;gap:3px}
 .rel-grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 @media(max-width:880px){.rel-grid2{grid-template-columns:1fr}}
 .rel-dist-row{display:grid;grid-template-columns:120px 1fr 48px;align-items:center;gap:10px;padding:5px 0}

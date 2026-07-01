@@ -29,12 +29,15 @@
   function el(tag,attrs,html){ var c=ctxRef(); return c.el(tag,attrs,html); }
 
   // Card de KPI simples (placeholder com valor)
-  function kpiCard(titulo, valor, sub, cor, tip){
+  function kpiCard(titulo, valor, sub, cor, tip, gotoTab){
     var infoIco = tip ? ' <span class="rel-kpi-info" title="'+esc(tip)+'">'+ico('info',11)+'</span>' : '';
-    return '<div class="rel-kpi"'+(tip?' title="'+esc(tip)+'"':'')+'>'+
+    var clsClick = gotoTab ? ' rel-kpi-click' : '';
+    var attrGoto = gotoTab ? ' data-goto="'+gotoTab+'"' : '';
+    var subHtml = sub ? '<div class="rel-kpi-s">'+sub+(gotoTab?' '+ico('arrow-right',11):'')+'</div>' : '';
+    return '<div class="rel-kpi'+clsClick+'"'+attrGoto+(tip?' title="'+esc(tip)+'"':'')+'>'+
       '<div class="rel-kpi-v" style="color:'+(cor||'var(--g-700)')+'">'+valor+'</div>'+
       '<div class="rel-kpi-t">'+esc(titulo)+infoIco+'</div>'+
-      (sub?'<div class="rel-kpi-s">'+sub+'</div>':'')+
+      subHtml+
     '</div>';
   }
 
@@ -499,8 +502,8 @@
         'Soma dos custos estimados de todos os procedimentos, OPME, diárias e UTI das guias do período. Valores simulados.')+
       kpiCard('Custo potencialmente evitável',moedaK(M.evitavel),'~18% do risco alto/crítico','#b45309',
         'Estimativa: 18% do custo das guias classificadas como risco ALTO ou CRÍTICO — parcela sujeita a glosa, negativa ou revisão que poderia ser evitada. É uma estimativa demonstrativa (percentual parametrizável).')+
-      kpiCard('Alertas ativos',M.alertas.length,'ver aba Alertas','#dc2626',
-        'Quantidade de alertas gerados pelo motor de detecção (concentração, recorrência, alto custo, inconsistência de OPME). Detalhes na aba Alertas Inteligentes.')+
+      kpiCard('Alertas ativos',M.alertas.length,'Alertas Inteligentes','#dc2626',
+        'Quantidade de alertas gerados pelo motor de detecção (concentração, recorrência, alto custo, inconsistência de OPME). Clique para abrir a aba Alertas Inteligentes.','alertas')+
     '</div>';
 
     var riscoKpis='<div class="rel-kpi-grid">'+
@@ -704,27 +707,34 @@
     content.innerHTML = renderTab(_state.tab);
     wrap.appendChild(content);
 
+    // Troca de aba reutilizável (usada pelos botões de aba e pelos KPIs clicáveis)
+    function irParaAba(id){
+      var btn=tabBar.querySelector('.rel-tab[data-rtab="'+id+'"]'); if(!btn) return;
+      _state.tab=id;
+      tabBar.querySelectorAll('.rel-tab').forEach(function(x){x.classList.toggle('active',x===btn);});
+      content.innerHTML=renderTab(id);
+      if(ctx.lcIcons) ctx.lcIcons();
+      bindConteudo(content, irParaAba);
+      if(window.innerWidth<=640) btn.scrollIntoView({inline:'center',block:'nearest'});
+    }
+
     setTimeout(function(){
       tabBar.querySelectorAll('.rel-tab').forEach(function(b){
-        b.onclick=function(){
-          _state.tab=b.getAttribute('data-rtab');
-          tabBar.querySelectorAll('.rel-tab').forEach(function(x){x.classList.toggle('active',x===b);});
-          content.innerHTML=renderTab(_state.tab);
-          if(ctx.lcIcons) ctx.lcIcons();
-          bindAlertas(content);
-          // rola a aba ativa para a vista (mobile)
-          if(window.innerWidth<=640) b.scrollIntoView({inline:'center',block:'nearest'});
-        };
+        b.onclick=function(){ irParaAba(b.getAttribute('data-rtab')); };
       });
-      bindAlertas(content);
+      bindConteudo(content, irParaAba);
       if(ctx.lcIcons) ctx.lcIcons();
     },0);
 
     return wrap;
   }
 
-  // Expande/recolhe a explicação do alerta ao clicar na linha
-  function bindAlertas(container){
+  // Vincula interações do conteúdo (alertas, exportação e KPIs clicáveis)
+  function bindConteudo(container, irParaAba){
+    // KPIs clicáveis que navegam para outra aba
+    container.querySelectorAll('.rel-kpi-click[data-goto]').forEach(function(k){
+      k.onclick=function(){ if(irParaAba) irParaAba(k.getAttribute('data-goto')); };
+    });
     // linhas de alerta (expandir explicação)
     container.querySelectorAll('.rel-alert-row').forEach(function(row){
       row.onclick=function(){
