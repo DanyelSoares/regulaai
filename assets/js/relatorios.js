@@ -236,7 +236,8 @@
       return '<tr>'+cols.map(function(c){ var v=c.f(r,i); return '<td'+(c.num?' style="text-align:right"':'')+'>'+v+'</td>'; }).join('')+'</tr>';
     }).join('');
     var hd='<div class="rel-card-hd">'+esc(titulo)+(opts.count?'<span class="rel-card-count">'+rows.length+'</span>':'')+'</div>';
-    var wrapCls = opts.scroll ? 'table-wrap rel-scroll' : 'table-wrap';
+    // No modo scroll usamos só .rel-scroll (sem .table-wrap, que tem overflow:hidden e cortaria a barra)
+    var wrapCls = opts.scroll ? 'rel-scroll' : 'table-wrap';
     return '<div class="rel-card">'+hd+
       '<div class="'+wrapCls+'"><table class="cfg-table'+(opts.scroll?' rel-sticky-head':'')+'"><thead><tr>'+head+'</tr></thead><tbody>'+body+'</tbody></table></div></div>';
   }
