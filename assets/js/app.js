@@ -4439,7 +4439,6 @@
     var ia=g._cache;
     var TABS_DEF=[
       {id:'resumo',        label:'Resumo',           ico:'layout-dashboard', grp:0},
-      {id:'beneficiario',  label:'Beneficiário',      ico:'user',             grp:0},
       {id:'etapas',        label:'Etapas',            ico:'git-branch',       grp:1},
       {id:'procedimentos', label:'Procedimentos',     ico:'stethoscope',      grp:1},
       {id:'pacotes',       label:'Pacotes',           ico:'package',          grp:1},
@@ -4561,6 +4560,7 @@
             '<dt>Beneficiário</dt><dd>'+esc(g.beneficiario.nome)+'</dd>'+
             '<dt>Data de nascimento</dt><dd>'+esc(g.beneficiario.dataNascimento||'—')+(MOCK.calcIdade(g.beneficiario.dataNascimento)!=null?' <span style="color:var(--muted)">('+MOCK.calcIdade(g.beneficiario.dataNascimento)+' anos)</span>':'')+'</dd>'+
             '<dt>Carteirinha</dt><dd>'+esc(g.beneficiario.carteirinha||'—')+'</dd>'+
+            '<dt>CPF</dt><dd>'+mask(g.beneficiario.cpf)+'</dd>'+
             '<dt>Plano / Contrato</dt><dd>'+esc(g.beneficiario.plano)+' · '+esc(g.beneficiario.contrato)+'</dd>'+
             '<dt>Data de inclusão</dt><dd>'+esc(g.beneficiario.dataInclusao||'—')+(MOCK.anosContrato(g.beneficiario.dataInclusao)!=null?' <span style="color:var(--muted)">('+MOCK.anosContrato(g.beneficiario.dataInclusao)+' '+(MOCK.anosContrato(g.beneficiario.dataInclusao)===1?'ano':'anos')+' de contrato)</span>':'')+'</dd>'+
           '</dl>'+
@@ -4588,8 +4588,6 @@
           }).join('')+
         '</div>'+
         '<div class="ai-warn" style="margin-top:14px">'+ia.avisoLegal+'</div>';
-    } else if(t==='beneficiario'){
-      d.innerHTML='<dl class="kv"><dt>Nome</dt><dd>'+esc(g.beneficiario.nome)+'</dd><dt>CPF</dt><dd>'+mask(g.beneficiario.cpf)+'</dd><dt>Cartão</dt><dd>'+mask(g.beneficiario.cartao)+'</dd><dt>Data de nascimento</dt><dd>'+esc(g.beneficiario.dataNascimento||'—')+(MOCK.calcIdade(g.beneficiario.dataNascimento)!=null?' ('+MOCK.calcIdade(g.beneficiario.dataNascimento)+' anos)':'')+'</dd><dt>Plano</dt><dd>'+esc(g.beneficiario.plano)+'</dd><dt>Contrato</dt><dd>'+esc(g.beneficiario.contrato)+'</dd></dl>';
     } else if(t==='etapas'){
       var tl=el('div',{class:'timeline'});
       g.etapas.forEach(function(e){
@@ -5590,7 +5588,6 @@
         var DET_TABS=[
           {id:'cabecalho',    label:'Cabeçalho'},
           {id:'resumo',       label:'Resumo'},
-          {id:'beneficiario', label:'Beneficiário'},
           {id:'etapas',       label:'Etapas'},
           {id:'procedimentos',label:'Procedimentos'},
           {id:'pacotes',      label:'Pacotes'},
@@ -5642,6 +5639,7 @@
               ['Beneficiário','Nome completo do paciente'],
               ['Data de nascimento','Data de nascimento (consultada no cadastro); a idade é calculada automaticamente e exibida entre parênteses'],
               ['Carteirinha','Número da carteirinha do beneficiário'],
+              ['CPF','CPF do beneficiário, parcialmente mascarado (privacidade de dados)'],
               ['Plano / Contrato','Nome do plano e código do contrato'],
               ['Data de inclusão','Data em que o beneficiário entrou no plano; o tempo de contrato (anos) é calculado automaticamente e exibido entre parênteses'],
             ])+
@@ -5656,16 +5654,6 @@
               ['CID','Código internacional de doenças (CID-10) associado à solicitação'],
               ['Indicação clínica / Hipótese diagnóstica','Descrição do diagnóstico correspondente ao CID informado'],
               ['Origem','Canal de origem da solicitação (badge colorido)'],
-            ]),
-          beneficiario:
-            '<p>Dados completos do paciente titular da guia:</p>'+
-            manualTable(['Campo','Descrição'],[
-              ['Nome','Nome completo do beneficiário'],
-              ['CPF','CPF parcialmente mascarado (privacidade de dados)'],
-              ['Cartão','Número do cartão do plano mascarado'],
-              ['Idade','Calculada automaticamente pela data de nascimento'],
-              ['Plano','Nome comercial do plano de saúde'],
-              ['Contrato','Código do contrato empresarial ou individual'],
             ]),
           prestador:
             '<p>Dois painéis lado a lado com os prestadores envolvidos na guia:</p>'+
@@ -5846,17 +5834,6 @@
               ['Assistencial','Risco assistencial com base na complexidade do procedimento e oncologia'],
               ['Documental','Risco baseado na aderência à DUT e documentação apresentada'],
               ['Contratual','Risco de cobertura contratual do plano para o procedimento solicitado'],
-            ]))+
-
-          manualBox('Aba: Beneficiário',
-            '<p>Dados completos do paciente titular da guia:</p>'+
-            manualTable(['Campo','Descrição'],[
-              ['Nome','Nome completo do beneficiário'],
-              ['CPF','CPF parcialmente mascarado (privacidade)'],
-              ['Cartão','Número do cartão do plano mascarado'],
-              ['Idade','Idade calculada automaticamente'],
-              ['Plano','Nome comercial do plano de saúde'],
-              ['Contrato','Código do contrato empresarial ou individual'],
             ]))+
 
           manualBox('Aba: Etapas',
