@@ -4558,7 +4558,7 @@
             '<dt>Número</dt><dd>'+esc(g.numero)+'</dd>'+
             '<dt>Beneficiário</dt><dd>'+esc(g.beneficiario.nome)+' ('+g.beneficiario.idade+' anos)</dd>'+
             '<dt>Plano / Contrato</dt><dd>'+esc(g.beneficiario.plano)+' · '+esc(g.beneficiario.contrato)+'</dd>'+
-            '<dt>Solicitante</dt><dd>'+esc(g.prestadorSol.nome)+'</dd>'+
+            '<dt>Solicitante</dt><dd>'+esc(g.solicitante)+'</dd>'+
             '<dt>Executante</dt><dd>'+esc(g.prestadorExe.nome)+'</dd>'+
             '<dt>Local do atendimento</dt><dd>'+esc(g.prestadorExe.nome)+'</dd>'+
             '<dt>Natureza / Regime</dt><dd>'+esc(g.natureza)+' · '+esc(g.regime)+'</dd>'+
@@ -5623,8 +5623,8 @@
               ['NÚMERO','Número identificador da guia'],
               ['BENEFICIÁRIO','Nome completo e idade do paciente'],
               ['PLANO / CONTRATO','Nome do plano e código do contrato'],
-              ['SOLICITANTE','Prestador que abriu a solicitação'],
-              ['EXECUTANTE','Prestador que realizará o procedimento'],
+              ['SOLICITANTE','Médico que solicitou o procedimento'],
+              ['EXECUTANTE','Prestador (estabelecimento) que realizará o procedimento'],
               ['LOCAL DO ATENDIMENTO','Onde o atendimento será realizado (nos dados atuais, igual ao executante)'],
               ['NATUREZA / REGIME','Natureza (Internação, Ambulatorial) e regime (Urgência, Eletivo)'],
               ['TIPO','Tipo da guia'],
@@ -5810,8 +5810,8 @@
               ['NÚMERO','Número identificador da guia'],
               ['BENEFICIÁRIO','Nome completo e idade do paciente'],
               ['PLANO / CONTRATO','Nome do plano e código do contrato'],
-              ['SOLICITANTE','Nome do prestador que solicitou a autorização'],
-              ['EXECUTANTE','Nome do prestador que executará o procedimento'],
+              ['SOLICITANTE','Médico que solicitou o procedimento'],
+              ['EXECUTANTE','Prestador (estabelecimento) que executará o procedimento'],
               ['LOCAL DO ATENDIMENTO','Onde o atendimento será realizado (nos dados atuais, igual ao executante)'],
               ['NATUREZA / REGIME','Natureza do atendimento (Ex.: Internação) e regime (Ex.: Urgência, Eletivo)'],
               ['TIPO','Tipo da guia (Ex.: Internação, Ambulatorial)'],
