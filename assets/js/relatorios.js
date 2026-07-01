@@ -493,8 +493,8 @@
     var maxRisco=Math.max(rc.baixo,rc.medio,rc.alto,rc.critico,1);
 
     var kpis='<div class="rel-kpi-grid">'+
-      kpiCard('Guias em análise',M.totalGuias,'entraram no período','var(--g-700)',
-        'Total de guias que entraram para análise no período selecionado.')+
+      kpiCard('Guias recebidas',M.totalGuias,'entraram para análise','var(--g-700)',
+        'Volume de guias que entraram para análise no período selecionado — independentemente do status atual (em análise, liberada, negada etc.).')+
       kpiCard('Custo total analisado',moedaK(M.totalCusto),'estimado','#0f766e',
         'Soma dos custos estimados de todos os procedimentos, OPME, diárias e UTI das guias do período. Valores simulados.')+
       kpiCard('Custo potencialmente evitável',moedaK(M.evitavel),'~18% do risco alto/crítico','#b45309',
