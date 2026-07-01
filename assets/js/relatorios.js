@@ -81,10 +81,15 @@
   var FORNECEDORES = ['MedSupply Distribuidora','OrtoTech Brasil','CardioMed Implantes','BioImplante Ltda','Global OPME','Nordeste Materiais Médicos','Prime Health Supply'];
   function fornecedorOpme(cod){ return FORNECEDORES[seed('forn'+cod) % FORNECEDORES.length]; }
 
+  // Custo do Mat/Med não-OPME (mesma base do detalhamento, p/ o total bater)
+  function custoMatmed(m){
+    if(window.MOCK&&window.MOCK.matmedDetalhe){ var x=window.MOCK.matmedDetalhe(m); return x.totalAutorizado||0; }
+    return 400 + seed(m.cod)%6000;
+  }
   function custoGuia(g){
     var total = 0;
     (g.procedimentos||[]).forEach(function(p){ total += custoProc(p); });
-    (g.matmed||[]).forEach(function(m){ total += m.opme ? custoOpme(m).cobrado : (400 + seed(m.cod)%6000); });
+    (g.matmed||[]).forEach(function(m){ total += m.opme ? custoOpme(m).cobrado : custoMatmed(m); });
     (g.diariasTaxas||[]).forEach(function(d){ total += 150 + seed(d.cod)%900; });
     if(g.uti) total += 2400 * (1 + (g.diasAuditoria||1)%4); // UTI pesa
     return total;
@@ -592,10 +597,11 @@
       var opmeMap={};
       (g.matmed||[]).forEach(function(m){ if(!m.opme) return; var k=m.cod; var oc=custoOpme(m);
         if(!opmeMap[k]) opmeMap[k]={cod:m.cod,desc:m.desc,forn:oc.fornecedor,qtd:0,valor:0}; opmeMap[k].qtd++; opmeMap[k].valor+=oc.cobrado; });
-      // Mat/Med não-OPME (medicamentos/materiais)
-      var matMap={};
-      (g.matmed||[]).forEach(function(m){ if(m.opme) return; var k=m.cod;
-        if(!matMap[k]) matMap[k]={cod:m.cod,desc:m.desc,qtd:0,valor:0}; matMap[k].qtd++; matMap[k].valor+=(400 + seed(m.cod)%6000); });
+      // Mat/Med não-OPME (medicamentos/materiais) — com detalhamento Solus
+      var matItens=[];
+      (g.matmed||[]).forEach(function(m){ if(m.opme) return;
+        matItens.push((window.MOCK&&window.MOCK.matmedDetalhe)?window.MOCK.matmedDetalhe(m):{cod:m.cod,desc:m.desc,qtdeSolic:1,unidade:'—',via:'—',vlrTabela:0,vlrAutorizado:0,totalAutorizado:(400+seed(m.cod)%6000),fornecido:'—'});
+      });
       // Diárias e taxas
       var dtMap={};
       (g.diariasTaxas||[]).forEach(function(d){ var k=d.cod;
@@ -620,9 +626,23 @@
       }
 
       // Só mostra as seções Mat/Med, Diárias/Taxas e UTI quando houver valor
-      var temMat=Object.keys(matMap).length, temDt=Object.keys(dtMap).length;
+      var temMat=matItens.length, temDt=Object.keys(dtMap).length;
+      function tabMat(){
+        var ls=matItens.map(function(x){
+          return '<tr><td>'+esc(x.cod)+'</td><td>'+esc(x.desc)+'</td><td style="text-align:center">'+(x.qtdeSolic||1)+'</td>'+
+            '<td>'+esc(x.unidade||'—')+'</td><td>'+esc(x.via||'—')+'</td>'+
+            '<td style="text-align:right">'+moeda(x.vlrTabela||0)+'</td>'+
+            '<td style="text-align:right">'+moeda(x.vlrAutorizado||0)+'</td>'+
+            '<td style="text-align:right">'+moeda(x.totalAutorizado||0)+'</td>'+
+            '<td style="font-size:11px">'+esc(x.fornecido||'—')+'</td></tr>';
+        }).join('');
+        return '<div class="table-wrap"><table class="cfg-table rel-drill-tab"><thead><tr>'+
+          '<th>Código</th><th>Material/Medicamento</th><th style="text-align:center">Qtd Sol.</th><th>Unidade</th><th>Via</th>'+
+          '<th style="text-align:right">Vlr tabela</th><th style="text-align:right">Vlr autorizado</th><th style="text-align:right">Total</th><th>Fornecido?</th>'+
+          '</tr></thead><tbody>'+ls+'</tbody></table></div>';
+      }
       var secOpme = '<div class="rel-drill-sec"><div class="rel-drill-sec-hd">'+ico('bone',13)+' OPME</div>'+tabOpme()+'</div>';
-      var secMat = temMat ? '<div class="rel-drill-sec"><div class="rel-drill-sec-hd">'+ico('pill',13)+' Mat/Med</div>'+tab4(matMap,'Material/Medicamento','')+'</div>' : '';
+      var secMat = temMat ? '<div class="rel-drill-sec"><div class="rel-drill-sec-hd">'+ico('pill',13)+' Mat/Med</div>'+tabMat()+'</div>' : '';
       var secDt  = temDt  ? '<div class="rel-drill-sec"><div class="rel-drill-sec-hd">'+ico('calendar-days',13)+' Diárias / Taxas</div>'+tab4(dtMap,'Diária/Taxa','')+'</div>' : '';
       var secUti = custoUti>0 ? '<div class="rel-drill-sec"><div class="rel-drill-sec-hd">'+ico('bed',13)+' UTI</div>'+
         '<div class="table-wrap"><table class="cfg-table rel-drill-tab"><thead><tr><th>Item</th><th style="text-align:center">Diárias</th><th style="text-align:right">Valor</th></tr></thead><tbody><tr><td>Diária de UTI</td><td style="text-align:center">'+(1+(g.diasAuditoria||1)%4)+'</td><td style="text-align:right">'+moeda(custoUti)+'</td></tr></tbody></table></div></div>' : '';

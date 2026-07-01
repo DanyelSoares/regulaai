@@ -297,6 +297,45 @@
 
   var CATEGORIAS_ANEXO = ['Guia TISS','Laudo médico','Exame complementar','Relatório clínico','Histórico/Prontuário','Justificativa técnica','DUT/Evidência','OPME — orçamento','Termo de consentimento','Outros'];
 
+  // ── Detalhamento de item Mat/Med (campos ricos, estilo Solus) ──
+  // Gerado de forma determinística por código do item, para ser estável entre renders.
+  function _mmSeed(s){ var h=0; s=''+s; for(var i=0;i<s.length;i++){ h=(h*31+s.charCodeAt(i))|0; } return Math.abs(h); }
+  var _VIAS = ['Oral','Endovenosa','Subcutânea','Intramuscular','Tópica','Inalatória'];
+  var _UNID = ['MG - Miligrama','ML - Mililitro','UN - Unidade','FR - Frasco','AMP - Ampola'];
+  var _FREQ = [1,2,3,4,6];
+  function matmedDetalhe(m){
+    var s = _mmSeed(m.cod);
+    var opme = !!m.opme;
+    var vlrTabela = +((opme ? 3500 + s%38000 : 40 + s%1800) + (s%100)/100).toFixed(4);
+    var glosaPct = (s%5===0) ? (5 + s%20)/100 : 0;         // ~alguns itens têm glosa parcial
+    var vlrAutorizado = +(vlrTabela * (1 - glosaPct)).toFixed(4);
+    var doses = opme ? 1 : (1 + s%6);
+    var qtdeSolic = opme ? 1 : (1 + s%3);
+    var unidade = opme ? 'UN - Unidade' : _UNID[s % _UNID.length];
+    var via = opme ? '—' : _VIAS[s % _VIAS.length];
+    var freq = opme ? 0 : _FREQ[s % _FREQ.length];
+    var fornecidoPrestador = (s%3!==0);
+    return {
+      cod:m.cod, desc:m.desc, opme:opme,
+      qtde:qtdeSolic, qtdeSolic:qtdeSolic,
+      calculo:'Automático',
+      fornecido: fornecidoPrestador ? 'Não, fornecido pelo prestador' : 'Sim, pela operadora',
+      statusReq:'—', qtdConsolidada:0, qtdDevolvida:0,
+      vlrTabela:vlrTabela, vlrAutorizado:vlrAutorizado,
+      totalSolicitado:+(vlrTabela*qtdeSolic).toFixed(2),
+      totalAutorizado:+(vlrAutorizado*qtdeSolic).toFixed(2),
+      totalSolicitadoDoses:+(vlrTabela*doses).toFixed(2),
+      totalAutorizadoDoses:+(vlrAutorizado*doses).toFixed(2),
+      coParticipacao:0, prevUso:'22/05/2026',
+      descEspecifica: opme ? 'OPME GENÉRICA' : (m.desc||''),
+      dosesSolic:doses, doses:doses,
+      unidade:unidade, unidadeTNUMM:'—',
+      via:via, frequencia:freq, ordenacao:1,
+      kit:'Produto avulso', alteradoKit:'Produto avulso',
+      processoJuridico:'—', pacotePTU:'Não'
+    };
+  }
+
   global.MOCK = {
     FLUXOS:FLUXOS, IA_POR_ETAPA:IA_POR_ETAPA,
     PROCEDIMENTOS:PROCEDIMENTOS, PACOTES:PACOTES, MATMED:MATMED, DIARIAS_TAXAS:DIARIAS_TAXAS,
@@ -304,6 +343,6 @@
     PRESTADORES:PRESTADORES, BENEFICIARIOS:BENEFICIARIOS, USUARIOS:USUARIOS,
     STATUS:STATUS, ORIGENS:ORIGENS, CATEGORIAS_ANEXO:CATEGORIAS_ANEXO,
     MOTIVOS_COMP:MOTIVOS_COMP, MOTIVOS_REPR:MOTIVOS_REPR, MOTIVOS_RESS:MOTIVOS_RESS,
-    LOGS:LOGS, buildGuias: hydrate
+    LOGS:LOGS, buildGuias: hydrate, matmedDetalhe: matmedDetalhe
   };
 })(window);

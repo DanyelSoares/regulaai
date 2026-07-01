@@ -4569,8 +4569,12 @@
         tl.appendChild(el('div',{class:'tl-item '+cls},'<h4>'+e.ordem+'. '+esc(e.nome)+'</h4><div class="meta">Responsável: '+esc(e.responsavel)+' · Prazo: '+e.prazoHoras+'h · Status: <b>'+esc(e.status)+'</b>'+(e.inicio?' · Início: '+esc(e.inicio):'')+(e.fim?' · Fim: '+esc(e.fim):'')+'</div>'));
       });
       d.appendChild(tl);
-    } else if(t==='procedimentos'||t==='pacotes'||t==='matmed'||t==='diariastaxas'){
-      var arr = t==='procedimentos'?g.procedimentos:(t==='pacotes'?g.pacotes:(t==='matmed'?g.matmed:g.diariasTaxas));
+    } else if(t==='matmed'){
+      // Aba Mat/Med com detalhamento completo (campos estilo Solus) por item
+      if(!g.matmed.length) d.innerHTML='<div class="empty"><div class="ico">'+icoLg('folder-open')+'</div>Sem Mat/Med vinculado a esta guia.</div>';
+      else d.appendChild(renderMatMedDetalhado(g.matmed));
+    } else if(t==='procedimentos'||t==='pacotes'||t==='diariastaxas'){
+      var arr = t==='procedimentos'?g.procedimentos:(t==='pacotes'?g.pacotes:g.diariasTaxas);
       if(!arr.length) d.innerHTML='<div class="empty"><div class="ico">'+icoLg('folder-open')+'</div>Sem itens vinculados. <br><span style="font-size:12px">Sem parametrização cadastrada.</span></div>';
       else {
         var tt=el('table'); tt.innerHTML='<thead><tr><th>Código</th><th>Descrição</th><th>Peso</th><th>Flags</th></tr></thead>';
@@ -4638,6 +4642,65 @@
     var map={'Guia TISS':'info','Laudo médico':'','Exame complementar':'info','Relatório clínico':'muted','Histórico/Prontuário':'muted','Justificativa técnica':'warn','DUT/Evidência':'warn','OPME — orçamento':'warn','Termo de consentimento':'dark','Outros':'muted'};
     return map[cat]||'muted';
   }
+  // Renderiza Mat/Med com o detalhamento completo (campos estilo Solus), um card por item
+  function renderMatMedDetalhado(itens){
+    var wrap=el('div',{class:'mm-det-wrap'});
+    function money(v){ return 'R$ '+(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+    function money4(v){ return (v||0).toLocaleString('pt-BR',{minimumFractionDigits:4,maximumFractionDigits:4}); }
+    function campo(k,v){ return '<div class="mm-det-field"><span class="mm-det-k">'+esc(k)+'</span><span class="mm-det-v">'+v+'</span></div>'; }
+    itens.forEach(function(m){
+      var x = MOCK.matmedDetalhe(m);
+      var card=el('div',{class:'mm-det-card'});
+      card.innerHTML=
+        '<div class="mm-det-hd">'+
+          '<span class="mm-det-cod">'+esc(x.cod)+'</span>'+
+          '<span class="mm-det-desc">'+esc(x.desc)+'</span>'+
+          (x.opme?'<span class="badge warn" style="font-size:10px">OPME</span>':'<span class="badge" style="font-size:10px">Medicação/Material</span>')+
+        '</div>'+
+        // Grupo: quantidades e cálculo
+        '<div class="mm-det-grp">'+
+          campo('Qtde',x.qtde.toLocaleString('pt-BR',{minimumFractionDigits:4}))+
+          campo('Qtde Solic.',x.qtdeSolic.toLocaleString('pt-BR',{minimumFractionDigits:4}))+
+          campo('Cálculo',esc(x.calculo))+
+          campo('Fornecido?',esc(x.fornecido))+
+          campo('Status da requisição',esc(x.statusReq))+
+          campo('Qtd consolidado',x.qtdConsolidada)+
+          campo('Qtd devolvido',x.qtdDevolvida)+
+        '</div>'+
+        // Grupo: valores
+        '<div class="mm-det-grp">'+
+          campo('Vlr Un. tabela (R$)',money4(x.vlrTabela))+
+          campo('Vlr Un. autorizado (R$)',money4(x.vlrAutorizado))+
+          campo('Total solicitado (R$)',money(x.totalSolicitado))+
+          campo('Total autorizado (R$)',money(x.totalAutorizado))+
+          campo('Total solic./doses (R$)',money(x.totalSolicitadoDoses))+
+          campo('Total autoriz./doses (R$)',money(x.totalAutorizadoDoses))+
+          campo('Co-part. (R$)',money(x.coParticipacao))+
+        '</div>'+
+        // Grupo: doses / unidade / uso
+        '<div class="mm-det-grp">'+
+          campo('Prev. de uso',esc(x.prevUso))+
+          campo('Descrição específica',esc(x.descEspecifica))+
+          campo('Núm. doses Soli.',x.dosesSolic.toLocaleString('pt-BR',{minimumFractionDigits:4}))+
+          campo('Núm. doses',x.doses.toLocaleString('pt-BR',{minimumFractionDigits:4}))+
+          campo('Unidade',esc(x.unidade))+
+          campo('Unidade TNUMM',esc(x.unidadeTNUMM))+
+        '</div>'+
+        // Grupo: administração
+        '<div class="mm-det-grp">'+
+          campo('Via (Med.)',esc(x.via))+
+          campo('Frequência',x.frequencia||'—')+
+          campo('Ordenação',x.ordenacao)+
+          campo('Dados do Kit de produtos',esc(x.kit))+
+          campo('Alterado em relação ao KIT?',esc(x.alteradoKit))+
+          campo('Processo Jurídico',esc(x.processoJuridico))+
+          campo('Pacote PTU',esc(x.pacotePTU))+
+        '</div>';
+      wrap.appendChild(card);
+    });
+    return wrap;
+  }
+
   function renderAnexos(g){
     var wrap=el('div');
     if(!g.anexosLista.length){ wrap.innerHTML='<div class="empty"><div class="ico">'+icoLg('paperclip')+'</div>Sem anexos enviados pelo prestador.</div>'; return wrap; }
