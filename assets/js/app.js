@@ -4440,8 +4440,6 @@
     var TABS_DEF=[
       {id:'resumo',        label:'Resumo',           ico:'layout-dashboard', grp:0},
       {id:'etapas',        label:'Etapas',            ico:'git-branch',       grp:1},
-      {id:'procedimentos', label:'Procedimentos',     ico:'stethoscope',      grp:1},
-      {id:'pacotes',       label:'Pacotes',           ico:'package',          grp:1},
       {id:'matmed',        label:'Mat/Med',           ico:'pill',             grp:1},
       {id:'diariastaxas',  label:'Diárias/Taxas',     ico:'calendar-days',    grp:1},
       {id:'opme',          label:'OPME',              ico:'wrench',           grp:1},
@@ -4530,10 +4528,10 @@
     }
     var linhas = arr.map(function(p){
       var fl=''; if(p.dut) fl+='<span class="badge warn">DUT</span> '; if(p.opme) fl+='<span class="badge warn">OPME</span> '; if(p.obrig) fl+='<span class="badge">Obrig.</span>';
-      return '<tr><td class="rm-cod">'+esc(p.cod)+'</td><td>'+esc(p.desc)+'</td><td class="rm-fl">'+fl+'</td></tr>';
+      return '<tr><td class="rm-cod">'+esc(p.cod)+'</td><td>'+esc(p.desc)+'</td><td class="rm-peso">'+(p.peso!=null?p.peso:'—')+'</td><td class="rm-fl">'+fl+'</td></tr>';
     }).join('');
     return '<div class="resumo-mini"><div class="panel" style="padding:0">'+head+
-      '<div class="resumo-mini-tbl"><table><thead><tr><th>Código</th><th>Descrição</th><th>Flags</th></tr></thead><tbody>'+linhas+'</tbody></table></div></div></div>';
+      '<div class="resumo-mini-tbl"><table><thead><tr><th>Código</th><th>Descrição</th><th>Peso</th><th>Flags</th></tr></thead><tbody>'+linhas+'</tbody></table></div></div></div>';
   }
 
   function renderGuiaTab(g, ia, t){
@@ -4619,8 +4617,8 @@
       var _mm=(g.matmed||[]).filter(function(m){return !m.opme;});
       if(!_mm.length) d.innerHTML='<div class="empty"><div class="ico">'+icoLg('folder-open')+'</div>Sem medicamentos/materiais nesta guia.<br><span style="font-size:12px">Itens OPME aparecem na aba OPME.</span></div>';
       else d.appendChild(renderMatMedDetalhado(_mm));
-    } else if(t==='procedimentos'||t==='pacotes'||t==='diariastaxas'){
-      var arr = t==='procedimentos'?g.procedimentos:(t==='pacotes'?g.pacotes:g.diariasTaxas);
+    } else if(t==='diariastaxas'){
+      var arr = g.diariasTaxas;
       if(!arr.length) d.innerHTML='<div class="empty"><div class="ico">'+icoLg('folder-open')+'</div>Sem itens vinculados. <br><span style="font-size:12px">Sem parametrização cadastrada.</span></div>';
       else {
         var tt=el('table'); tt.innerHTML='<thead><tr><th>Código</th><th>Descrição</th><th>Peso</th><th>Flags</th></tr></thead>';
@@ -5608,8 +5606,6 @@
           {id:'cabecalho',    label:'Cabeçalho'},
           {id:'resumo',       label:'Resumo'},
           {id:'etapas',       label:'Etapas'},
-          {id:'procedimentos',label:'Procedimentos'},
-          {id:'pacotes',      label:'Pacotes'},
           {id:'matmed',       label:'Mat/Med'},
           {id:'diarias',      label:'Diárias/Taxas'},
           {id:'opme',         label:'OPME'},
@@ -5698,27 +5694,6 @@
               ['Pendente (cinza)','Etapa ainda não iniciada'],
             ])+
             '<p style="margin-top:10px">Cada etapa exibe: número de ordem, nome, responsável (Auditor / Enfermeiro), prazo em horas e datas de execução.</p>',
-          procedimentos:
-            '<p>Procedimentos vinculados à guia com suas configurações:</p>'+
-            manualTable(['Coluna','Descrição'],[
-              ['Código','Código TUSS ou interno do procedimento'],
-              ['Descrição','Nome do procedimento'],
-              ['Peso','Pontuação no cálculo de risco (0–10)'],
-              ['Obrig.','Se o procedimento é obrigatório para o fluxo'],
-              ['OPME','Se o item é classificado como OPME'],
-              ['IA','Instrução personalizada para análise pela IA'],
-              ['Status','Ativo ou Inativo na parametrização'],
-            ]),
-          pacotes:
-            '<p>Pacotes assistenciais vinculados à guia:</p>'+
-            manualTable(['Coluna','Descrição'],[
-              ['Código','Código do pacote'],
-              ['Descrição','Nome do pacote'],
-              ['Peso','Pontuação no cálculo de risco (0–10)'],
-              ['Obrig.','Se o pacote é obrigatório no fluxo'],
-              ['IA','Instrução para a IA analisar este pacote'],
-              ['Status','Ativo / Inativo'],
-            ]),
           matmed:
             '<p>Materiais e medicamentos vinculados à guia:</p>'+
             manualTable(['Coluna','Descrição'],[
@@ -5865,27 +5840,13 @@
             ])+
             '<p>Cada etapa exibe: número de ordem, nome, responsável (Auditor / Enfermeiro), prazo em horas e datas de execução.</p>')+
 
-          manualBox('Aba: Procedimentos',
-            '<p>Lista todos os procedimentos vinculados à guia com suas configurações:</p>'+
+          manualBox('Procedimentos e Pacotes (no Resumo)',
+            '<p>As antigas abas <b>Procedimentos</b> e <b>Pacotes</b> foram incorporadas ao <b>Resumo</b>, exibidas em duas mini-tabelas lado a lado abaixo dos cards de risco:</p>'+
             manualTable(['Coluna','Descrição'],[
-              ['Código','Código TUSS ou interno do procedimento'],
-              ['Descrição','Nome do procedimento'],
+              ['Código','Código TUSS ou interno do procedimento / pacote'],
+              ['Descrição','Nome do procedimento ou pacote'],
               ['Peso','Pontuação do item no cálculo de risco (0–10)'],
-              ['Obrig.','Indica se o procedimento é obrigatório para o fluxo'],
-              ['OPME','Indica se o item é classificado como OPME'],
-              ['IA','Instrução personalizada para análise pela IA'],
-              ['Status','Ativo ou Inativo na parametrização'],
-            ]))+
-
-          manualBox('Aba: Pacotes',
-            '<p>Lista os pacotes assistenciais vinculados à guia. Estrutura idêntica à aba Procedimentos, sem a coluna OPME.</p>'+
-            manualTable(['Coluna','Descrição'],[
-              ['Código','Código do pacote'],
-              ['Descrição','Nome do pacote'],
-              ['Peso','Pontuação no cálculo de risco (0–10)'],
-              ['Obrig.','Se o pacote é obrigatório no fluxo'],
-              ['IA','Instrução para a IA analisar este pacote'],
-              ['Status','Ativo / Inativo'],
+              ['Flags','Marcadores do item: DUT, OPME e/ou Obrigatório'],
             ]))+
 
           manualBox('Aba: Mat/Med',
