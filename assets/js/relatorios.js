@@ -88,7 +88,7 @@
     if(_cache) return _cache;
     var guias = (ctxRef().guias) || [];
     var porBenef={}, porMedico={}, porPrestador={}, porProc={}, porOpme={};
-    var totalCusto=0, custoNegadas=0, qtdNegadas=0, qtdEmAberto=0;
+    var totalCusto=0, custoNegado=0, qtdNegadas=0, servNegados=0, qtdEmAberto=0;
     var riscoCnt={baixo:0,medio:0,alto:0,critico:0};
     var ABERTO={'Em análise':1,'Aguardando complemento':1,'Em junta médica':1,'Cotação de OPME':1};
 
@@ -96,7 +96,11 @@
       var c = custoGuia(g);
       totalCusto += c;
       // Métricas REAIS (sem estimativa arbitrária):
-      if(g.status==='Negada'){ qtdNegadas++; custoNegadas+=c; } // economia concreta já realizada
+      if(g.status==='Negada'){
+        qtdNegadas++; custoNegado+=c;
+        // serviços não autorizados = procedimentos + OPME da guia negada
+        servNegados += (g.procedimentos||[]).length + (g.matmed||[]).filter(function(m){return m.opme;}).length;
+      }
       if(ABERTO[g.status]) qtdEmAberto++;                        // ainda sujeitas a decisão
       if(riscoCnt[g.risco]!=null) riscoCnt[g.risco]++;
 
@@ -170,7 +174,7 @@
 
     _cache = {
       guias:guias, totalGuias:guias.length, totalCusto:totalCusto,
-      custoNegadas:custoNegadas, qtdNegadas:qtdNegadas, qtdEmAberto:qtdEmAberto, riscoCnt:riscoCnt,
+      custoNegado:custoNegado, qtdNegadas:qtdNegadas, servNegados:servNegados, qtdEmAberto:qtdEmAberto, riscoCnt:riscoCnt,
       benefs:benefs, medicos:medicos, prestadores:prestadores, procs:procs, opmes:opmes
     };
     _cache.alertas = detectarAlertas(_cache);
@@ -504,8 +508,8 @@
         'Volume de guias que entraram para análise no período selecionado — independentemente do status atual (em análise, liberada, negada etc.).')+
       kpiCard('Custo total analisado',moedaK(M.totalCusto),'estimado','#0f766e',
         'Soma dos custos estimados de todos os procedimentos, OPME, diárias e UTI das guias do período. Valores simulados.')+
-      kpiCard('Custo de guias negadas',moedaK(M.custoNegadas),M.qtdNegadas+' guia(s) negada(s)','#15803d',
-        'Soma do custo estimado das guias efetivamente NEGADAS no período — economia concreta já realizada pela auditoria. Baseado no status real das guias (não é estimativa por percentual).')+
+      kpiCard('Custo de serviços negados',moedaK(M.custoNegado),M.servNegados+' serviço(s) não autorizado(s)','#15803d',
+        'Soma do custo estimado dos serviços (procedimentos e OPME) não autorizados no período — economia concreta já realizada pela auditoria. A contagem reflete os serviços das guias com status Negada.')+
       kpiCard('Alertas ativos',M.alertas.length,'Alertas Inteligentes','#dc2626',
         'Quantidade de alertas gerados pelo motor de detecção (concentração, recorrência, alto custo, inconsistência de OPME). Clique para abrir a aba Alertas Inteligentes.','alertas')+
     '</div>';
@@ -565,8 +569,8 @@
         'Soma dos custos estimados de todas as guias do período. Valores simulados.')+
       kpiCard('Custo médio por guia',moeda(custoMedioGuia),'no período','#0f766e')+
       kpiCard('Maior custo (guia)',moeda(maiorCusto.custo),'guia '+maiorCusto.numero,'#b91c1c')+
-      kpiCard('Custo de guias negadas',moedaK(M.custoNegadas),M.qtdNegadas+' negada(s)','#15803d',
-        'Custo estimado das guias efetivamente negadas — economia concreta já realizada (baseado no status real).')+
+      kpiCard('Custo de serviços negados',moedaK(M.custoNegado),M.servNegados+' serviço(s) não autorizado(s)','#15803d',
+        'Custo estimado dos serviços (procedimentos e OPME) não autorizados — economia concreta já realizada (reflete os serviços das guias com status Negada).')+
     '</div>';
 
     var rkGuias=rankTable('Guias de maior custo',[
