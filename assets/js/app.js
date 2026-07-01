@@ -4600,7 +4600,7 @@
             '</div>';
           }).join('')+
         '</div>'+
-        '<div class="g2" style="gap:12px;margin-top:14px">'+
+        '<div class="resumo-mini-stack">'+
           resumoMiniTabela('Procedimentos','stethoscope',g.procedimentos)+
           resumoMiniTabela('Pacotes','package',g.pacotes)+
         '</div>'+
@@ -5670,7 +5670,7 @@
               ['Indicação clínica / Hipótese diagnóstica','Descrição do diagnóstico correspondente ao CID informado'],
               ['Origem','Canal de origem da solicitação (badge colorido)'],
             ])+
-            '<p style="margin-top:12px"><b>Procedimentos e Pacotes (mini-tabelas):</b> abaixo dos cards de risco, duas tabelas resumidas lado a lado importam os itens das abas <b>Procedimentos</b> e <b>Pacotes</b> — código, descrição e flags (DUT, OPME, Obrigatório) — para consulta rápida sem sair do Resumo.</p>',
+            '<p style="margin-top:12px"><b>Procedimentos e Pacotes (mini-tabelas):</b> abaixo dos cards de risco, duas tabelas resumidas empilhadas (uma abaixo da outra, em largura cheia) importam os itens das antigas abas <b>Procedimentos</b> e <b>Pacotes</b> — código, descrição, peso e flags (DUT, OPME, Obrigatório) — para consulta rápida sem sair do Resumo.</p>',
           prestador:
             '<p>Dois painéis lado a lado com os prestadores envolvidos na guia:</p>'+
             manualTable(['Painel','Descrição'],[
