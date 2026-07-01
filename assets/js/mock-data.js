@@ -336,6 +336,54 @@
     };
   }
 
+  // ── Detalhamento de item OPME (campos próprios, estilo Solus) ──
+  var FORNECEDORES_OPME = ['MedSupply Distribuidora','OrtoTech Brasil','CardioMed Implantes','BioImplante Ltda','Global OPME','Nordeste Materiais Médicos','Prime Health Supply'];
+  var _MARCAS = ['Biomet','Zimmer','Stryker','Medtronic','Johnson & Johnson','Smith & Nephew','B.Braun'];
+  var _FABRIC = ['Zimmer Biomet Holdings','Stryker Corporation','Medtronic PLC','DePuy Synthes','Smith+Nephew Ltda'];
+  var _LABANVISA = ['Zimmer Biomet Brasil Ltda','Stryker do Brasil','Medtronic Comercial Ltda','Johnson & Johnson do Brasil'];
+  function opmeDetalhe(m){
+    var s=_mmSeed('opme'+m.cod);
+    var qtde = 1 + (s%2);
+    var vlrTabela = +(3500 + s%38000 + (s%100)/100).toFixed(4);
+    // cotado/pago pode variar sobre a tabela; autorizado pode ser < cotado (glosa)
+    var cotado = +(vlrTabela * (0.9 + (s%25)/100)).toFixed(4);
+    var glosa = (s%4===0) ? (5+s%15)/100 : 0;
+    var autorizado = +(cotado * (1-glosa)).toFixed(4);
+    var consignado = (s%2===0) ? 'Sim' : 'Não';
+    var fornSolic = FORNECEDORES_OPME[s % FORNECEDORES_OPME.length];
+    var fornAutoriz = (s%5===0) ? FORNECEDORES_OPME[(s+2) % FORNECEDORES_OPME.length] : fornSolic; // às vezes muda
+    var anvisa = '1' + String(10000000000 + (s%89999999999));
+    var codSolic = 'OPM-' + (10000 + s%89999);
+    var codAutoriz = (fornAutoriz===fornSolic) ? codSolic : ('OPM-' + (10000 + (s+7)%89999));
+    var interc = (s%6===0) ? 'PTU' : '—';
+    var entregue = (s%3===0) ? 'Sim' : 'Não';
+    return {
+      cod:m.cod, desc:m.desc,
+      codReferencia:'REF-'+(1000+s%9000),
+      anvisa:anvisa,
+      marca:_MARCAS[s % _MARCAS.length],
+      qtde:qtde, calculo:'Automático',
+      fornecido: (s%3!==0)?'Não, fornecido pelo prestador':'Sim, pela operadora',
+      statusReq:'—', qtdConsolidada:0, qtdDevolvida:0,
+      consignado:consignado,
+      fornecedorUtilizado:fornSolic,
+      // Solicitado
+      fornecedorSolic:fornSolic, codSolic:codSolic, anvisaSolic:anvisa, produtoSolic:m.desc, marcaSolic:_MARCAS[s % _MARCAS.length],
+      vlrUnSolic:vlrTabela, vlrTotalSolic:+(vlrTabela*qtde).toFixed(2),
+      vlrUnCotado:cotado, vlrTotalCotado:+(cotado*qtde).toFixed(2),
+      vlrUnTabela:vlrTabela,
+      // Autorizado
+      qtdeAuto:qtde, fornecedorAutoriz:fornAutoriz, codAutoriz:codAutoriz, produtoAutoriz:m.desc,
+      vlrUnAutorizado:autorizado, vlrTotalAutorizado:+(autorizado*qtde).toFixed(2),
+      // Outros
+      ordemPrioridade:1, observacoesEspec:'—',
+      produtoInterPTU:interc, produtoEntregue:entregue, dataEntrega:(entregue==='Sim'?'25/05/2026':'—'),
+      processoJuridico:'—', codProdutoFabricante:'FAB-'+(1000+s%9000), fabricante:_FABRIC[s % _FABRIC.length],
+      labAnvisa:_LABANVISA[s % _LABANVISA.length],
+      negociado:(s%2===0)?'Sim':'Não'
+    };
+  }
+
   // ── Observações do ERP por guia (impressas + não impressas) ──
   // Determinístico por número da guia. Simula o que viria do Solus.
   var _OPERADORES = ['YASMINFREITAS','CARLOSMENDES','ANAPAULA','ROBERTASILVA','MARCOSLIMA'];
@@ -381,6 +429,6 @@
     PRESTADORES:PRESTADORES, BENEFICIARIOS:BENEFICIARIOS, USUARIOS:USUARIOS,
     STATUS:STATUS, ORIGENS:ORIGENS, CATEGORIAS_ANEXO:CATEGORIAS_ANEXO,
     MOTIVOS_COMP:MOTIVOS_COMP, MOTIVOS_REPR:MOTIVOS_REPR, MOTIVOS_RESS:MOTIVOS_RESS,
-    LOGS:LOGS, buildGuias: hydrate, matmedDetalhe: matmedDetalhe, observacoesGuia: observacoesGuia
+    LOGS:LOGS, buildGuias: hydrate, matmedDetalhe: matmedDetalhe, opmeDetalhe: opmeDetalhe, observacoesGuia: observacoesGuia
   };
 })(window);

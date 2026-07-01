@@ -4605,7 +4605,7 @@
     } else if(t==='opme'){
       var opmes=g.matmed.filter(function(m){return m.opme});
       if(!opmes.length) d.innerHTML='<div class="empty"><div class="ico">'+icoLg('activity')+'</div>Sem OPME nesta guia.</div>';
-      else d.appendChild(renderMatMedDetalhado(opmes)); // mesmo detalhamento completo (campos Solus)
+      else d.appendChild(renderOpmeDetalhado(opmes)); // campos próprios de OPME (ANVISA, fornecedor, solic/autoriz)
     } else if(t==='anexos'){
       d.appendChild(renderAnexos(g));
     } else if(t==='historico'){
@@ -4716,6 +4716,78 @@
           campo('Alterado em relação ao KIT?',esc(x.alteradoKit))+
           campo('Processo Jurídico',esc(x.processoJuridico))+
           campo('Pacote PTU',esc(x.pacotePTU))+
+        '</div>';
+      wrap.appendChild(card);
+    });
+    return wrap;
+  }
+
+  // Renderiza OPME com campos próprios (estilo Solus), agrupando Solicitado x Autorizado
+  function renderOpmeDetalhado(itens){
+    var wrap=el('div',{class:'mm-det-wrap'});
+    function money(v){ return 'R$ '+(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+    function money4(v){ return (v||0).toLocaleString('pt-BR',{minimumFractionDigits:4,maximumFractionDigits:4}); }
+    function campo(k,v){ return '<div class="mm-det-field"><span class="mm-det-k">'+esc(k)+'</span><span class="mm-det-v">'+v+'</span></div>'; }
+    function subhd(t){ return '<div class="mm-det-subhd">'+t+'</div>'; }
+    itens.forEach(function(m){
+      var x = MOCK.opmeDetalhe(m);
+      var card=el('div',{class:'mm-det-card'});
+      card.innerHTML=
+        '<div class="mm-det-hd">'+
+          '<span class="mm-det-cod">'+esc(x.cod)+'</span>'+
+          '<span class="mm-det-desc">'+esc(x.desc)+'</span>'+
+          '<span class="badge warn" style="font-size:10px">OPME</span>'+
+        '</div>'+
+        // Identificação regulatória
+        '<div class="mm-det-grp">'+
+          campo('Cod. Referência',esc(x.codReferencia))+
+          campo('Registro ANVISA',esc(x.anvisa))+
+          campo('Marca',esc(x.marca))+
+          campo('Consignado',esc(x.consignado))+
+          campo('Fornecido?',esc(x.fornecido))+
+          campo('Qtde',x.qtde.toLocaleString('pt-BR',{minimumFractionDigits:4}))+
+          campo('Cálculo',esc(x.calculo))+
+          campo('Status da requisição',esc(x.statusReq))+
+          campo('Qtd consolidado',x.qtdConsolidada)+
+          campo('Qtd devolvido',x.qtdDevolvida)+
+          campo('Fornecedor utilizado',esc(x.fornecedorUtilizado))+
+          campo('Ordem prioridade',x.ordemPrioridade)+
+        '</div>'+
+        // Bloco SOLICITADO
+        subhd(ico('arrow-up-right',12)+' Solicitado')+
+        '<div class="mm-det-grp">'+
+          campo('Fornecedor solicitado',esc(x.fornecedorSolic))+
+          campo('Código solicitado',esc(x.codSolic))+
+          campo('ANVISA solicitado',esc(x.anvisaSolic))+
+          campo('Produto solicitado',esc(x.produtoSolic))+
+          campo('Marca solicitado',esc(x.marcaSolic))+
+          campo('Vlr Un. tabela (R$)',money4(x.vlrUnTabela))+
+          campo('Vlr Un. cotado/pago (R$)',money4(x.vlrUnCotado))+
+          campo('Total cotado/pago (R$)',money(x.vlrTotalCotado))+
+          campo('Vlr Un. solicitado (R$)',money4(x.vlrUnSolic))+
+          campo('Vlr Total solic. (R$)',money(x.vlrTotalSolic))+
+        '</div>'+
+        // Bloco AUTORIZADO
+        subhd(ico('check-circle-2',12)+' Autorizado')+
+        '<div class="mm-det-grp">'+
+          campo('Qtde autorizada',x.qtdeAuto.toLocaleString('pt-BR',{minimumFractionDigits:4}))+
+          campo('Fornecedor autorizado',esc(x.fornecedorAutoriz))+
+          campo('Código autorizado',esc(x.codAutoriz))+
+          campo('Produto autorizado',esc(x.produtoAutoriz))+
+          campo('Vlr Un. autorizado (R$)',money4(x.vlrUnAutorizado))+
+          campo('Vlr Total autor. (R$)',money(x.vlrTotalAutorizado))+
+          campo('Negociado?',esc(x.negociado))+
+        '</div>'+
+        // Rastreabilidade e entrega
+        '<div class="mm-det-grp">'+
+          campo('Produto Solic. Intercâmbio/PTU',esc(x.produtoInterPTU))+
+          campo('Produto entregue/utilizado?',esc(x.produtoEntregue))+
+          campo('Data de entrega',esc(x.dataEntrega))+
+          campo('Processo Jurídico',esc(x.processoJuridico))+
+          campo('Cód. Produto do Fabricante',esc(x.codProdutoFabricante))+
+          campo('Fabricante',esc(x.fabricante))+
+          campo('Laboratório detentor do registro ANVISA',esc(x.labAnvisa))+
+          campo('Observações/Especificações',esc(x.observacoesEspec))+
         '</div>';
       wrap.appendChild(card);
     });
