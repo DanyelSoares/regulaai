@@ -29,10 +29,11 @@
   function el(tag,attrs,html){ var c=ctxRef(); return c.el(tag,attrs,html); }
 
   // Card de KPI simples (placeholder com valor)
-  function kpiCard(titulo, valor, sub, cor){
-    return '<div class="rel-kpi">'+
+  function kpiCard(titulo, valor, sub, cor, tip){
+    var infoIco = tip ? ' <span class="rel-kpi-info" title="'+esc(tip)+'">'+ico('info',11)+'</span>' : '';
+    return '<div class="rel-kpi"'+(tip?' title="'+esc(tip)+'"':'')+'>'+
       '<div class="rel-kpi-v" style="color:'+(cor||'var(--g-700)')+'">'+valor+'</div>'+
-      '<div class="rel-kpi-t">'+esc(titulo)+'</div>'+
+      '<div class="rel-kpi-t">'+esc(titulo)+infoIco+'</div>'+
       (sub?'<div class="rel-kpi-s">'+sub+'</div>':'')+
     '</div>';
   }
@@ -63,8 +64,12 @@
     var aut = 3500 + (seed(m.cod) % 38000);           // 3.5k .. 41.5k
     var varPct = ((seed(m.cod+'v') % 60) - 10) / 100; // -10% .. +50%
     var cob = Math.round(aut * (1 + varPct));
-    return {autorizado:aut, cobrado:cob, varPct:Math.round(varPct*100)};
+    return {autorizado:aut, cobrado:cob, varPct:Math.round(varPct*100), fornecedor:fornecedorOpme(m.cod)};
   }
+
+  // Fornecedor simulado (determinístico por código do OPME)
+  var FORNECEDORES = ['MedSupply Distribuidora','OrtoTech Brasil','CardioMed Implantes','BioImplante Ltda','Global OPME','Nordeste Materiais Médicos','Prime Health Supply'];
+  function fornecedorOpme(cod){ return FORNECEDORES[seed('forn'+cod) % FORNECEDORES.length]; }
 
   function custoGuia(g){
     var total = 0;
@@ -127,7 +132,7 @@
       (g.matmed||[]).forEach(function(mm){
         if(!mm.opme) return;
         var oc=custoOpme(mm);
-        var oo=porOpme[mm.cod]||(porOpme[mm.cod]={cod:mm.cod,desc:mm.desc,qtd:0,autorizado:0,cobrado:0,varMax:0,benefs:{},medicos:{}});
+        var oo=porOpme[mm.cod]||(porOpme[mm.cod]={cod:mm.cod,desc:mm.desc,fornecedor:oc.fornecedor,qtd:0,autorizado:0,cobrado:0,varMax:0,benefs:{},medicos:{}});
         oo.qtd++; oo.autorizado+=oc.autorizado; oo.cobrado+=oc.cobrado;
         oo.varMax=Math.max(oo.varMax,oc.varPct);
         oo.benefs[bid]=1; if(g.solicitante) oo.medicos[g.solicitante]=1;
@@ -223,14 +228,17 @@
     return '—';
   }
 
-  // Tabela de ranking genérica (top N)
-  function rankTable(titulo, cols, rows){
+  // Tabela de ranking genérica. opts.scroll=true → corpo com altura fixa e rolagem.
+  function rankTable(titulo, cols, rows, opts){
+    opts=opts||{};
     var head=cols.map(function(c){return '<th'+(c.num?' style="text-align:right"':'')+'>'+esc(c.h)+'</th>';}).join('');
     var body=rows.map(function(r,i){
       return '<tr>'+cols.map(function(c){ var v=c.f(r,i); return '<td'+(c.num?' style="text-align:right"':'')+'>'+v+'</td>'; }).join('')+'</tr>';
     }).join('');
-    return '<div class="rel-card"><div class="rel-card-hd">'+esc(titulo)+'</div>'+
-      '<div class="table-wrap"><table class="cfg-table"><thead><tr>'+head+'</tr></thead><tbody>'+body+'</tbody></table></div></div>';
+    var hd='<div class="rel-card-hd">'+esc(titulo)+(opts.count?'<span class="rel-card-count">'+rows.length+'</span>':'')+'</div>';
+    var wrapCls = opts.scroll ? 'table-wrap rel-scroll' : 'table-wrap';
+    return '<div class="rel-card">'+hd+
+      '<div class="'+wrapCls+'"><table class="cfg-table'+(opts.scroll?' rel-sticky-head':'')+'"><thead><tr>'+head+'</tr></thead><tbody>'+body+'</tbody></table></div></div>';
   }
   // Selo de score (0-100) com cor por faixa
   function scoreBadge(s){
@@ -465,7 +473,7 @@
     else if(tipo==='medicos'){ head=['Medico','Guias','Beneficiarios','Prestadores','OPME','TaxaAprov','Custo','Score']; rows=M.medicos.map(function(m){return [m.nome,m.guias,m.nBenefs,m.nPrestadores,m.opme,m.taxaAprov+'%',m.custo,m.score];}); }
     else if(tipo==='prestadores'){ head=['Prestador','Guias','Internacoes','OPME','Medicos','CustoMedio','CustoTotal','Score']; rows=M.prestadores.map(function(p){return [p.nome,p.guias,p.internacoes,p.opme,p.nMedicos,p.custoMedio,p.custo,p.score];}); }
     else if(tipo==='procedimentos'){ head=['Codigo','Descricao','Qtd','Negadas','TaxaNeg','CustoTotal','CustoMedio']; rows=M.procs.map(function(p){return [p.cod,p.desc,p.qtd,p.negadas,p.taxaNeg+'%',p.custo,p.custoMedio];}); }
-    else if(tipo==='opme'){ head=['Codigo','Descricao','Qtd','Autorizado','Cobrado','Variacao','Score']; rows=M.opmes.map(function(o){return [o.cod,o.desc,o.qtd,o.autorizado,o.cobrado,o.varPreco+'%',o.score];}); }
+    else if(tipo==='opme'){ head=['Codigo','Descricao','Fornecedor','Qtd','Autorizado','Cobrado','Variacao','Score']; rows=M.opmes.map(function(o){return [o.cod,o.desc,o.fornecedor||'',o.qtd,o.autorizado,o.cobrado,o.varPreco+'%',o.score];}); }
     var csv=[head].concat(rows).map(function(r){return r.map(function(c){var s=(''+c).replace(/"/g,'""');return /[";\n]/.test(s)?'"'+s+'"':s;}).join(';');}).join('\r\n');
     var blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8;'});
     var url=URL.createObjectURL(blob); var a=document.createElement('a');
@@ -477,16 +485,21 @@
   function renderExecutivo(){
     var M=analitico();
     var rc=M.riscoCnt;
-    var topMedicos=M.medicos.slice().sort(function(a,b){return b.guias-a.guias;}).slice(0,5);
-    var topPrest=M.prestadores.slice().sort(function(a,b){return b.custo-a.custo;}).slice(0,5);
-    var topOpme=M.opmes.slice().sort(function(a,b){return b.cobrado-a.cobrado;}).slice(0,5);
+    // Rankings completos (todos os registros), ordenados
+    var rkMedicos=M.medicos.slice().sort(function(a,b){return b.guias-a.guias || b.custo-a.custo;});
+    var rkPrestadores=M.prestadores.slice().sort(function(a,b){return b.custo-a.custo;});
+    var rkOpmes=M.opmes.slice().sort(function(a,b){return b.cobrado-a.cobrado;});
     var maxRisco=Math.max(rc.baixo,rc.medio,rc.alto,rc.critico,1);
 
     var kpis='<div class="rel-kpi-grid">'+
-      kpiCard('Total de guias analisadas',M.totalGuias,'no período','var(--g-700)')+
-      kpiCard('Custo total analisado',moedaK(M.totalCusto),'estimado','#0f766e')+
-      kpiCard('Custo potencialmente evitável',moedaK(M.evitavel),'risco alto/crítico','#b45309')+
-      kpiCard('Alertas ativos',M.alertas.length,'caixa de entrada','#dc2626')+
+      kpiCard('Guias em análise',M.totalGuias,'entraram no período','var(--g-700)',
+        'Total de guias que entraram para análise no período selecionado.')+
+      kpiCard('Custo total analisado',moedaK(M.totalCusto),'estimado','#0f766e',
+        'Soma dos custos estimados de todos os procedimentos, OPME, diárias e UTI das guias do período. Valores simulados.')+
+      kpiCard('Custo potencialmente evitável',moedaK(M.evitavel),'~18% do risco alto/crítico','#b45309',
+        'Estimativa: 18% do custo das guias classificadas como risco ALTO ou CRÍTICO — parcela sujeita a glosa, negativa ou revisão que poderia ser evitada. É uma estimativa demonstrativa (percentual parametrizável).')+
+      kpiCard('Alertas ativos',M.alertas.length,'ver aba Alertas','#dc2626',
+        'Quantidade de alertas gerados pelo motor de detecção (concentração, recorrência, alto custo, inconsistência de OPME). Detalhes na aba Alertas Inteligentes.')+
     '</div>';
 
     var riscoKpis='<div class="rel-kpi-grid">'+
@@ -508,22 +521,23 @@
       {h:'Médico',f:function(r){return esc(r.nome);}},
       {h:'Guias',num:true,f:function(r){return r.guias;}},
       {h:'Custo',num:true,f:function(r){return moeda(r.custo);}}
-    ],topMedicos);
+    ],rkMedicos,{scroll:true,count:true});
     var rkPrest=rankTable('Ranking de prestadores por custo',[
       {h:'#',f:function(r,i){return '<b>'+(i+1)+'</b>';}},
       {h:'Prestador',f:function(r){return esc(r.nome);}},
       {h:'Guias',num:true,f:function(r){return r.guias;}},
       {h:'Custo',num:true,f:function(r){return moeda(r.custo);}}
-    ],topPrest);
+    ],rkPrestadores,{scroll:true,count:true});
     var rkOpme=rankTable('Ranking de OPME por valor',[
       {h:'#',f:function(r,i){return '<b>'+(i+1)+'</b>';}},
       {h:'OPME',f:function(r){return esc(r.desc);}},
+      {h:'Fornecedor',f:function(r){return esc(r.fornecedor||'—');}},
       {h:'Qtd',num:true,f:function(r){return r.qtd;}},
       {h:'Valor cobrado',num:true,f:function(r){return moeda(r.cobrado);}}
-    ],topOpme);
+    ],rkOpmes,{scroll:true,count:true});
 
     return '<div class="rel-section">'+
-      '<div class="rel-note">'+ico('info',13)+' <span>Visão da diretoria. KPIs e rankings calculados sobre as guias do período. <b>Valores em R$ são simulados</b> para demonstração (não há tabela de preços real conectada).</span></div>'+
+      '<div class="rel-note">'+ico('info',13)+' <span>Visão da diretoria. KPIs e rankings calculados sobre as guias que entraram para análise no período. <b>Valores em R$ e fornecedores de OPME são simulados</b> para demonstração (sem tabela de preços/cadastro real conectado). Passe o mouse sobre os KPIs para ver como cada um é calculado.</span></div>'+
       kpis+ riscoKpis+ distRisco+
       '<div class="rel-grid2">'+rkMed+rkPrest+'</div>'+
       rkOpme+
@@ -592,6 +606,7 @@
 
     var tab=rankTable('OPME — autorizado x cobrado',[
       {h:'OPME',f:function(r){return esc(r.desc);}},
+      {h:'Fornecedor',f:function(r){return esc(r.fornecedor||'—');}},
       {h:'Qtd',num:true,f:function(r){return r.qtd;}},
       {h:'Autorizado',num:true,f:function(r){return moeda(r.autorizado);}},
       {h:'Cobrado',num:true,f:function(r){return moeda(r.cobrado);}},
