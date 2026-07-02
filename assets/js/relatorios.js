@@ -20,7 +20,7 @@
     {id:'exportacoes', label:'Exportações',      ico:'download'}
   ];
 
-  var _state = { tab: 'executivo', ordExec: { med:'custo_desc', prest:'custo_desc', opme:'valor_desc' } };
+  var _state = { tab: 'executivo', ordExec: { med:'custo_desc', prest:'custo_desc', opme:'valor_desc' }, buscaExec: { med:'', prest:'', opme:'' } };
 
   // Opções de ordenação por ranking do Painel Executivo
   var ORD_MED = [
@@ -56,6 +56,22 @@
   function sortSelect(rankKey, opts, atual){
     var options = opts.map(function(o){ return '<option value="'+o.v+'"'+(o.v===atual?' selected':'')+'>'+esc(o.lbl)+'</option>'; }).join('');
     return '<select class="rel-sort" data-rank="'+rankKey+'">'+options+'</select>';
+  }
+  // Caixa de busca discreta (expande ao focar) para o cabeçalho de um ranking
+  function searchBox(rankKey, valor){
+    var v = valor||'';
+    return '<span class="rel-search-wrap'+(v?' has-val':'')+'">'+ico('search',13)+
+      '<input type="text" class="rel-search" data-rank="'+rankKey+'" value="'+esc(v)+'" placeholder="Buscar" aria-label="Buscar no ranking" />'+
+    '</span>';
+  }
+  // Filtra registros de um ranking pelo termo (nome/descrição/fornecedor/código)
+  function filtrarRank(arr, termo){
+    termo = (termo||'').trim().toLowerCase();
+    if(!termo) return arr;
+    return arr.filter(function(o){
+      var alvo = [o.nome, o.desc, o.fornecedor, o.cod].filter(Boolean).join(' ').toLowerCase();
+      return alvo.indexOf(termo) >= 0;
+    });
   }
 
   // ── Helpers de placeholder ────────────────────────────────────────
@@ -589,11 +605,11 @@
   function renderExecutivo(){
     var M=analitico();
     var rc=M.riscoCnt;
-    // Rankings completos (todos os registros), ordenados conforme filtro do usuário
-    var ord=_state.ordExec;
-    var rkMedicos=ordenarRank(M.medicos, ord.med, 'custo');
-    var rkPrestadores=ordenarRank(M.prestadores, ord.prest, 'custo');
-    var rkOpmes=ordenarRank(M.opmes, ord.opme, 'cobrado');
+    // Rankings completos: filtro de busca + ordenação conforme escolha do usuário
+    var ord=_state.ordExec, busca=_state.buscaExec;
+    var rkMedicos=ordenarRank(filtrarRank(M.medicos, busca.med), ord.med, 'custo');
+    var rkPrestadores=ordenarRank(filtrarRank(M.prestadores, busca.prest), ord.prest, 'custo');
+    var rkOpmes=ordenarRank(filtrarRank(M.opmes, busca.opme), ord.opme, 'cobrado');
     var maxRisco=Math.max(rc.baixo,rc.medio,rc.alto,rc.critico,1);
 
     var kpis='<div class="rel-kpi-grid">'+
@@ -626,13 +642,13 @@
       {h:'Médico',f:function(r){return esc(r.nome);}},
       {h:'Guias',num:true,f:function(r){return r.guias;}},
       {h:'Custo',num:true,f:function(r){return moeda(r.custo);}}
-    ],rkMedicos,{scroll:true,count:true,countLabel:function(n){return n+' médico(s) solicitante(s) no ranking';},rowDrill:function(r){return 'med:'+r.nome;},sortControl:sortSelect('med',ORD_MED,ord.med)});
+    ],rkMedicos,{scroll:true,count:true,countLabel:function(n){return n+' médico(s) solicitante(s) no ranking';},rowDrill:function(r){return 'med:'+r.nome;},sortControl:searchBox('med',busca.med)+sortSelect('med',ORD_MED,ord.med)});
     var rkPrest=rankTable('Ranking de prestadores por custo',[
       {h:'#',f:function(r,i){return '<b>'+(i+1)+'</b>';}},
       {h:'Prestador',f:function(r){return esc(r.nome);}},
       {h:'Guias',num:true,f:function(r){return r.guias;}},
       {h:'Custo',num:true,f:function(r){return moeda(r.custo);}}
-    ],rkPrestadores,{scroll:true,count:true,countLabel:function(n){return n+' prestador(es) no ranking';},rowDrill:function(r){return 'prest:'+r.nome;},sortControl:sortSelect('prest',ORD_PREST,ord.prest)});
+    ],rkPrestadores,{scroll:true,count:true,countLabel:function(n){return n+' prestador(es) no ranking';},rowDrill:function(r){return 'prest:'+r.nome;},sortControl:searchBox('prest',busca.prest)+sortSelect('prest',ORD_PREST,ord.prest)});
     var rkOpme=rankTable('Ranking de OPME por valor',[
       {h:'#',f:function(r,i){return '<b>'+(i+1)+'</b>';}},
       {h:'OPME',f:function(r){return esc(r.desc);}},
@@ -640,7 +656,7 @@
       {h:'Fornecedor',f:function(r){return esc(r.fornecedor||'—');}},
       {h:'Qtd',num:true,f:function(r){return r.qtd;}},
       {h:'Valor cobrado',num:true,f:function(r){return moeda(r.cobrado);}}
-    ],rkOpmes,{scroll:true,count:true,countLabel:function(n){return n+' item(ns) de OPME distintos no ranking';},rowDrill:function(r){return 'opme:'+r.cod;},sortControl:sortSelect('opme',ORD_OPME,ord.opme)});
+    ],rkOpmes,{scroll:true,count:true,countLabel:function(n){return n+' item(ns) de OPME distintos no ranking';},rowDrill:function(r){return 'opme:'+r.cod;},sortControl:searchBox('opme',busca.opme)+sortSelect('opme',ORD_OPME,ord.opme)});
 
     return '<div class="rel-section">'+
       kpis+ riscoKpis+ distRisco+
@@ -975,7 +991,29 @@
         if(irParaAba) irParaAba('executivo'); // re-renderiza mantendo a aba
       };
     });
+    // busca nos rankings do Painel Executivo (re-render com debounce, mantém foco/cursor)
+    container.querySelectorAll('.rel-search[data-rank]').forEach(function(inp){
+      inp.onclick=function(e){ e.stopPropagation(); };
+      inp.oninput=function(){
+        var rank=inp.getAttribute('data-rank');
+        _state.buscaExec[rank]=inp.value;
+        _relBuscaFoco={rank:rank, pos:inp.selectionStart};
+        clearTimeout(_relBuscaTimer);
+        _relBuscaTimer=setTimeout(function(){ if(irParaAba) irParaAba('executivo'); }, 180);
+      };
+    });
+    // restaura o foco no campo de busca após o re-render (evita perder a digitação)
+    if(_relBuscaFoco){
+      var alvo=container.querySelector('.rel-search[data-rank="'+_relBuscaFoco.rank+'"]');
+      if(alvo){
+        alvo.focus();
+        var p=_relBuscaFoco.pos!=null?_relBuscaFoco.pos:alvo.value.length;
+        try{ alvo.setSelectionRange(p,p); }catch(e){}
+      }
+      _relBuscaFoco=null;
+    }
   }
+  var _relBuscaTimer=null, _relBuscaFoco=null;
 
   global.RELATORIOS = { view: view };
 

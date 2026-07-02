@@ -372,11 +372,20 @@ body.pl--blurring .pl--blur-target{filter:blur(5px)}
 .rel-card-count{margin-left:auto;font-size:11px;font-weight:700;color:var(--muted);background:var(--g-100);border-radius:20px;padding:1px 9px;cursor:help}
 .rel-card-count[title]:hover{background:var(--g-200);color:var(--g-700)}
 /* com filtro de ordenação: o select empurra para a direita e o contador vem logo após */
-.rel-card-sort{margin-left:auto}
+.rel-card-sort{margin-left:auto;display:inline-flex;align-items:center;gap:6px}
 .rel-card-sort~.rel-card-count{margin-left:6px}
 .rel-sort{font-size:11.5px;font-weight:600;color:var(--g-700);background:#fff;border:1px solid var(--g-200);border-radius:7px;padding:3px 24px 3px 9px;cursor:pointer;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23555' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 7px center}
 .rel-sort:hover{border-color:var(--g-400)}
 .rel-sort:focus{outline:none;border-color:var(--g-500);box-shadow:0 0 0 2px var(--g-100)}
+/* busca discreta no cabeçalho do ranking (expande ao focar) */
+.rel-search-wrap{display:inline-flex;align-items:center;gap:4px;background:#fff;border:1px solid var(--g-200);border-radius:7px;padding:0 6px;color:var(--muted);transition:border-color .18s,box-shadow .18s;overflow:hidden}
+.rel-search-wrap svg{flex:0 0 auto;opacity:.7}
+.rel-search{border:none;outline:none;background:transparent;font-size:11.5px;font-weight:600;color:var(--g-700);padding:3px 0;width:64px;transition:width .22s ease}
+.rel-search::placeholder{color:var(--muted);font-weight:500}
+.rel-search-wrap:hover{border-color:var(--g-400)}
+.rel-search-wrap:focus-within{border-color:var(--g-500);box-shadow:0 0 0 2px var(--g-100)}
+.rel-search-wrap:focus-within .rel-search,.rel-search-wrap.has-val .rel-search{width:150px}
+@media(max-width:640px){.rel-search-wrap:focus-within .rel-search,.rel-search-wrap.has-val .rel-search{width:110px}}
 /* Ranking com rolagem — altura FIXA da div (mantém tamanho; barra sempre presente) */
 .rel-scroll{height:280px;overflow-y:scroll!important;overflow-x:hidden;border-top:1px solid var(--g-100);scrollbar-width:thin;scrollbar-color:var(--g-300) var(--g-50)}
 .rel-scroll::-webkit-scrollbar{width:10px;-webkit-appearance:none}
