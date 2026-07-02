@@ -156,7 +156,14 @@
     if(_cache && _cache.__key===ck) return _cache;
     var guias = (ctxRef().guias) || [];
     if(filtroRisco){ guias = guias.filter(function(g){ return (g.risco||'baixo')===filtroRisco; }); }
-    if(filtroAtend){ guias = guias.filter(function(g){ return (g.natureza||'Ambulatorial')===filtroAtend; }); }
+    if(filtroAtend){
+      var MK=window.MOCK;
+      guias = guias.filter(function(g){
+        if(filtroAtend==='Internação') return g.natureza==='Internação'; // todas as internações
+        // 'Ambulatorial' ou 'Internação <Subtipo>'
+        return (MK&&MK.naturezaDetalhada?MK.naturezaDetalhada(g):(g.natureza||'Ambulatorial'))===filtroAtend;
+      });
+    }
     var porBenef={}, porMedico={}, porPrestador={}, porProc={}, porOpme={};
     var totalCusto=0, custoNegado=0, qtdNegadas=0, servNegados=0, qtdEmAberto=0;
     var riscoCnt={baixo:0,medio:0,alto:0,critico:0};
@@ -629,15 +636,14 @@
 
     var RISCO_LBL={baixo:'Baixo',medio:'Médio',alto:'Alto',critico:'Crítico'};
 
-    // Seletor de natureza (segmented): Todos · Ambulatorial · Internação
-    function segBtn(val,lbl,ico2){
-      return '<button class="rel-seg-btn'+(fa===val?' active':'')+'" data-atend="'+esc(val)+'">'+(ico2?ico(ico2,13)+' ':'')+esc(lbl)+'</button>';
-    }
-    var segAtend='<div class="rel-seg" role="group" aria-label="Natureza da guia">'+
-      segBtn('','Todos','')+
-      segBtn('Ambulatorial','Ambulatorial','activity')+
-      segBtn('Internação','Internação','bed')+
-    '</div>';
+    // Seletor de natureza: Todos · Ambulatorial · Internação (todas) · subtipos de internação
+    var SUBS=(window.MOCK&&window.MOCK.SUB_INTERNACAO)||[];
+    var natOpts=[['','Todas as naturezas'],['Ambulatorial','Ambulatorial'],['Internação','Internação (todas)']]
+      .concat(SUBS.map(function(s){return ['Internação '+s,'   • Internação '+s];}));
+    var segAtend='<label class="rel-nat-filtro">'+ico('bed',13)+
+      '<select class="rel-nat-select" data-atend-sel="1" aria-label="Natureza da guia">'+
+        natOpts.map(function(o){return '<option value="'+esc(o[0])+'"'+(fa===o[0]?' selected':'')+'>'+esc(o[1])+'</option>';}).join('')+
+      '</select></label>';
 
     // Banner de filtro ativo (risco e/ou atendimento)
     var partes=[];
@@ -1064,15 +1070,18 @@
         if(irParaAba) irParaAba('executivo');
       };
     });
-    // seletor de tipo de atendimento (segmented + colunas da quebra) → toggle do filtro
+    // colunas da quebra Ambulatorial × Internação → toggle do filtro
     container.querySelectorAll('[data-atend]').forEach(function(btn){
       btn.onclick=function(e){
         e.stopPropagation();
         var v=btn.getAttribute('data-atend');
-        _state.filtroAtend = (_state.filtroAtend===v) ? '' : v; // clicar no ativo limpa; 'Todos' tem v=''
-        if(v==='') _state.filtroAtend='';
+        _state.filtroAtend = (_state.filtroAtend===v) ? '' : v; // clicar no ativo limpa
         if(irParaAba) irParaAba('executivo');
       };
+    });
+    // seletor (dropdown) de natureza — inclui subtipos de internação
+    container.querySelectorAll('[data-atend-sel]').forEach(function(sel){
+      sel.onchange=function(){ _state.filtroAtend=sel.value; if(irParaAba) irParaAba('executivo'); };
     });
     // botão "Limpar filtros" do banner (risco + atendimento)
     container.querySelectorAll('[data-clear-filtros]').forEach(function(btn){

@@ -1488,7 +1488,7 @@
         {id:'faStatus',    label:'Status',               opts:MOCK.STATUS, key:'status'},
         {id:'faNivel',     label:'Nível de auditoria',   opts:['Auditoria Prévia','Auditoria Concorrente','Auditoria Retrospectiva'], key:'nivelAuditoria'},
         {id:'faEspec',     label:'Especialidade',        opts:(function(){var s={};guias.forEach(function(g){var e=_especMap[g.tipo];if(e)s[e]=1;});return Object.keys(s).sort();}()), key:'especialidade'},
-        {id:'faNatureza',  label:'Natureza',             opts:['Ambulatorial','Internação'], key:'natureza'},
+        {id:'faNatureza',  label:'Natureza',             opts:['Ambulatorial','Internação'].concat(MOCK.SUB_INTERNACAO.map(function(s){return 'Internação '+s;})), key:'natureza'},
         {id:'faAuditor',   label:'Auditor',              opts:MOCK.USUARIOS.filter(function(u){return u.perfil==='auditor';}).map(function(u){return u.nome;}), key:'auditor'},
         {id:'faTipo',      label:'Tipo de auditoria',    opts:(function(){var s={};guias.forEach(function(g){if(g.tipo)s[g.tipo]=1;});return Object.keys(s).sort();}()), key:'tipo'},
         {id:'faRegime',    label:'Regime',               opts:['Urgência','Eletivo'], key:'regime'},
@@ -1636,7 +1636,11 @@
       if(f.benef&&g.beneficiario.nome!==f.benef) return false;
       if(f.prest&&g.prestadorSol.nome!==f.prest) return false;
       if(f.tipo&&g.tipo!==f.tipo) return false;
-      if(f.natureza&&g.natureza!==f.natureza) return false;
+      if(f.natureza){
+        // 'Ambulatorial' | 'Internação' (todas) | 'Internação <Subtipo>' (específico)
+        if(f.natureza==='Internação'){ if(g.natureza!=='Internação') return false; }
+        else if(MOCK.naturezaDetalhada(g)!==f.natureza) return false;
+      }
       if(f.congenere&&g.congenere!==f.congenere) return false;
       if(f.solicitante&&g.solicitante!==f.solicitante) return false;
       if(f.opme==='Sim'&&!g.opme) return false;
@@ -2106,7 +2110,10 @@
       if(kf.uti==='sim'&&!g.uti) return false;
       if(kf.uti==='nao'&&g.uti) return false;
       if(kf.regime&&g.regime!==kf.regime) return false;
-      if(kf.tipo&&g.natureza!==kf.tipo) return false;
+      if(kf.tipo){
+        if(kf.tipo==='Internação'){ if(g.natureza!=='Internação') return false; }
+        else if(MOCK.naturezaDetalhada(g)!==kf.tipo) return false;
+      }
       if(kf.especialidade&&MOCK.especialidadeDaGuia(g)!==kf.especialidade) return false;
       return true;
     });
@@ -2224,10 +2231,12 @@
       });
     }));
 
-    // Natureza (Ambulatorial × Internação)
+    // Natureza (Ambulatorial × Internação, com subtipos de internação)
     var tipoLabel=kf.tipo||'Natureza';
     fbar.appendChild(makeFltWrap('bed',tipoLabel,kf.tipo!=='',function(drop){
-      [['','Todos'],['Ambulatorial','Ambulatorial'],['Internação','Internação']].forEach(function(opt){
+      var natOpts=[['','Todos'],['Ambulatorial','Ambulatorial'],['Internação','Internação (todas)']]
+        .concat(MOCK.SUB_INTERNACAO.map(function(s){return ['Internação '+s,'• '+s];}));
+      natOpts.forEach(function(opt){
         drop.appendChild(fltItem(opt[1],kf.tipo===opt[0],(function(v){
           return function(){ State.kanbanFiltros.tipo=v; render(); };
         })(opt[0])));
@@ -4584,7 +4593,7 @@
             '<dt>Executante</dt><dd>'+esc(g.prestadorExe.nome)+'</dd>'+
             '<dt>Local do atendimento</dt><dd>'+esc(g.prestadorExe.nome)+'</dd>'+
             '<dt>Especialidade</dt><dd>'+esc(MOCK.especialidadeDaGuia(g))+'</dd>'+
-            '<dt>Natureza</dt><dd>'+esc(g.natureza)+'</dd>'+
+            '<dt>Natureza</dt><dd>'+esc(MOCK.naturezaDetalhada(g))+'</dd>'+
             '<dt>Regime</dt><dd>'+esc(g.regime)+'</dd>'+
             '<dt>CID</dt><dd>'+esc(MOCK.cidGuia(g).codigo)+'</dd>'+
             '<dt>Indicação clínica / Hipótese diagnóstica</dt><dd>'+esc(MOCK.cidGuia(g).descricao)+'</dd>'+
