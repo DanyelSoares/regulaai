@@ -20,7 +20,7 @@
     {id:'exportacoes', label:'Exportações',      ico:'download'}
   ];
 
-  var _state = { tab: 'executivo', ordExec: { med:'custo_desc', prest:'custo_desc', opme:'valor_desc' }, buscaExec: { med:'', prest:'', opme:'' }, filtroRisco: '' };
+  var _state = { tab: 'executivo', ordExec: { med:'custo_desc', prest:'custo_desc', opme:'valor_desc' }, buscaExec: { med:'', prest:'', opme:'' }, filtroRisco: '', filtroAtend: '' };
 
   // Opções de ordenação por ranking do Painel Executivo
   var ORD_MED = [
@@ -149,12 +149,14 @@
 
   // Constrói (e cacheia) o modelo analítico a partir das guias do contexto.
   // filtroRisco (opcional): 'baixo'|'medio'|'alto'|'critico' — restringe às guias daquele nível.
-  function analitico(filtroRisco){
-    // cache separado por filtro de risco (o painel pode filtrar por barra de distribuição)
-    var ck = filtroRisco || '_all';
+  // filtroAtend (opcional): 'Internação'|'Ambulatorial' — restringe ao tipo de atendimento.
+  function analitico(filtroRisco, filtroAtend){
+    // cache separado por combinação de filtros
+    var ck = (filtroRisco||'_all')+'|'+(filtroAtend||'_all');
     if(_cache && _cache.__key===ck) return _cache;
     var guias = (ctxRef().guias) || [];
     if(filtroRisco){ guias = guias.filter(function(g){ return (g.risco||'baixo')===filtroRisco; }); }
+    if(filtroAtend){ guias = guias.filter(function(g){ return (g.tipoAtendimento||'Ambulatorial')===filtroAtend; }); }
     var porBenef={}, porMedico={}, porPrestador={}, porProc={}, porOpme={};
     var totalCusto=0, custoNegado=0, qtdNegadas=0, servNegados=0, qtdEmAberto=0;
     var riscoCnt={baixo:0,medio:0,alto:0,critico:0};
@@ -612,10 +614,12 @@
 
   // ── Painel Executivo (KPIs + rankings reais) ──────────────────────
   function renderExecutivo(){
-    var fr=_state.filtroRisco||''; // filtro de risco ativo (clique na barra de distribuição)
-    var MFull=analitico();          // visão total (para a distribuição sempre completa)
-    var M=fr?analitico(fr):MFull;   // visão filtrada (KPIs e rankings refletem o filtro)
-    var rc=MFull.riscoCnt;          // contagem por nível sempre sobre o total
+    var fr=_state.filtroRisco||'';  // filtro de risco ativo (clique na barra de distribuição)
+    var fa=_state.filtroAtend||'';  // filtro de tipo de atendimento (Internação × Ambulatorial)
+    // MBase: filtrado só por atendimento (a distribuição por risco reflete o atendimento, mas mostra todos os níveis)
+    var MBase = fa?analitico('', fa):analitico();
+    var M = fr?analitico(fr, fa):MBase; // KPIs e rankings refletem risco + atendimento
+    var rc=MBase.riscoCnt;          // contagem por nível dentro do atendimento selecionado
     // Rankings completos: filtro de busca + ordenação conforme escolha do usuário
     var ord=_state.ordExec, busca=_state.buscaExec;
     var rkMedicos=ordenarRank(filtrarRank(M.medicos, busca.med), ord.med, 'custo');
@@ -624,11 +628,25 @@
     var maxRisco=Math.max(rc.baixo,rc.medio,rc.alto,rc.critico,1);
 
     var RISCO_LBL={baixo:'Baixo',medio:'Médio',alto:'Alto',critico:'Crítico'};
-    // Banner de filtro ativo (aparece só quando um nível está selecionado)
-    var filtroBanner = fr
+
+    // Seletor de tipo de atendimento (segmented): Todos · Ambulatorial · Internação
+    function segBtn(val,lbl,ico2){
+      return '<button class="rel-seg-btn'+(fa===val?' active':'')+'" data-atend="'+esc(val)+'">'+(ico2?ico(ico2,13)+' ':'')+esc(lbl)+'</button>';
+    }
+    var segAtend='<div class="rel-seg" role="group" aria-label="Tipo de atendimento">'+
+      segBtn('','Todos','')+
+      segBtn('Ambulatorial','Ambulatorial','activity')+
+      segBtn('Internação','Internação','bed')+
+    '</div>';
+
+    // Banner de filtro ativo (risco e/ou atendimento)
+    var partes=[];
+    if(fa) partes.push('atendimento <b>'+esc(fa)+'</b>');
+    if(fr) partes.push('risco <b>'+esc(RISCO_LBL[fr]||fr)+'</b>');
+    var filtroBanner = partes.length
       ? '<div class="rel-filter-banner">'+ico('filter',13)+
-          ' Filtrando por risco <b>'+esc(RISCO_LBL[fr]||fr)+'</b> — '+M.totalGuias+' guia(s). '+
-          '<button class="rel-filter-clear" data-clear-risco="1">'+ico('x',12)+' Limpar filtro</button>'+
+          ' Filtrando por '+partes.join(' + ')+' — '+M.totalGuias+' guia(s). '+
+          '<button class="rel-filter-clear" data-clear-filtros="1">'+ico('x',12)+' Limpar filtros</button>'+
         '</div>'
       : '';
 
@@ -671,9 +689,30 @@
       {h:'Valor cobrado',num:true,f:function(r){return moeda(r.cobrado);}}
     ],rkOpmes,{scroll:true,count:true,countLabel:function(n){return n+' item(ns) de OPME distintos no ranking';},rowDrill:function(r){return 'opme:'+r.cod;},sortControl:searchBox('opme',busca.opme)+sortSelect('opme',ORD_OPME,ord.opme)});
 
+    // Quebra Ambulatorial × Internação (sempre sobre o total, para comparação)
+    var MTotal=analitico();
+    var mAmb=analitico('','Ambulatorial'), mInt=analitico('','Internação');
+    function quebraCol(lbl,ico2,m,cor){
+      var pctG=MTotal.totalGuias?Math.round(m.totalGuias/MTotal.totalGuias*100):0;
+      var ativo = fa===lbl;
+      return '<button class="rel-quebra-col'+(ativo?' active':'')+'" data-atend="'+esc(lbl)+'" style="--qc:'+cor+'">'+
+        '<div class="rel-quebra-hd">'+ico(ico2,14)+' '+esc(lbl)+'</div>'+
+        '<div class="rel-quebra-guias">'+m.totalGuias+' <span>guia(s) · '+pctG+'%</span></div>'+
+        '<div class="rel-quebra-custo">'+moedaK(m.totalCusto)+'</div>'+
+      '</button>';
+    }
+    var quebra='<div class="rel-card"><div class="rel-card-hd">Ambulatorial × Internação'+
+        '<span class="rel-card-sub" title="Clique numa coluna para filtrar o painel por esse tipo de atendimento">clique para filtrar</span></div>'+
+      '<div class="rel-quebra">'+
+        quebraCol('Ambulatorial','activity',mAmb,'#0f766e')+
+        quebraCol('Internação','bed',mInt,'#b45309')+
+      '</div></div>';
+
     return '<div class="rel-section">'+
       filtroBanner+
-      kpis+ distRisco+
+      '<div class="rel-exec-toolbar">'+segAtend+'</div>'+
+      kpis+
+      '<div class="rel-grid2">'+quebra+distRisco+'</div>'+
       '<div class="rel-grid2">'+rkMed+rkPrest+'</div>'+
       rkOpme+
     '</div>';
@@ -954,7 +993,7 @@
     // Troca de aba reutilizável (usada pelos botões de aba e pelos KPIs clicáveis)
     function irParaAba(id){
       var btn=tabBar.querySelector('.rel-tab[data-rtab="'+id+'"]'); if(!btn) return;
-      if(id!=='executivo') _state.filtroRisco=''; // sair do Painel Executivo limpa o filtro de risco
+      if(id!=='executivo'){ _state.filtroRisco=''; _state.filtroAtend=''; } // sair do Painel Executivo limpa os filtros
       _state.tab=id;
       tabBar.querySelectorAll('.rel-tab').forEach(function(x){x.classList.toggle('active',x===btn);});
       content.innerHTML=renderTab(id);
@@ -1025,9 +1064,19 @@
         if(irParaAba) irParaAba('executivo');
       };
     });
-    // botão "Limpar filtro" do banner
-    container.querySelectorAll('[data-clear-risco]').forEach(function(btn){
-      btn.onclick=function(){ _state.filtroRisco=''; if(irParaAba) irParaAba('executivo'); };
+    // seletor de tipo de atendimento (segmented + colunas da quebra) → toggle do filtro
+    container.querySelectorAll('[data-atend]').forEach(function(btn){
+      btn.onclick=function(e){
+        e.stopPropagation();
+        var v=btn.getAttribute('data-atend');
+        _state.filtroAtend = (_state.filtroAtend===v) ? '' : v; // clicar no ativo limpa; 'Todos' tem v=''
+        if(v==='') _state.filtroAtend='';
+        if(irParaAba) irParaAba('executivo');
+      };
+    });
+    // botão "Limpar filtros" do banner (risco + atendimento)
+    container.querySelectorAll('[data-clear-filtros]').forEach(function(btn){
+      btn.onclick=function(){ _state.filtroRisco=''; _state.filtroAtend=''; if(irParaAba) irParaAba('executivo'); };
     });
     // restaura o foco no campo de busca após o re-render (evita perder a digitação)
     if(_relBuscaFoco){

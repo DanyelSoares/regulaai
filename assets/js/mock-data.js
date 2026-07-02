@@ -235,7 +235,7 @@
       var diasEm = 1 + (i%9);
       out.push({
         numero:g.numero, beneficiario:ben, prestadorSol:ps, prestadorExe:pe, fluxo:fluxo,
-        tipo:g.tipo, natureza:g.natureza, regime:g.regime, status:g.status, origem:g.origem, congenere:ben.cidade||'—', solicitante:g.solicitante||'—',
+        tipo:g.tipo, natureza:g.natureza, regime:g.regime, tipoAtendimento:tipoAtendimentoDaGuia(g), status:g.status, origem:g.origem, congenere:ben.cidade||'—', solicitante:g.solicitante||'—',
         uti:g.uti, opme:g.opme, dut:g.dut, anexos:g.anexos, prio:g.prio,
         risco:g.risco, dataEmissao:'2026-06-0'+((i%9)+1), internacao:g.internacao||'', alta:'',
         diasAuditoria:diasEm, prazoVencido: diasEm>5,
@@ -423,6 +423,17 @@
   var ESPEC_MAP = {'Internação':'Clínica Médica','Cirurgia':'Cirurgia Geral','Quimioterapia':'Oncologia','Cirurgia neuro':'Neurocirurgia','Cirurgia ortopédica':'Ortopedia','Exame imagem':'Radiologia','Exame':'Clínica Médica','Hemodinâmica':'Cardiologia','Junta médica':'Multiprofissional'};
   function especialidadeDaGuia(g){ return ESPEC_MAP[g&&g.tipo]||'Outros'; }
 
+  // ── Tipo de atendimento: Internação × Ambulatorial (campo limpo, derivado do tipo) ──
+  // Corrige a mistura do campo "natureza" (que trazia 'Eletiva' junto de Internação/Ambulatorial).
+  var TIPO_ATEND_INTERNACAO = {'Internação':1,'Cirurgia':1,'Cirurgia neuro':1,'Cirurgia ortopédica':1};
+  function tipoAtendimentoDaGuia(g){
+    if(!g) return 'Ambulatorial';
+    // UTI ou data de internação => sempre Internação, independentemente do tipo
+    if(g.uti || g.internacao) return 'Internação';
+    if(TIPO_ATEND_INTERNACAO[g.tipo]) return 'Internação';
+    return 'Ambulatorial'; // Exame, Exame imagem, Quimioterapia, Hemodinâmica, Junta médica, Consulta...
+  }
+
   // ── CID (simulado, coerente com o tipo da guia) ──
   var CID_MAP = {
     'Internação':      ['J18.9 — Pneumonia não especificada','I50.0 — Insuficiência cardíaca congestiva','A41.9 — Sepse não especificada'],
@@ -476,6 +487,7 @@
     STATUS:STATUS, ORIGENS:ORIGENS, CATEGORIAS_ANEXO:CATEGORIAS_ANEXO,
     MOTIVOS_COMP:MOTIVOS_COMP, MOTIVOS_REPR:MOTIVOS_REPR, MOTIVOS_RESS:MOTIVOS_RESS,
     LOGS:LOGS, buildGuias: hydrate, matmedDetalhe: matmedDetalhe, opmeDetalhe: opmeDetalhe, observacoesGuia: observacoesGuia,
-    calcIdade: calcIdade, anosContrato: anosContrato, cidGuia: cidGuia
+    calcIdade: calcIdade, anosContrato: anosContrato, cidGuia: cidGuia,
+    tipoAtendimentoDaGuia: tipoAtendimentoDaGuia
   };
 })(window);

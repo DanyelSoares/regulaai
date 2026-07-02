@@ -435,6 +435,21 @@ body.pl--blurring .pl--blur-target{filter:blur(5px)}
 .rel-filter-banner b{color:#7a4f00}
 .rel-filter-clear{margin-left:auto;display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700;color:#92400e;background:#fff;border:1px solid #fcd34d;border-radius:7px;padding:4px 10px;cursor:pointer;transition:background .15s,border-color .15s}
 .rel-filter-clear:hover{background:#fffbeb;border-color:#f59e0b}
+/* seletor segmentado: tipo de atendimento */
+.rel-exec-toolbar{display:flex;justify-content:flex-end;margin-bottom:12px}
+.rel-seg{display:inline-flex;background:var(--g-50);border:1px solid var(--g-200);border-radius:9px;padding:3px;gap:2px}
+.rel-seg-btn{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;font-weight:600;color:var(--g-600);background:transparent;border:none;border-radius:7px;padding:5px 12px;cursor:pointer;transition:background .15s,color .15s}
+.rel-seg-btn:hover{color:var(--ink-1)}
+.rel-seg-btn.active{background:#fff;color:var(--g-800);box-shadow:0 1px 3px rgba(0,0,0,.08);font-weight:700}
+/* quebra Ambulatorial × Internação */
+.rel-quebra{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px 14px}
+.rel-quebra-col{text-align:left;background:#fff;border:1.5px solid var(--g-100);border-left:4px solid var(--qc,var(--g-300));border-radius:10px;padding:11px 13px;cursor:pointer;transition:border-color .15s,box-shadow .15s,transform .1s}
+.rel-quebra-col:hover{box-shadow:0 2px 8px rgba(0,0,0,.07);transform:translateY(-1px)}
+.rel-quebra-col.active{box-shadow:0 0 0 2px var(--qc,var(--g-400));border-color:var(--qc,var(--g-400))}
+.rel-quebra-hd{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--qc,var(--g-600))}
+.rel-quebra-guias{font-size:20px;font-weight:800;color:var(--ink-1);margin-top:6px;line-height:1}
+.rel-quebra-guias span{font-size:11px;font-weight:600;color:var(--muted);letter-spacing:0}
+.rel-quebra-custo{font-size:13px;font-weight:700;color:var(--g-700);margin-top:5px}
 /* Alertas */
 .rel-alert-table tbody tr.rel-alert-row{cursor:pointer}
 .rel-alert-table tbody tr.rel-alert-row:hover td{background:var(--g-50)}

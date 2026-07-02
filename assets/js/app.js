@@ -61,7 +61,7 @@
     },
     guias: MOCK.buildGuias(),
     guiasPagina: 1,
-    filtros: { q:'', status:'', fluxo:'', origem:'', risco:'', benef:'', prest:'', tipo:'', congenere:'', solicitante:'', opme:'', uti:'', regimeAte:'', especialidade:'', dataDeEmissao:'', dataAteEmissao:'', sortCol:'', sortDir:'' },
+    filtros: { q:'', status:'', fluxo:'', origem:'', risco:'', benef:'', prest:'', tipo:'', tipoAtendimento:'', congenere:'', solicitante:'', opme:'', uti:'', regimeAte:'', especialidade:'', dataDeEmissao:'', dataAteEmissao:'', sortCol:'', sortDir:'' },
     kanbanPeriodo: { de:'', ate:'' },
     dashboardPeriodo: (function(){
       var hj=new Date(), de=new Date(); de.setDate(hj.getDate()-30);
@@ -1488,6 +1488,7 @@
         {id:'faStatus',    label:'Status',               opts:MOCK.STATUS, key:'status'},
         {id:'faNivel',     label:'Nível de auditoria',   opts:['Auditoria Prévia','Auditoria Concorrente','Auditoria Retrospectiva'], key:'nivelAuditoria'},
         {id:'faEspec',     label:'Especialidade',        opts:(function(){var s={};guias.forEach(function(g){var e=_especMap[g.tipo];if(e)s[e]=1;});return Object.keys(s).sort();}()), key:'especialidade'},
+        {id:'faAtend',     label:'Atendimento',          opts:['Ambulatorial','Internação'], key:'tipoAtendimento'},
         {id:'faNatureza',  label:'Natureza',             opts:['Internação','Eletiva','Ambulatorial'], key:'natureza'},
         {id:'faAuditor',   label:'Auditor',              opts:MOCK.USUARIOS.filter(function(u){return u.perfil==='auditor';}).map(function(u){return u.nome;}), key:'auditor'},
         {id:'faTipo',      label:'Tipo de auditoria',    opts:(function(){var s={};guias.forEach(function(g){if(g.tipo)s[g.tipo]=1;});return Object.keys(s).sort();}()), key:'tipo'},
@@ -1636,6 +1637,7 @@
       if(f.benef&&g.beneficiario.nome!==f.benef) return false;
       if(f.prest&&g.prestadorSol.nome!==f.prest) return false;
       if(f.tipo&&g.tipo!==f.tipo) return false;
+      if(f.tipoAtendimento&&(g.tipoAtendimento||MOCK.tipoAtendimentoDaGuia(g))!==f.tipoAtendimento) return false;
       if(f.congenere&&g.congenere!==f.congenere) return false;
       if(f.solicitante&&g.solicitante!==f.solicitante) return false;
       if(f.opme==='Sim'&&!g.opme) return false;
@@ -1653,6 +1655,7 @@
     // Chips de filtros rápidos
     var quickChips=[
       {key:'status',label:'Status'},
+      {key:'tipoAtendimento',label:'Atendimento'},
       {key:'especialidade',label:'Especialidade'},
       {key:'benef',label:'Beneficiário'},
       {key:'prest',label:'Prestador'},
@@ -1866,7 +1869,7 @@
         function(de, ate){ State.filtros.dataDeEmissao=de; State.filtros.dataAteEmissao=ate; render(); }
       );
       $('#btnClear').onclick=function(){
-        State.filtros={q:'',status:'',fluxo:'',origem:'',risco:'',benef:'',prest:'',tipo:'',congenere:'',solicitante:'',opme:'',uti:'',regimeAte:'',especialidade:'',dataDeEmissao:'',dataAteEmissao:'',sortCol:'',sortDir:''};
+        State.filtros={q:'',status:'',fluxo:'',origem:'',risco:'',benef:'',prest:'',tipo:'',tipoAtendimento:'',congenere:'',solicitante:'',opme:'',uti:'',regimeAte:'',especialidade:'',dataDeEmissao:'',dataAteEmissao:'',sortCol:'',sortDir:''};
         if(_drpInstance) _drpInstance.clear();
         $('#globalSearch').value=''; render();
       };
@@ -2104,7 +2107,7 @@
       if(kf.uti==='sim'&&!g.uti) return false;
       if(kf.uti==='nao'&&g.uti) return false;
       if(kf.regime&&g.regime!==kf.regime) return false;
-      if(kf.tipo&&g.tipo!==kf.tipo) return false;
+      if(kf.tipo&&(g.tipoAtendimento||MOCK.tipoAtendimentoDaGuia(g))!==kf.tipo) return false;
       if(kf.especialidade&&MOCK.especialidadeDaGuia(g)!==kf.especialidade) return false;
       return true;
     });
@@ -2222,10 +2225,10 @@
       });
     }));
 
-    // Tipo
-    var tipoLabel=kf.tipo||'Tipo';
-    fbar.appendChild(makeFltWrap('tag',tipoLabel,kf.tipo!=='',function(drop){
-      [['','Todos'],['Internação','Internação'],['Ambulatorial','Ambulatorial']].forEach(function(opt){
+    // Atendimento (Internação × Ambulatorial — campo limpo tipoAtendimento)
+    var tipoLabel=kf.tipo||'Atendimento';
+    fbar.appendChild(makeFltWrap('bed',tipoLabel,kf.tipo!=='',function(drop){
+      [['','Todos'],['Ambulatorial','Ambulatorial'],['Internação','Internação']].forEach(function(opt){
         drop.appendChild(fltItem(opt[1],kf.tipo===opt[0],(function(v){
           return function(){ State.kanbanFiltros.tipo=v; render(); };
         })(opt[0])));
