@@ -20,7 +20,7 @@
     {id:'exportacoes', label:'Exportações',      ico:'download'}
   ];
 
-  var _state = { tab: 'executivo', ordExec: { med:'custo_desc', prest:'custo_desc', opme:'valor_desc' }, buscaExec: { med:'', prest:'', opme:'' } };
+  var _state = { tab: 'executivo', ordExec: { med:'custo_desc', prest:'custo_desc', opme:'valor_desc' }, buscaExec: { med:'', prest:'', opme:'' }, filtroRisco: '' };
 
   // Opções de ordenação por ranking do Painel Executivo
   var ORD_MED = [
@@ -147,10 +147,14 @@
     return total;
   }
 
-  // Constrói (e cacheia) o modelo analítico a partir das guias do contexto
-  function analitico(){
-    if(_cache) return _cache;
+  // Constrói (e cacheia) o modelo analítico a partir das guias do contexto.
+  // filtroRisco (opcional): 'baixo'|'medio'|'alto'|'critico' — restringe às guias daquele nível.
+  function analitico(filtroRisco){
+    // cache separado por filtro de risco (o painel pode filtrar por barra de distribuição)
+    var ck = filtroRisco || '_all';
+    if(_cache && _cache.__key===ck) return _cache;
     var guias = (ctxRef().guias) || [];
+    if(filtroRisco){ guias = guias.filter(function(g){ return (g.risco||'baixo')===filtroRisco; }); }
     var porBenef={}, porMedico={}, porPrestador={}, porProc={}, porOpme={};
     var totalCusto=0, custoNegado=0, qtdNegadas=0, servNegados=0, qtdEmAberto=0;
     var riscoCnt={baixo:0,medio:0,alto:0,critico:0};
@@ -262,6 +266,7 @@
     var opmes=toArr(porOpme,function(o){o.varPreco=o.autorizado?Math.round((o.cobrado-o.autorizado)/o.autorizado*100):0;o.nBenefs=Object.keys(o.benefs).length;o.nMedicos=Object.keys(o.medicos).length;o.score=clamp(Math.max(0,o.varPreco)*1.2 + o.qtd*8);});
 
     _cache = {
+      __key:ck,
       guias:guias, totalGuias:guias.length, totalCusto:totalCusto,
       custoNegado:custoNegado, qtdNegadas:qtdNegadas, servNegados:servNegados, qtdEmAberto:qtdEmAberto, riscoCnt:riscoCnt,
       benefs:benefs, medicos:medicos, prestadores:prestadores, procs:procs, opmes:opmes, especStats:especStats
@@ -363,13 +368,17 @@
     var bg  = s>=70?'#fee2e2':(s>=45?'#ffedd5':(s>=25?'#fef9c3':'#dcfce7'));
     return '<span class="rel-score" style="color:'+cor+';background:'+bg+'">'+s+'</span>';
   }
-  // Mini barra de distribuição
-  function distRow(label, valor, max, cor){
+  // Mini barra de distribuição. riscoKey (opcional) torna a linha clicável p/ filtrar; ativo=nível selecionado
+  function distRow(label, valor, max, cor, riscoKey, ativo){
     var pct=max?Math.round(valor/max*100):0;
-    var tip=valor+' guia(s) com risco '+String(label).toLowerCase();
-    return '<div class="rel-dist-row" title="'+esc(tip)+'"><span class="rel-dist-lbl">'+esc(label)+'</span>'+
+    var clicavel = !!riscoKey;
+    var tip = clicavel
+      ? (ativo?'Filtro ativo — clique para limpar':'Clique para filtrar o painel por risco '+String(label).toLowerCase()+' ('+valor+' guia(s))')
+      : (valor+' guia(s) com risco '+String(label).toLowerCase());
+    return '<div class="rel-dist-row'+(clicavel?' rel-dist-click':'')+(ativo?' active':'')+'"'+
+        (clicavel?' data-risco="'+esc(riscoKey)+'"':'')+' title="'+esc(tip)+'"><span class="rel-dist-lbl">'+esc(label)+'</span>'+
       '<span class="rel-dist-bar"><span style="width:'+pct+'%;background:'+(cor||'var(--g-500)')+'"></span></span>'+
-      '<span class="rel-dist-val" title="'+esc(tip)+'">'+valor+'</span></div>';
+      '<span class="rel-dist-val">'+valor+'</span></div>';
   }
 
   // Bloco "em construção" padrão para abas ainda não preenchidas
@@ -603,14 +612,25 @@
 
   // ── Painel Executivo (KPIs + rankings reais) ──────────────────────
   function renderExecutivo(){
-    var M=analitico();
-    var rc=M.riscoCnt;
+    var fr=_state.filtroRisco||''; // filtro de risco ativo (clique na barra de distribuição)
+    var MFull=analitico();          // visão total (para a distribuição sempre completa)
+    var M=fr?analitico(fr):MFull;   // visão filtrada (KPIs e rankings refletem o filtro)
+    var rc=MFull.riscoCnt;          // contagem por nível sempre sobre o total
     // Rankings completos: filtro de busca + ordenação conforme escolha do usuário
     var ord=_state.ordExec, busca=_state.buscaExec;
     var rkMedicos=ordenarRank(filtrarRank(M.medicos, busca.med), ord.med, 'custo');
     var rkPrestadores=ordenarRank(filtrarRank(M.prestadores, busca.prest), ord.prest, 'custo');
     var rkOpmes=ordenarRank(filtrarRank(M.opmes, busca.opme), ord.opme, 'cobrado');
     var maxRisco=Math.max(rc.baixo,rc.medio,rc.alto,rc.critico,1);
+
+    var RISCO_LBL={baixo:'Baixo',medio:'Médio',alto:'Alto',critico:'Crítico'};
+    // Banner de filtro ativo (aparece só quando um nível está selecionado)
+    var filtroBanner = fr
+      ? '<div class="rel-filter-banner">'+ico('filter',13)+
+          ' Filtrando por risco <b>'+esc(RISCO_LBL[fr]||fr)+'</b> — '+M.totalGuias+' guia(s). '+
+          '<button class="rel-filter-clear" data-clear-risco="1">'+ico('x',12)+' Limpar filtro</button>'+
+        '</div>'
+      : '';
 
     var kpis='<div class="rel-kpi-grid">'+
       kpiCard('Guias recebidas',M.totalGuias,'entraram para análise','var(--g-700)',
@@ -630,11 +650,11 @@
       kpiCard('Risco crítico',rc.critico,'','#b91c1c')+
     '</div>';
 
-    var distRisco='<div class="rel-card"><div class="rel-card-hd">Distribuição por risco<span class="rel-card-sub" title="O valor após cada barra é o número de guias classificadas naquele nível de risco">nº de guias por nível</span></div><div style="padding:6px 14px 12px">'+
-      distRow('Baixo',rc.baixo,maxRisco,'#16a34a')+
-      distRow('Médio',rc.medio,maxRisco,'#a16207')+
-      distRow('Alto',rc.alto,maxRisco,'#c2410c')+
-      distRow('Crítico',rc.critico,maxRisco,'#b91c1c')+
+    var distRisco='<div class="rel-card"><div class="rel-card-hd">Distribuição por risco<span class="rel-card-sub" title="Clique numa barra para filtrar o painel pelas guias daquele nível de risco">clique para filtrar · nº de guias</span></div><div style="padding:6px 14px 12px">'+
+      distRow('Baixo',rc.baixo,maxRisco,'#16a34a','baixo',fr==='baixo')+
+      distRow('Médio',rc.medio,maxRisco,'#a16207','medio',fr==='medio')+
+      distRow('Alto',rc.alto,maxRisco,'#c2410c','alto',fr==='alto')+
+      distRow('Crítico',rc.critico,maxRisco,'#b91c1c','critico',fr==='critico')+
     '</div></div>';
 
     var rkMed=rankTable('Ranking de médicos por custo',[
@@ -659,6 +679,7 @@
     ],rkOpmes,{scroll:true,count:true,countLabel:function(n){return n+' item(ns) de OPME distintos no ranking';},rowDrill:function(r){return 'opme:'+r.cod;},sortControl:searchBox('opme',busca.opme)+sortSelect('opme',ORD_OPME,ord.opme)});
 
     return '<div class="rel-section">'+
+      filtroBanner+
       kpis+ riscoKpis+ distRisco+
       '<div class="rel-grid2">'+rkMed+rkPrest+'</div>'+
       rkOpme+
@@ -940,6 +961,7 @@
     // Troca de aba reutilizável (usada pelos botões de aba e pelos KPIs clicáveis)
     function irParaAba(id){
       var btn=tabBar.querySelector('.rel-tab[data-rtab="'+id+'"]'); if(!btn) return;
+      if(id!=='executivo') _state.filtroRisco=''; // sair do Painel Executivo limpa o filtro de risco
       _state.tab=id;
       tabBar.querySelectorAll('.rel-tab').forEach(function(x){x.classList.toggle('active',x===btn);});
       content.innerHTML=renderTab(id);
@@ -1001,6 +1023,18 @@
         clearTimeout(_relBuscaTimer);
         _relBuscaTimer=setTimeout(function(){ if(irParaAba) irParaAba('executivo'); }, 180);
       };
+    });
+    // clique nas barras de "Distribuição por risco" → filtra o painel (toggle)
+    container.querySelectorAll('.rel-dist-click[data-risco]').forEach(function(row){
+      row.onclick=function(){
+        var r=row.getAttribute('data-risco');
+        _state.filtroRisco = (_state.filtroRisco===r) ? '' : r; // clicar no ativo limpa
+        if(irParaAba) irParaAba('executivo');
+      };
+    });
+    // botão "Limpar filtro" do banner
+    container.querySelectorAll('[data-clear-risco]').forEach(function(btn){
+      btn.onclick=function(){ _state.filtroRisco=''; if(irParaAba) irParaAba('executivo'); };
     });
     // restaura o foco no campo de busca após o re-render (evita perder a digitação)
     if(_relBuscaFoco){
