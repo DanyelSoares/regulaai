@@ -4797,7 +4797,6 @@
           campo('Código solicitado',esc(x.codSolic))+
           campo('ANVISA solicitado',esc(x.anvisaSolic))+
           campo('Produto solicitado',esc(x.produtoSolic))+
-          campo('Marca solicitado',esc(x.marcaSolic))+
           campo('Vlr Un. tabela (R$)',money4(x.vlrUnTabela))+
           campo('Vlr Un. cotado/pago (R$)',money4(x.vlrUnCotado))+
           campo('Total cotado/pago (R$)',money(x.vlrTotalCotado))+
@@ -4820,9 +4819,9 @@
           campo('Produto Solic. Intercâmbio/PTU',esc(x.produtoInterPTU))+
           campo('Produto entregue/utilizado?',esc(x.produtoEntregue))+
           campo('Data de entrega',esc(x.dataEntrega))+
+          campo('Tipo do anexo',esc(x.tipoAnexo))+
           campo('Processo Jurídico',esc(x.processoJuridico))+
           campo('Cód. Produto do Fabricante',esc(x.codProdutoFabricante))+
-          campo('Fabricante',esc(x.fabricante))+
           campo('Laboratório detentor do registro ANVISA',esc(x.labAnvisa))+
           campo('Observações/Especificações',esc(x.observacoesEspec))+
         '</div>';

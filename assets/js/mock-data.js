@@ -340,7 +340,6 @@
   // ── Detalhamento de item OPME (campos próprios, estilo Solus) ──
   var FORNECEDORES_OPME = ['MedSupply Distribuidora','OrtoTech Brasil','CardioMed Implantes','BioImplante Ltda','Global OPME','Nordeste Materiais Médicos','Prime Health Supply'];
   var _MARCAS = ['Biomet','Zimmer','Stryker','Medtronic','Johnson & Johnson','Smith & Nephew','B.Braun'];
-  var _FABRIC = ['Zimmer Biomet Holdings','Stryker Corporation','Medtronic PLC','DePuy Synthes','Smith+Nephew Ltda'];
   var _LABANVISA = ['Zimmer Biomet Brasil Ltda','Stryker do Brasil','Medtronic Comercial Ltda','Johnson & Johnson do Brasil'];
   function opmeDetalhe(m){
     var s=_mmSeed('opme'+m.cod);
@@ -369,7 +368,7 @@
       consignado:consignado,
       fornecedorUtilizado:fornSolic,
       // Solicitado
-      fornecedorSolic:fornSolic, codSolic:codSolic, anvisaSolic:anvisa, produtoSolic:m.desc, marcaSolic:_MARCAS[s % _MARCAS.length],
+      fornecedorSolic:fornSolic, codSolic:codSolic, anvisaSolic:anvisa, produtoSolic:m.desc,
       vlrUnSolic:vlrTabela, vlrTotalSolic:+(vlrTabela*qtde).toFixed(2),
       vlrUnCotado:cotado, vlrTotalCotado:+(cotado*qtde).toFixed(2),
       vlrUnTabela:vlrTabela,
@@ -379,7 +378,8 @@
       // Outros
       ordemPrioridade:1, observacoesEspec:'—',
       produtoInterPTU:interc, produtoEntregue:entregue, dataEntrega:(entregue==='Sim'?'25/05/2026':'—'),
-      processoJuridico:'—', codProdutoFabricante:'FAB-'+(1000+s%9000), fabricante:_FABRIC[s % _FABRIC.length],
+      tipoAnexo:'3 - OPME',
+      processoJuridico:'—', codProdutoFabricante:'FAB-'+(1000+s%9000),
       labAnvisa:_LABANVISA[s % _LABANVISA.length],
       negociado:(s%2===0)?'Sim':'Não'
     };
