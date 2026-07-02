@@ -193,10 +193,14 @@
       especStats[e].nMed++; especStats[e].guias+=m.guias; especStats[e].custo+=m.custo;
     });
     Object.keys(especStats).forEach(function(e){ var s=especStats[e]; s.mediaGuias=s.nMed?s.guias/s.nMed:0; s.mediaCusto=s.nMed?s.custo/s.nMed:0; });
-    // Marca desvio: médico acima da média da própria especialidade (com ≥2 médicos na especialidade)
+    // Marca desvio: médico acima da média da própria especialidade.
+    // Requer ≥2 médicos na especialidade (comparação estatística) E volume mínimo do
+    // próprio médico (MIN_GUIAS_DESVIO): com 1-2 guias a amostra é pequena demais e
+    // o custo de um único procedimento caro geraria falso positivo.
+    var MIN_GUIAS_DESVIO=3;
     medicos.forEach(function(m){
       var s=especStats[m.especialidade]; m.especMediaGuias=s?Math.round(s.mediaGuias*10)/10:0; m.especMediaCusto=s?Math.round(s.mediaCusto):0;
-      m.desvio = !!(s && s.nMed>=2 && (m.guias>s.mediaGuias*1.3 || m.custo>s.mediaCusto*1.3));
+      m.desvio = !!(s && s.nMed>=2 && m.guias>=MIN_GUIAS_DESVIO && (m.guias>s.mediaGuias*1.3 || m.custo>s.mediaCusto*1.3));
     });
     var prestadores=toArr(porPrestador,function(o){
       o.nMedicos=Object.keys(o.medicos).length; o.custoMedio=o.guias?Math.round(o.custo/o.guias):0;
@@ -391,7 +395,7 @@
       {h:'Custo',num:true,f:function(r){return moeda(r.custo);}},
       {h:'Score',num:true,f:function(r){return scoreBadge(r.score);}}
     ],ms,{scroll:true,count:true});
-    var nota='<div class="rel-note">'+ico('info',13)+' <span><b>▲ desvio</b> = médico com volume/custo acima da média dos pares da <b>mesma especialidade</b> (comparação estatística, requer ≥2 médicos na especialidade) — gera alerta na central. <b>⚠</b> = todas as solicitações concentradas em um único prestador.</span></div>';
+    var nota='<div class="rel-note">'+ico('info',13)+' <span><b>▲ desvio</b> = médico com volume/custo acima da média dos pares da <b>mesma especialidade</b> (comparação estatística, requer ≥2 médicos na especialidade e ≥3 guias do próprio médico, para evitar falso positivo em amostra pequena) — gera alerta na central. <b>⚠</b> = todas as solicitações concentradas em um único prestador.</span></div>';
     return '<div class="rel-section">'+kpis+nota+tab+'</div>';
   }
 
