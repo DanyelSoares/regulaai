@@ -435,7 +435,6 @@ body.pl--blurring .pl--blur-target{filter:blur(5px)}
 .rel-filter-banner b{color:#7a4f00}
 .rel-filter-clear{margin-left:auto;display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700;color:#92400e;background:#fff;border:1px solid #fcd34d;border-radius:7px;padding:4px 10px;cursor:pointer;transition:background .15s,border-color .15s}
 .rel-filter-clear:hover{background:#fffbeb;border-color:#f59e0b}
-.rel-exec-toolbar{display:flex;justify-content:flex-end;margin-bottom:12px}
 /* seletor de Natureza no Kanban usa o mesmo componente .csel dos demais filtros */
 .k-flt-natwrap{display:inline-flex}
 /* quebra Ambulatorial × Internação */

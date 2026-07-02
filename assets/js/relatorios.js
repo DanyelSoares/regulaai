@@ -636,11 +636,6 @@
 
     var RISCO_LBL={baixo:'Baixo',medio:'Médio',alto:'Alto',critico:'Crítico'};
 
-    // Seletor de natureza padronizado (com subtipos de internação em optgroup)
-    var segAtend = (window.MOCK&&window.MOCK.naturezaSelectHTML)
-      ? window.MOCK.naturezaSelectHTML(fa, 'data-atend-sel="1" aria-label="Natureza da guia"')
-      : '';
-
     // Banner de filtro ativo (risco e/ou atendimento)
     var partes=[];
     if(fa) partes.push('natureza <b>'+esc(fa)+'</b>');
@@ -712,7 +707,6 @@
 
     return '<div class="rel-section">'+
       filtroBanner+
-      '<div class="rel-exec-toolbar">'+segAtend+'</div>'+
       kpis+
       '<div class="rel-grid2">'+quebra+distRisco+'</div>'+
       '<div class="rel-grid2">'+rkMed+rkPrest+'</div>'+
@@ -1074,11 +1068,6 @@
         _state.filtroAtend = (_state.filtroAtend===v) ? '' : v; // clicar no ativo limpa
         if(irParaAba) irParaAba('executivo');
       };
-    });
-    // seletor (dropdown) de natureza — padronizado com o componente .csel (mesmo de Guias/Kanban)
-    container.querySelectorAll('[data-atend-sel]').forEach(function(sel){
-      sel.onchange=function(){ _state.filtroAtend=sel.value; if(irParaAba) irParaAba('executivo'); };
-      if(window.makeCustomSelect && !sel.__csel){ sel.__csel=1; window.makeCustomSelect(sel); }
     });
     // botão "Limpar filtros" do banner (risco + atendimento)
     container.querySelectorAll('[data-clear-filtros]').forEach(function(btn){
