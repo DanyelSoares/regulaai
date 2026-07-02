@@ -20,7 +20,43 @@
     {id:'exportacoes', label:'Exportações',      ico:'download'}
   ];
 
-  var _state = { tab: 'executivo' };
+  var _state = { tab: 'executivo', ordExec: { med:'custo_desc', prest:'custo_desc', opme:'valor_desc' } };
+
+  // Opções de ordenação por ranking do Painel Executivo
+  var ORD_MED = [
+    {v:'custo_desc', lbl:'Maior custo'},
+    {v:'custo_asc',  lbl:'Menor custo'},
+    {v:'guias_desc', lbl:'Mais guias'},
+    {v:'guias_asc',  lbl:'Menos guias'}
+  ];
+  var ORD_PREST = ORD_MED; // mesmos critérios (guias + custo)
+  var ORD_OPME = [
+    {v:'valor_desc', lbl:'Maior valor'},
+    {v:'valor_asc',  lbl:'Menor valor'},
+    {v:'guias_desc', lbl:'Mais guias'},
+    {v:'guias_asc',  lbl:'Menos guias'}
+  ];
+  // Ordena um array conforme a chave de ordenação escolhida
+  function ordenarRank(arr, ord, campoValor){
+    var vc = campoValor || 'custo'; // 'custo' p/ médicos/prestadores, 'cobrado' p/ OPME
+    var nGuias = function(o){ return typeof o.guias==='number' ? o.guias : (Array.isArray(o.guias)?o.guias.length:0); };
+    return arr.slice().sort(function(a,b){
+      switch(ord){
+        case 'custo_asc':  return (a[vc]-b[vc]) || (nGuias(a)-nGuias(b));
+        case 'valor_asc':  return (a[vc]-b[vc]) || (nGuias(a)-nGuias(b));
+        case 'guias_desc': return (nGuias(b)-nGuias(a)) || (b[vc]-a[vc]);
+        case 'guias_asc':  return (nGuias(a)-nGuias(b)) || (a[vc]-b[vc]);
+        case 'custo_desc':
+        case 'valor_desc':
+        default:           return (b[vc]-a[vc]) || (nGuias(b)-nGuias(a));
+      }
+    });
+  }
+  // Monta o <select> de ordenação para o cabeçalho de um ranking
+  function sortSelect(rankKey, opts, atual){
+    var options = opts.map(function(o){ return '<option value="'+o.v+'"'+(o.v===atual?' selected':'')+'>'+esc(o.lbl)+'</option>'; }).join('');
+    return '<select class="rel-sort" data-rank="'+rankKey+'">'+options+'</select>';
+  }
 
   // ── Helpers de placeholder ────────────────────────────────────────
   function ctxRef(){ return global.__RELCTX || {}; }
@@ -295,7 +331,9 @@
       var trAttr = drill!=null ? ' class="rel-rank-row" data-drill="'+esc(drill)+'"' : '';
       return '<tr'+trAttr+'>'+cols.map(function(c){ var v=c.f(r,i); return '<td'+(c.num?' style="text-align:right"':'')+'>'+v+'</td>'; }).join('')+'</tr>';
     }).join('');
-    var hd='<div class="rel-card-hd">'+esc(titulo)+(opts.count?'<span class="rel-card-count">'+rows.length+'</span>':'')+'</div>';
+    var hd='<div class="rel-card-hd">'+esc(titulo)+
+      (opts.sortControl?'<span class="rel-card-sort">'+opts.sortControl+'</span>':'')+
+      (opts.count?'<span class="rel-card-count">'+rows.length+'</span>':'')+'</div>';
     // No modo scroll usamos só .rel-scroll (sem .table-wrap, que tem overflow:hidden e cortaria a barra)
     var wrapCls = opts.scroll ? 'rel-scroll' : 'table-wrap';
     return '<div class="rel-card">'+hd+
@@ -548,10 +586,11 @@
   function renderExecutivo(){
     var M=analitico();
     var rc=M.riscoCnt;
-    // Rankings completos (todos os registros), ordenados
-    var rkMedicos=M.medicos.slice().sort(function(a,b){return b.guias-a.guias || b.custo-a.custo;});
-    var rkPrestadores=M.prestadores.slice().sort(function(a,b){return b.custo-a.custo;});
-    var rkOpmes=M.opmes.slice().sort(function(a,b){return b.cobrado-a.cobrado;});
+    // Rankings completos (todos os registros), ordenados conforme filtro do usuário
+    var ord=_state.ordExec;
+    var rkMedicos=ordenarRank(M.medicos, ord.med, 'custo');
+    var rkPrestadores=ordenarRank(M.prestadores, ord.prest, 'custo');
+    var rkOpmes=ordenarRank(M.opmes, ord.opme, 'cobrado');
     var maxRisco=Math.max(rc.baixo,rc.medio,rc.alto,rc.critico,1);
 
     var kpis='<div class="rel-kpi-grid">'+
@@ -579,18 +618,18 @@
       distRow('Crítico',rc.critico,maxRisco,'#b91c1c')+
     '</div></div>';
 
-    var rkMed=rankTable('Ranking de médicos por volume',[
+    var rkMed=rankTable('Ranking de médicos por custo',[
       {h:'#',f:function(r,i){return '<b>'+(i+1)+'</b>';}},
       {h:'Médico',f:function(r){return esc(r.nome);}},
       {h:'Guias',num:true,f:function(r){return r.guias;}},
       {h:'Custo',num:true,f:function(r){return moeda(r.custo);}}
-    ],rkMedicos,{scroll:true,count:true,rowDrill:function(r){return 'med:'+r.nome;}});
+    ],rkMedicos,{scroll:true,count:true,rowDrill:function(r){return 'med:'+r.nome;},sortControl:sortSelect('med',ORD_MED,ord.med)});
     var rkPrest=rankTable('Ranking de prestadores por custo',[
       {h:'#',f:function(r,i){return '<b>'+(i+1)+'</b>';}},
       {h:'Prestador',f:function(r){return esc(r.nome);}},
       {h:'Guias',num:true,f:function(r){return r.guias;}},
       {h:'Custo',num:true,f:function(r){return moeda(r.custo);}}
-    ],rkPrestadores,{scroll:true,count:true,rowDrill:function(r){return 'prest:'+r.nome;}});
+    ],rkPrestadores,{scroll:true,count:true,rowDrill:function(r){return 'prest:'+r.nome;},sortControl:sortSelect('prest',ORD_PREST,ord.prest)});
     var rkOpme=rankTable('Ranking de OPME por valor',[
       {h:'#',f:function(r,i){return '<b>'+(i+1)+'</b>';}},
       {h:'OPME',f:function(r){return esc(r.desc);}},
@@ -598,7 +637,7 @@
       {h:'Fornecedor',f:function(r){return esc(r.fornecedor||'—');}},
       {h:'Qtd',num:true,f:function(r){return r.qtd;}},
       {h:'Valor cobrado',num:true,f:function(r){return moeda(r.cobrado);}}
-    ],rkOpmes,{scroll:true,count:true,rowDrill:function(r){return 'opme:'+r.cod;}});
+    ],rkOpmes,{scroll:true,count:true,rowDrill:function(r){return 'opme:'+r.cod;},sortControl:sortSelect('opme',ORD_OPME,ord.opme)});
 
     return '<div class="rel-section">'+
       kpis+ riscoKpis+ distRisco+
@@ -922,6 +961,16 @@
     // linhas de ranking clicáveis → detalhe das guias (modal)
     container.querySelectorAll('.rel-rank-row[data-drill]').forEach(function(row){
       row.onclick=function(){ abrirDetalhe(row.getAttribute('data-drill')); };
+    });
+    // filtros de ordenação dos rankings do Painel Executivo
+    container.querySelectorAll('.rel-sort[data-rank]').forEach(function(sel){
+      // impede que o clique no select dispare o drill da linha
+      sel.onclick=function(e){ e.stopPropagation(); };
+      sel.onchange=function(){
+        var rank=sel.getAttribute('data-rank');
+        _state.ordExec[rank]=sel.value;
+        if(irParaAba) irParaAba('executivo'); // re-renderiza mantendo a aba
+      };
     });
   }
 
