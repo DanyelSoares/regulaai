@@ -395,7 +395,7 @@
       {h:'Custo',num:true,f:function(r){return moeda(r.custo);}},
       {h:'Score',num:true,f:function(r){return scoreBadge(r.score);}}
     ],ms,{scroll:true,count:true});
-    var nota='<div class="rel-note">'+ico('info',13)+' <span><b>▲ desvio</b> = médico com volume/custo acima da média dos pares da <b>mesma especialidade</b> (comparação estatística, requer ≥2 médicos na especialidade e ≥3 guias do próprio médico, para evitar falso positivo em amostra pequena) — gera alerta na central. <b>⚠</b> = todas as solicitações concentradas em um único prestador.</span></div>';
+    var nota='<div class="rel-note">'+ico('info',13)+' <span><b>▲ desvio</b> = médico com volume/custo acima da média dos pares da <b>mesma especialidade</b> (comparação estatística, requer ≥2 médicos na especialidade).<br><b>⚠</b> = todas as solicitações concentradas em um único prestador.<br>Ambas geram alertas em <b>Alertas Inteligentes</b>.</span></div>';
     return '<div class="rel-section">'+kpis+nota+tab+'</div>';
   }
 
