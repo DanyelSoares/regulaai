@@ -1075,9 +1075,10 @@
         if(irParaAba) irParaAba('executivo');
       };
     });
-    // seletor (dropdown) de natureza — inclui subtipos de internação
+    // seletor (dropdown) de natureza — padronizado com o componente .csel (mesmo de Guias/Kanban)
     container.querySelectorAll('[data-atend-sel]').forEach(function(sel){
       sel.onchange=function(){ _state.filtroAtend=sel.value; if(irParaAba) irParaAba('executivo'); };
+      if(window.makeCustomSelect && !sel.__csel){ sel.__csel=1; window.makeCustomSelect(sel); }
     });
     // botão "Limpar filtros" do banner (risco + atendimento)
     container.querySelectorAll('[data-clear-filtros]').forEach(function(btn){

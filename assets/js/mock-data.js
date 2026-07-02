@@ -434,20 +434,21 @@
     return g.natureza||'Ambulatorial';
   }
   // HTML padronizado do seletor de Natureza (usado em Relatórios, Guias e Kanban).
+  // Emite um <select> plano (sem optgroup) para ser decorado pelo makeCustomSelect (estilo .csel).
+  // Os subtipos de internação são marcados com data-sub="1" para receberem recuo visual no dropdown.
   // sel = valor selecionado; extraAttrs = string de atributos extras no <select>.
   function naturezaSelectHTML(sel, extraAttrs){
     function esc2(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
     sel = sel||'';
-    var cls='natureza-select'+(sel?' filtro-on':'');
     var subOpts = SUB_INTERNACAO.map(function(s){
       var v='Internação '+s;
-      return '<option value="'+esc2(v)+'"'+(sel===v?' selected':'')+'>'+esc2(s)+'</option>';
+      return '<option value="'+esc2(v)+'" data-sub="1"'+(sel===v?' selected':'')+'>'+esc2(v)+'</option>';
     }).join('');
-    return '<select class="'+cls+'"'+(extraAttrs?' '+extraAttrs:'')+'>'+
+    return '<select'+(extraAttrs?' '+extraAttrs:'')+'>'+
       '<option value=""'+(sel===''?' selected':'')+'>Todas as naturezas</option>'+
       '<option value="Ambulatorial"'+(sel==='Ambulatorial'?' selected':'')+'>Ambulatorial</option>'+
       '<option value="Internação"'+(sel==='Internação'?' selected':'')+'>Internação (todas)</option>'+
-      '<optgroup label="Internação por especialidade">'+subOpts+'</optgroup>'+
+      subOpts+
     '</select>';
   }
 

@@ -582,7 +582,8 @@
     function closeAll(){ document.querySelectorAll('.csel.open').forEach(function(x){x.classList.remove('open')}); }
 
     Array.prototype.forEach.call(sel.options,function(o){
-      var item=el('div',{class:'csel-item'+(o.selected?' active':'')});
+      var isSub=o.getAttribute&&o.getAttribute('data-sub')==='1';
+      var item=el('div',{class:'csel-item'+(o.selected?' active':'')+(isSub?' csel-sub':'')});
       item.textContent=o.text;
       item.setAttribute('data-v',o.value);
       item.onclick=function(e){
@@ -610,6 +611,7 @@
     wrap.appendChild(sel);
   }
   document.addEventListener('click',function(){ document.querySelectorAll('.csel.open').forEach(function(x){x.classList.remove('open')}); });
+  window.makeCustomSelect = makeCustomSelect; // exposto para o módulo Relatórios padronizar seus selects
 
   /* === Sidebar collapse === */
   var _sidebarCollapsed = localStorage.getItem('regula_sidebar')==='1';
@@ -1863,7 +1865,7 @@
       $('#fUti').onchange=function(){State.filtros.uti=this.value;render()};
       $('#fNaturezaC').onchange=function(){State.filtros.natureza=this.value;render()};
       var fesp=$('#fEspec'); if(fesp) fesp.onchange=function(){State.filtros.especialidade=this.value;render();};
-      ['#fStatus','#fFluxo','#fOrigem','#fRisco','#fEspec','#fOpme','#fUti'].forEach(function(id){ var s=$(id); if(s) makeCustomSelect(s); });
+      ['#fStatus','#fFluxo','#fOrigem','#fRisco','#fEspec','#fNaturezaC','#fOpme','#fUti'].forEach(function(id){ var s=$(id); if(s) makeCustomSelect(s); });
       var _drpInstance = makeDateRangePicker(
         $('#fPeriodoWrap'),
         State.filtros.dataDeEmissao,
@@ -2230,12 +2232,15 @@
       });
     }));
 
-    // Natureza (padronizada: seletor único com subtipos de internação)
+    // Natureza (padronizada: mesmo componente .csel dos filtros de Guias)
     var natWrap=el('div',{class:'k-flt-natwrap'});
     natWrap.innerHTML=MOCK.naturezaSelectHTML(kf.tipo||'','id="kfNatureza"');
     fbar.appendChild(natWrap);
     var kfNat=natWrap.querySelector('#kfNatureza');
-    if(kfNat) kfNat.onchange=function(){ State.kanbanFiltros.tipo=this.value; render(); };
+    if(kfNat){
+      kfNat.onchange=function(){ State.kanbanFiltros.tipo=this.value; render(); };
+      makeCustomSelect(kfNat);
+    }
 
     // Especialidade (derivada do tipo da guia)
     var especOpts=(function(){var s={};guias.forEach(function(g){var e=MOCK.especialidadeDaGuia(g);if(e)s[e]=1;});return Object.keys(s).sort();}());
