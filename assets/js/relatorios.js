@@ -350,9 +350,10 @@
   // Mini barra de distribuição
   function distRow(label, valor, max, cor){
     var pct=max?Math.round(valor/max*100):0;
-    return '<div class="rel-dist-row"><span class="rel-dist-lbl">'+esc(label)+'</span>'+
+    var tip=valor+' guia(s) com risco '+String(label).toLowerCase();
+    return '<div class="rel-dist-row" title="'+esc(tip)+'"><span class="rel-dist-lbl">'+esc(label)+'</span>'+
       '<span class="rel-dist-bar"><span style="width:'+pct+'%;background:'+(cor||'var(--g-500)')+'"></span></span>'+
-      '<span class="rel-dist-val">'+valor+'</span></div>';
+      '<span class="rel-dist-val" title="'+esc(tip)+'">'+valor+'</span></div>';
   }
 
   // Bloco "em construção" padrão para abas ainda não preenchidas
@@ -613,7 +614,7 @@
       kpiCard('Risco crítico',rc.critico,'','#b91c1c')+
     '</div>';
 
-    var distRisco='<div class="rel-card"><div class="rel-card-hd">Distribuição por risco</div><div style="padding:6px 14px 12px">'+
+    var distRisco='<div class="rel-card"><div class="rel-card-hd">Distribuição por risco<span class="rel-card-sub" title="O valor após cada barra é o número de guias classificadas naquele nível de risco">nº de guias por nível</span></div><div style="padding:6px 14px 12px">'+
       distRow('Baixo',rc.baixo,maxRisco,'#16a34a')+
       distRow('Médio',rc.medio,maxRisco,'#a16207')+
       distRow('Alto',rc.alto,maxRisco,'#c2410c')+
