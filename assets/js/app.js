@@ -4449,18 +4449,18 @@
     var ia=g._cache;
     var TABS_DEF=[
       {id:'resumo',        label:'Resumo',           ico:'layout-dashboard', grp:0},
-      {id:'etapas',        label:'Etapas',            ico:'git-branch',       grp:1},
-      {id:'matmed',        label:'Mat/Med',           ico:'pill',             grp:1},
-      {id:'diariastaxas',  label:'Diárias/Taxas',     ico:'calendar-days',    grp:1},
-      {id:'opme',          label:'OPME',              ico:'wrench',           grp:1},
       {id:'anexos',        label:'Anexos',            ico:'paperclip',        grp:1},
+      {id:'diariastaxas',  label:'Diárias/Taxas',     ico:'calendar-days',    grp:1},
+      {id:'matmed',        label:'Mat/Med',           ico:'pill',             grp:1},
+      {id:'opme',          label:'OPME',              ico:'wrench',           grp:1},
       {id:'criticas',      label:'Críticas',          ico:'triangle-alert',   grp:2},
-      {id:'ia',            label:'Parecer Técnico',   ico:'bot',              grp:2},
-      {id:'operadora',     label:'Parecer Operadora', ico:'file-check-2',     grp:2},
-      {id:'obsimp',        label:'Obs. Impressas',    ico:'printer',          grp:2},
-      {id:'obsnaoimp',     label:'Obs. Não Impressas',ico:'eye-off',          grp:2},
-      {id:'historico',     label:'Histórico',         ico:'history',          grp:2},
-      {id:'logs',          label:'Logs',              ico:'scroll-text',      grp:2},
+      {id:'ia',            label:'Parecer Técnico',   ico:'bot',              grp:3},
+      {id:'historico',     label:'Histórico',         ico:'history',          grp:3},
+      {id:'obsimp',        label:'Obs. Impressas',    ico:'printer',          grp:4},
+      {id:'obsnaoimp',     label:'Obs. Não Impressas',ico:'eye-off',          grp:4},
+      {id:'operadora',     label:'Parecer Operadora', ico:'file-check-2',     grp:5},
+      {id:'etapas',        label:'Etapas',            ico:'git-branch',       grp:6},
+      {id:'logs',          label:'Logs',              ico:'scroll-text',      grp:6},
     ];
     var tabs=TABS_DEF.map(function(t){return t.id});
     var tabsHtml='<div class="tabs">';
