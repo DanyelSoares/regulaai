@@ -210,17 +210,17 @@
 
   var GUIAS_RAW = [
     {numero:'101848029',benId:'B1',presS:'P1',presE:'P1',solicitante:'DIOGO SOARES DE MENDES',tipo:'Internação',natureza:'Internação',regime:'Urgência',fluxoId:'F1',status:'Em análise',origem:'Site',uti:true,opme:true,dut:true,anexos:true,prio:'Alta',procs:['10103035','40901327','31602050'],pacs:[],mm:['MM-001','MM-008'],dt:['DT-001','DT-005'],risco:'alto',internacao:'2026-06-05',obs:'Internação urgência com UTI e OPME ortopédico.'},
-    {numero:'203741856',benId:'B2',presS:'P1',presE:'P1',solicitante:'CARLOS HENRIQUE PINTO LIMA',tipo:'Cirurgia',natureza:'Eletiva',regime:'Eletivo',fluxoId:'F6',status:'Aguardando complemento',origem:'Web Prestador',uti:false,opme:false,dut:true,anexos:false,prio:'Média',procs:['30912018'],pacs:['PKT-BAR-01'],mm:[],dt:['DT-005'],risco:'medio',obs:'Bariátrica eletiva — DUT incompleta, faltam relatórios.'},
+    {numero:'203741856',benId:'B2',presS:'P1',presE:'P1',solicitante:'CARLOS HENRIQUE PINTO LIMA',tipo:'Cirurgia',natureza:'Internação',regime:'Eletivo',fluxoId:'F6',status:'Aguardando complemento',origem:'Web Prestador',uti:false,opme:false,dut:true,anexos:false,prio:'Média',procs:['30912018'],pacs:['PKT-BAR-01'],mm:[],dt:['DT-005'],risco:'medio',obs:'Bariátrica eletiva — DUT incompleta, faltam relatórios.'},
     {numero:'304529173',benId:'B3',presS:'P3',presE:'P3',solicitante:'FERNANDA OLIVEIRA COSTA',tipo:'Quimioterapia',natureza:'Ambulatorial',regime:'Eletivo',fluxoId:'F8',status:'Em junta médica',origem:'Emissão guias',uti:false,opme:false,dut:true,anexos:true,prio:'Alta',procs:['30729050'],pacs:['PKT-ONC-01'],mm:['MM-005','MM-006'],dt:[],risco:'alto',obs:'Imunobiológico de alto custo — junta médica.'},
     {numero:'405837264',benId:'B4',presS:'P2',presE:'P2',solicitante:'RICARDO ALVES FONSECA',tipo:'Exame imagem',natureza:'Ambulatorial',regime:'Eletivo',fluxoId:'F3',status:'Em análise',origem:'Site',uti:false,opme:false,dut:true,anexos:true,prio:'Baixa',procs:['40901114'],pacs:[],mm:['MM-009','MM-010'],dt:[],risco:'baixo',obs:'RM crânio com sedação.'},
     {numero:'506294837',benId:'B5',presS:'P2',presE:'P2',solicitante:'DIOGO SOARES DE MENDES',tipo:'Internação',natureza:'Internação',regime:'Eletivo',fluxoId:'F2',status:'Em análise',origem:'Emissão guias',uti:false,opme:false,dut:true,anexos:true,prio:'Média',procs:['41001214','40601161'],pacs:[],mm:['MM-001'],dt:['DT-003'],risco:'medio',obs:'Internação clínica eletiva.'},
-    {numero:'607183924',benId:'B6',presS:'P5',presE:'P5',solicitante:'THIAGO NASCIMENTO CRUZ',tipo:'Cirurgia',natureza:'Eletiva',regime:'Eletivo',fluxoId:'F4',status:'Em análise',origem:'Site',uti:false,opme:false,dut:true,anexos:true,prio:'Média',procs:['30912018'],pacs:['PKT-BAR-01'],mm:['MM-003'],dt:['DT-005'],risco:'medio',obs:'Cirurgia eletiva.'},
-    {numero:'708364519',benId:'B7',presS:'P1',presE:'P1',solicitante:'THIAGO NASCIMENTO CRUZ',tipo:'Cirurgia',natureza:'Eletiva',regime:'Eletivo',fluxoId:'F4',status:'Em análise',origem:'Web Prestador',uti:false,opme:false,dut:true,anexos:true,prio:'Média',procs:['30602131'],pacs:['PKT-CAT-01'],mm:[],dt:['DT-005'],risco:'medio',obs:'Cirurgia eletiva.'},
-    {numero:'809274631',benId:'B8',presS:'P4',presE:'P4',solicitante:'ANDERSON LOPES CAVALCANTE',tipo:'Cirurgia ortopédica',natureza:'Eletiva',regime:'Eletivo',fluxoId:'F2',status:'Cotação de OPME',origem:'Web Prestador',uti:false,opme:true,dut:true,anexos:true,prio:'Média',procs:['31602069'],pacs:['PKT-ORT-02'],mm:['MM-002'],dt:['DT-005'],risco:'medio',obs:'Artroplastia quadril — aguardando cotação de 3 fornecedores de OPME.'},
+    {numero:'607183924',benId:'B6',presS:'P5',presE:'P5',solicitante:'THIAGO NASCIMENTO CRUZ',tipo:'Cirurgia',natureza:'Internação',regime:'Eletivo',fluxoId:'F4',status:'Em análise',origem:'Site',uti:false,opme:false,dut:true,anexos:true,prio:'Média',procs:['30912018'],pacs:['PKT-BAR-01'],mm:['MM-003'],dt:['DT-005'],risco:'medio',obs:'Cirurgia eletiva.'},
+    {numero:'708364519',benId:'B7',presS:'P1',presE:'P1',solicitante:'THIAGO NASCIMENTO CRUZ',tipo:'Cirurgia',natureza:'Internação',regime:'Eletivo',fluxoId:'F4',status:'Em análise',origem:'Web Prestador',uti:false,opme:false,dut:true,anexos:true,prio:'Média',procs:['30602131'],pacs:['PKT-CAT-01'],mm:[],dt:['DT-005'],risco:'medio',obs:'Cirurgia eletiva.'},
+    {numero:'809274631',benId:'B8',presS:'P4',presE:'P4',solicitante:'ANDERSON LOPES CAVALCANTE',tipo:'Cirurgia ortopédica',natureza:'Internação',regime:'Eletivo',fluxoId:'F2',status:'Cotação de OPME',origem:'Web Prestador',uti:false,opme:true,dut:true,anexos:true,prio:'Média',procs:['31602069'],pacs:['PKT-ORT-02'],mm:['MM-002'],dt:['DT-005'],risco:'medio',obs:'Artroplastia quadril — aguardando cotação de 3 fornecedores de OPME.'},
     {numero:'910583742',benId:'B2',presS:'P1',presE:'P1',solicitante:'BRUNO CESAR MAGALHAES',tipo:'Internação',natureza:'Internação',regime:'Eletivo',fluxoId:'F2',status:'Analisada',origem:'Site',uti:false,opme:false,dut:true,anexos:true,prio:'Média',procs:['41001214','40601161'],pacs:[],mm:[],dt:['DT-003'],risco:'baixo',obs:'Histórico anterior relevante.'},
     {numero:'112847563',benId:'B3',presS:'P3',presE:'P3',solicitante:'LETICIA VIEIRA ANDRADE',tipo:'Junta médica',natureza:'Ambulatorial',regime:'Eletivo',fluxoId:'F8',status:'Em junta médica',origem:'Emissão guias',uti:false,opme:false,dut:true,anexos:true,prio:'Alta',procs:['30730066'],pacs:['PKT-ONC-01'],mm:['MM-007'],dt:[],risco:'alto',obs:'Em junta médica para revisão.'},
     {numero:'213956874',benId:'B1',presS:'P2',presE:'P2',solicitante:'DIOGO SOARES DE MENDES',tipo:'Internação',natureza:'Internação',regime:'Eletivo',fluxoId:'F2',status:'Liberada',origem:'Web Prestador',uti:false,opme:false,dut:true,anexos:true,prio:'Média',procs:['41001214'],pacs:[],mm:['MM-008'],dt:['DT-003'],risco:'baixo',obs:'Internação clínica — liberada após análise.'},
-    {numero:'314862795',benId:'B4',presS:'P1',presE:'P1',solicitante:'THIAGO NASCIMENTO CRUZ',tipo:'Cirurgia',natureza:'Eletiva',regime:'Eletivo',fluxoId:'F4',status:'Negada',origem:'Site',uti:false,opme:false,dut:true,anexos:true,prio:'Média',procs:['30602131'],pacs:['PKT-CAT-01'],mm:[],dt:['DT-005'],risco:'medio',obs:'Negada por DUT não atendida.'}
+    {numero:'314862795',benId:'B4',presS:'P1',presE:'P1',solicitante:'THIAGO NASCIMENTO CRUZ',tipo:'Cirurgia',natureza:'Internação',regime:'Eletivo',fluxoId:'F4',status:'Negada',origem:'Site',uti:false,opme:false,dut:true,anexos:true,prio:'Média',procs:['30602131'],pacs:['PKT-CAT-01'],mm:[],dt:['DT-005'],risco:'medio',obs:'Negada por DUT não atendida.'}
   ];
 
   function hydrate(){
@@ -235,7 +235,7 @@
       var diasEm = 1 + (i%9);
       out.push({
         numero:g.numero, beneficiario:ben, prestadorSol:ps, prestadorExe:pe, fluxo:fluxo,
-        tipo:g.tipo, natureza:g.natureza, regime:g.regime, tipoAtendimento:tipoAtendimentoDaGuia(g), status:g.status, origem:g.origem, congenere:ben.cidade||'—', solicitante:g.solicitante||'—',
+        tipo:g.tipo, natureza:g.natureza, regime:g.regime, status:g.status, origem:g.origem, congenere:ben.cidade||'—', solicitante:g.solicitante||'—',
         uti:g.uti, opme:g.opme, dut:g.dut, anexos:g.anexos, prio:g.prio,
         risco:g.risco, dataEmissao:'2026-06-0'+((i%9)+1), internacao:g.internacao||'', alta:'',
         diasAuditoria:diasEm, prazoVencido: diasEm>5,
@@ -423,16 +423,9 @@
   var ESPEC_MAP = {'Internação':'Clínica Médica','Cirurgia':'Cirurgia Geral','Quimioterapia':'Oncologia','Cirurgia neuro':'Neurocirurgia','Cirurgia ortopédica':'Ortopedia','Exame imagem':'Radiologia','Exame':'Clínica Médica','Hemodinâmica':'Cardiologia','Junta médica':'Multiprofissional'};
   function especialidadeDaGuia(g){ return ESPEC_MAP[g&&g.tipo]||'Outros'; }
 
-  // ── Tipo de atendimento: Internação × Ambulatorial (campo limpo, derivado do tipo) ──
-  // Corrige a mistura do campo "natureza" (que trazia 'Eletiva' junto de Internação/Ambulatorial).
-  var TIPO_ATEND_INTERNACAO = {'Internação':1,'Cirurgia':1,'Cirurgia neuro':1,'Cirurgia ortopédica':1};
-  function tipoAtendimentoDaGuia(g){
-    if(!g) return 'Ambulatorial';
-    // UTI ou data de internação => sempre Internação, independentemente do tipo
-    if(g.uti || g.internacao) return 'Internação';
-    if(TIPO_ATEND_INTERNACAO[g.tipo]) return 'Internação';
-    return 'Ambulatorial'; // Exame, Exame imagem, Quimioterapia, Hemodinâmica, Junta médica, Consulta...
-  }
+  // Natureza da guia: Ambulatorial × Internação (campo direto, já normalizado nos dados).
+  // Mantido como helper para consumidores que preferem chamar por função.
+  function naturezaDaGuia(g){ return (g && g.natureza) || 'Ambulatorial'; }
 
   // ── CID (simulado, coerente com o tipo da guia) ──
   var CID_MAP = {
@@ -488,6 +481,6 @@
     MOTIVOS_COMP:MOTIVOS_COMP, MOTIVOS_REPR:MOTIVOS_REPR, MOTIVOS_RESS:MOTIVOS_RESS,
     LOGS:LOGS, buildGuias: hydrate, matmedDetalhe: matmedDetalhe, opmeDetalhe: opmeDetalhe, observacoesGuia: observacoesGuia,
     calcIdade: calcIdade, anosContrato: anosContrato, cidGuia: cidGuia,
-    tipoAtendimentoDaGuia: tipoAtendimentoDaGuia
+    naturezaDaGuia: naturezaDaGuia
   };
 })(window);

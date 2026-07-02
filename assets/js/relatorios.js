@@ -149,14 +149,14 @@
 
   // Constrói (e cacheia) o modelo analítico a partir das guias do contexto.
   // filtroRisco (opcional): 'baixo'|'medio'|'alto'|'critico' — restringe às guias daquele nível.
-  // filtroAtend (opcional): 'Internação'|'Ambulatorial' — restringe ao tipo de atendimento.
+  // filtroAtend (opcional): 'Internação'|'Ambulatorial' — restringe pela natureza da guia.
   function analitico(filtroRisco, filtroAtend){
     // cache separado por combinação de filtros
     var ck = (filtroRisco||'_all')+'|'+(filtroAtend||'_all');
     if(_cache && _cache.__key===ck) return _cache;
     var guias = (ctxRef().guias) || [];
     if(filtroRisco){ guias = guias.filter(function(g){ return (g.risco||'baixo')===filtroRisco; }); }
-    if(filtroAtend){ guias = guias.filter(function(g){ return (g.tipoAtendimento||'Ambulatorial')===filtroAtend; }); }
+    if(filtroAtend){ guias = guias.filter(function(g){ return (g.natureza||'Ambulatorial')===filtroAtend; }); }
     var porBenef={}, porMedico={}, porPrestador={}, porProc={}, porOpme={};
     var totalCusto=0, custoNegado=0, qtdNegadas=0, servNegados=0, qtdEmAberto=0;
     var riscoCnt={baixo:0,medio:0,alto:0,critico:0};
@@ -629,11 +629,11 @@
 
     var RISCO_LBL={baixo:'Baixo',medio:'Médio',alto:'Alto',critico:'Crítico'};
 
-    // Seletor de tipo de atendimento (segmented): Todos · Ambulatorial · Internação
+    // Seletor de natureza (segmented): Todos · Ambulatorial · Internação
     function segBtn(val,lbl,ico2){
       return '<button class="rel-seg-btn'+(fa===val?' active':'')+'" data-atend="'+esc(val)+'">'+(ico2?ico(ico2,13)+' ':'')+esc(lbl)+'</button>';
     }
-    var segAtend='<div class="rel-seg" role="group" aria-label="Tipo de atendimento">'+
+    var segAtend='<div class="rel-seg" role="group" aria-label="Natureza da guia">'+
       segBtn('','Todos','')+
       segBtn('Ambulatorial','Ambulatorial','activity')+
       segBtn('Internação','Internação','bed')+
@@ -641,7 +641,7 @@
 
     // Banner de filtro ativo (risco e/ou atendimento)
     var partes=[];
-    if(fa) partes.push('atendimento <b>'+esc(fa)+'</b>');
+    if(fa) partes.push('natureza <b>'+esc(fa)+'</b>');
     if(fr) partes.push('risco <b>'+esc(RISCO_LBL[fr]||fr)+'</b>');
     var filtroBanner = partes.length
       ? '<div class="rel-filter-banner">'+ico('filter',13)+
@@ -701,8 +701,8 @@
         '<div class="rel-quebra-custo">'+moedaK(m.totalCusto)+'</div>'+
       '</button>';
     }
-    var quebra='<div class="rel-card"><div class="rel-card-hd">Ambulatorial × Internação'+
-        '<span class="rel-card-sub" title="Clique numa coluna para filtrar o painel por esse tipo de atendimento">clique para filtrar</span></div>'+
+    var quebra='<div class="rel-card"><div class="rel-card-hd">Natureza — Ambulatorial × Internação'+
+        '<span class="rel-card-sub" title="Clique numa coluna para filtrar o painel pela natureza da guia">clique para filtrar</span></div>'+
       '<div class="rel-quebra">'+
         quebraCol('Ambulatorial','activity',mAmb,'#0f766e')+
         quebraCol('Internação','bed',mInt,'#b45309')+
