@@ -331,9 +331,11 @@
       var trAttr = drill!=null ? ' class="rel-rank-row" data-drill="'+esc(drill)+'"' : '';
       return '<tr'+trAttr+'>'+cols.map(function(c){ var v=c.f(r,i); return '<td'+(c.num?' style="text-align:right"':'')+'>'+v+'</td>'; }).join('')+'</tr>';
     }).join('');
+    // Contador com rótulo/tooltip explicando o que está sendo contado
+    var cntLbl = opts.countLabel ? opts.countLabel(rows.length) : (rows.length+' registro(s)');
     var hd='<div class="rel-card-hd">'+esc(titulo)+
       (opts.sortControl?'<span class="rel-card-sort">'+opts.sortControl+'</span>':'')+
-      (opts.count?'<span class="rel-card-count">'+rows.length+'</span>':'')+'</div>';
+      (opts.count?'<span class="rel-card-count" title="'+esc(cntLbl)+'">'+rows.length+'</span>':'')+'</div>';
     // No modo scroll usamos só .rel-scroll (sem .table-wrap, que tem overflow:hidden e cortaria a barra)
     var wrapCls = opts.scroll ? 'rel-scroll' : 'table-wrap';
     return '<div class="rel-card">'+hd+
@@ -432,7 +434,7 @@
       {h:'Aprov.',num:true,f:function(r){return r.taxaAprov+'%';}},
       {h:'Custo',num:true,f:function(r){return moeda(r.custo);}},
       {h:'Score',num:true,f:function(r){return scoreBadge(r.score);}}
-    ],ms,{scroll:true,count:true});
+    ],ms,{scroll:true,count:true,countLabel:function(n){return n+' médico(s) solicitante(s) na lista';}});
     var nota='<div class="rel-note">'+ico('info',13)+' <span><b>▲ desvio</b> = médico com volume/custo acima da média dos pares da <b>mesma especialidade</b> (comparação estatística, requer ≥2 médicos na especialidade).<br><b>⚠</b> = todas as solicitações concentradas em um único prestador.<br>Ambas geram alertas em <b>Alertas Inteligentes</b>.</span></div>';
     return '<div class="rel-section">'+kpis+nota+tab+'</div>';
   }
@@ -623,13 +625,13 @@
       {h:'Médico',f:function(r){return esc(r.nome);}},
       {h:'Guias',num:true,f:function(r){return r.guias;}},
       {h:'Custo',num:true,f:function(r){return moeda(r.custo);}}
-    ],rkMedicos,{scroll:true,count:true,rowDrill:function(r){return 'med:'+r.nome;},sortControl:sortSelect('med',ORD_MED,ord.med)});
+    ],rkMedicos,{scroll:true,count:true,countLabel:function(n){return n+' médico(s) solicitante(s) no ranking';},rowDrill:function(r){return 'med:'+r.nome;},sortControl:sortSelect('med',ORD_MED,ord.med)});
     var rkPrest=rankTable('Ranking de prestadores por custo',[
       {h:'#',f:function(r,i){return '<b>'+(i+1)+'</b>';}},
       {h:'Prestador',f:function(r){return esc(r.nome);}},
       {h:'Guias',num:true,f:function(r){return r.guias;}},
       {h:'Custo',num:true,f:function(r){return moeda(r.custo);}}
-    ],rkPrestadores,{scroll:true,count:true,rowDrill:function(r){return 'prest:'+r.nome;},sortControl:sortSelect('prest',ORD_PREST,ord.prest)});
+    ],rkPrestadores,{scroll:true,count:true,countLabel:function(n){return n+' prestador(es) no ranking';},rowDrill:function(r){return 'prest:'+r.nome;},sortControl:sortSelect('prest',ORD_PREST,ord.prest)});
     var rkOpme=rankTable('Ranking de OPME por valor',[
       {h:'#',f:function(r,i){return '<b>'+(i+1)+'</b>';}},
       {h:'OPME',f:function(r){return esc(r.desc);}},
@@ -637,7 +639,7 @@
       {h:'Fornecedor',f:function(r){return esc(r.fornecedor||'—');}},
       {h:'Qtd',num:true,f:function(r){return r.qtd;}},
       {h:'Valor cobrado',num:true,f:function(r){return moeda(r.cobrado);}}
-    ],rkOpmes,{scroll:true,count:true,rowDrill:function(r){return 'opme:'+r.cod;},sortControl:sortSelect('opme',ORD_OPME,ord.opme)});
+    ],rkOpmes,{scroll:true,count:true,countLabel:function(n){return n+' item(ns) de OPME distintos no ranking';},rowDrill:function(r){return 'opme:'+r.cod;},sortControl:sortSelect('opme',ORD_OPME,ord.opme)});
 
     return '<div class="rel-section">'+
       kpis+ riscoKpis+ distRisco+
