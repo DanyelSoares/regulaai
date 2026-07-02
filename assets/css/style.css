@@ -435,16 +435,33 @@ body.pl--blurring .pl--blur-target{filter:blur(5px)}
 .rel-filter-banner b{color:#7a4f00}
 .rel-filter-clear{margin-left:auto;display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700;color:#92400e;background:#fff;border:1px solid #fcd34d;border-radius:7px;padding:4px 10px;cursor:pointer;transition:background .15s,border-color .15s}
 .rel-filter-clear:hover{background:#fffbeb;border-color:#f59e0b}
-/* seletor de natureza (dropdown com subtipos de internação) */
 .rel-exec-toolbar{display:flex;justify-content:flex-end;margin-bottom:12px}
-.rel-nat-filtro{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--g-200);border-radius:9px;padding:4px 10px;color:var(--g-600)}
-.rel-nat-filtro svg{opacity:.7;flex:0 0 auto}
-.rel-nat-select{border:none;outline:none;background:transparent;font-size:12.5px;font-weight:600;color:var(--g-800);cursor:pointer;padding:2px 2px}
-.rel-nat-filtro:focus-within{border-color:var(--g-500);box-shadow:0 0 0 2px var(--g-100)}
-.rel-seg{display:inline-flex;background:var(--g-50);border:1px solid var(--g-200);border-radius:9px;padding:3px;gap:2px}
-.rel-seg-btn{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;font-weight:600;color:var(--g-600);background:transparent;border:none;border-radius:7px;padding:5px 12px;cursor:pointer;transition:background .15s,color .15s}
-.rel-seg-btn:hover{color:var(--ink-1)}
-.rel-seg-btn.active{background:#fff;color:var(--g-800);box-shadow:0 1px 3px rgba(0,0,0,.08);font-weight:700}
+/* ── Seletor de Natureza padronizado (usado em Relatórios, Guias e Kanban) ── */
+.natureza-select{
+  appearance:none;-webkit-appearance:none;-moz-appearance:none;
+  font-family:inherit;font-size:12.5px;font-weight:600;color:var(--g-800);
+  background-color:#fff;border:1px solid var(--g-200);border-radius:9px;
+  height:34px;line-height:1;padding:0 34px 0 34px;cursor:pointer;
+  transition:border-color .15s,box-shadow .15s;
+  /* ícone de cama (natureza) à esquerda + chevron à direita, ambos via SVG embutido */
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='15' height='15' viewBox='0 0 24 24' fill='none' stroke='%23667085' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 4v16'/%3E%3Cpath d='M2 8h18a2 2 0 0 1 2 2v10'/%3E%3Cpath d='M2 17h20'/%3E%3Cpath d='M6 8v9'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='%23667085' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat:no-repeat,no-repeat;
+  background-position:left 10px center,right 11px center;
+  max-width:230px;
+}
+.natureza-select:hover{border-color:var(--g-400)}
+.natureza-select:focus{outline:none;border-color:var(--g-500);box-shadow:0 0 0 2px var(--g-100)}
+/* estado "ativo" (com filtro aplicado) */
+.natureza-select.filtro-on{border-color:var(--g-500);background-color:var(--g-50);color:var(--g-800)}
+/* grupo e itens do dropdown nativo (o navegador estiliza o popup, mas ajustamos o texto base) */
+.natureza-select optgroup{font-weight:700;color:var(--g-600);font-style:normal}
+.natureza-select option{font-weight:500;color:var(--ink-1);padding:4px}
+/* ajuste do seletor de Natureza dentro da barra de filtros do Kanban */
+.k-flt-natwrap{display:inline-flex}
+.k-filter-bar .natureza-select{height:31px;font-size:12px;border-width:1.5px;max-width:210px}
+@media(max-width:900px){.k-filter-bar .natureza-select{height:28px;font-size:11px;max-width:180px}}
 /* quebra Ambulatorial × Internação */
 .rel-quebra{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px 14px}
 .rel-quebra-col{text-align:left;background:#fff;border:1.5px solid var(--g-100);border-left:4px solid var(--qc,var(--g-300));border-radius:10px;padding:11px 13px;cursor:pointer;transition:border-color .15s,box-shadow .15s,transform .1s}

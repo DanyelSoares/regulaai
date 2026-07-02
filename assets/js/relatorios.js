@@ -636,14 +636,10 @@
 
     var RISCO_LBL={baixo:'Baixo',medio:'Médio',alto:'Alto',critico:'Crítico'};
 
-    // Seletor de natureza: Todos · Ambulatorial · Internação (todas) · subtipos de internação
-    var SUBS=(window.MOCK&&window.MOCK.SUB_INTERNACAO)||[];
-    var natOpts=[['','Todas as naturezas'],['Ambulatorial','Ambulatorial'],['Internação','Internação (todas)']]
-      .concat(SUBS.map(function(s){return ['Internação '+s,'   • Internação '+s];}));
-    var segAtend='<label class="rel-nat-filtro">'+ico('bed',13)+
-      '<select class="rel-nat-select" data-atend-sel="1" aria-label="Natureza da guia">'+
-        natOpts.map(function(o){return '<option value="'+esc(o[0])+'"'+(fa===o[0]?' selected':'')+'>'+esc(o[1])+'</option>';}).join('')+
-      '</select></label>';
+    // Seletor de natureza padronizado (com subtipos de internação em optgroup)
+    var segAtend = (window.MOCK&&window.MOCK.naturezaSelectHTML)
+      ? window.MOCK.naturezaSelectHTML(fa, 'data-atend-sel="1" aria-label="Natureza da guia"')
+      : '';
 
     // Banner de filtro ativo (risco e/ou atendimento)
     var partes=[];

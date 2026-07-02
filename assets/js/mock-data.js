@@ -433,6 +433,23 @@
     if(g.natureza==='Internação' && g.subInternacao) return 'Internação '+g.subInternacao;
     return g.natureza||'Ambulatorial';
   }
+  // HTML padronizado do seletor de Natureza (usado em Relatórios, Guias e Kanban).
+  // sel = valor selecionado; extraAttrs = string de atributos extras no <select>.
+  function naturezaSelectHTML(sel, extraAttrs){
+    function esc2(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+    sel = sel||'';
+    var cls='natureza-select'+(sel?' filtro-on':'');
+    var subOpts = SUB_INTERNACAO.map(function(s){
+      var v='Internação '+s;
+      return '<option value="'+esc2(v)+'"'+(sel===v?' selected':'')+'>'+esc2(s)+'</option>';
+    }).join('');
+    return '<select class="'+cls+'"'+(extraAttrs?' '+extraAttrs:'')+'>'+
+      '<option value=""'+(sel===''?' selected':'')+'>Todas as naturezas</option>'+
+      '<option value="Ambulatorial"'+(sel==='Ambulatorial'?' selected':'')+'>Ambulatorial</option>'+
+      '<option value="Internação"'+(sel==='Internação'?' selected':'')+'>Internação (todas)</option>'+
+      '<optgroup label="Internação por especialidade">'+subOpts+'</optgroup>'+
+    '</select>';
+  }
 
   // ── CID (simulado, coerente com o tipo da guia) ──
   var CID_MAP = {
@@ -488,6 +505,7 @@
     MOTIVOS_COMP:MOTIVOS_COMP, MOTIVOS_REPR:MOTIVOS_REPR, MOTIVOS_RESS:MOTIVOS_RESS,
     LOGS:LOGS, buildGuias: hydrate, matmedDetalhe: matmedDetalhe, opmeDetalhe: opmeDetalhe, observacoesGuia: observacoesGuia,
     calcIdade: calcIdade, anosContrato: anosContrato, cidGuia: cidGuia,
-    naturezaDaGuia: naturezaDaGuia, naturezaDetalhada: naturezaDetalhada, SUB_INTERNACAO: SUB_INTERNACAO
+    naturezaDaGuia: naturezaDaGuia, naturezaDetalhada: naturezaDetalhada, SUB_INTERNACAO: SUB_INTERNACAO,
+    naturezaSelectHTML: naturezaSelectHTML
   };
 })(window);

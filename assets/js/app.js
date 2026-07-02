@@ -1443,7 +1443,7 @@
         '<select id="fEspec">'+(function(){var s='<option value="">Especialidade</option>';var seen={};guias.forEach(function(g){var e=_especMap[g.tipo];if(e&&!seen[e]){seen[e]=1;s+='<option value="'+esc(e)+'"'+(State.filtros.especialidade===e?' selected':'')+'>'+esc(e)+'</option>';}});return s;}())+'</select>'+
         '<select id="fOpme">'+opts(['Sim','Não'],State.filtros.opme,'OPME')+'</select>'+
         '<select id="fUti">'+opts(['Sim','Não'],State.filtros.uti,'UTI')+'</select>'+
-        '<select id="fNaturezaC">'+opts(['Ambulatorial','Internação'].concat(MOCK.SUB_INTERNACAO.map(function(s){return 'Internação '+s;})),State.filtros.natureza,'Natureza')+'</select>'+
+        MOCK.naturezaSelectHTML(State.filtros.natureza,'id="fNaturezaC"')+
         '<div class="spacer"></div>'+
         '<div id="fPeriodoWrap"></div>';
       wrap.appendChild(filt);
@@ -1863,7 +1863,7 @@
       $('#fUti').onchange=function(){State.filtros.uti=this.value;render()};
       $('#fNaturezaC').onchange=function(){State.filtros.natureza=this.value;render()};
       var fesp=$('#fEspec'); if(fesp) fesp.onchange=function(){State.filtros.especialidade=this.value;render();};
-      ['#fStatus','#fFluxo','#fOrigem','#fRisco','#fEspec','#fOpme','#fUti','#fNaturezaC'].forEach(function(id){ var s=$(id); if(s) makeCustomSelect(s); });
+      ['#fStatus','#fFluxo','#fOrigem','#fRisco','#fEspec','#fOpme','#fUti'].forEach(function(id){ var s=$(id); if(s) makeCustomSelect(s); });
       var _drpInstance = makeDateRangePicker(
         $('#fPeriodoWrap'),
         State.filtros.dataDeEmissao,
@@ -2230,17 +2230,12 @@
       });
     }));
 
-    // Natureza (Ambulatorial × Internação, com subtipos de internação)
-    var tipoLabel=kf.tipo||'Natureza';
-    fbar.appendChild(makeFltWrap('bed',tipoLabel,kf.tipo!=='',function(drop){
-      var natOpts=[['','Todos'],['Ambulatorial','Ambulatorial'],['Internação','Internação (todas)']]
-        .concat(MOCK.SUB_INTERNACAO.map(function(s){return ['Internação '+s,'• '+s];}));
-      natOpts.forEach(function(opt){
-        drop.appendChild(fltItem(opt[1],kf.tipo===opt[0],(function(v){
-          return function(){ State.kanbanFiltros.tipo=v; render(); };
-        })(opt[0])));
-      });
-    }));
+    // Natureza (padronizada: seletor único com subtipos de internação)
+    var natWrap=el('div',{class:'k-flt-natwrap'});
+    natWrap.innerHTML=MOCK.naturezaSelectHTML(kf.tipo||'','id="kfNatureza"');
+    fbar.appendChild(natWrap);
+    var kfNat=natWrap.querySelector('#kfNatureza');
+    if(kfNat) kfNat.onchange=function(){ State.kanbanFiltros.tipo=this.value; render(); };
 
     // Especialidade (derivada do tipo da guia)
     var especOpts=(function(){var s={};guias.forEach(function(g){var e=MOCK.especialidadeDaGuia(g);if(e)s[e]=1;});return Object.keys(s).sort();}());
