@@ -61,7 +61,7 @@
     },
     guias: MOCK.buildGuias(),
     guiasPagina: 1,
-    filtros: { q:'', status:'', fluxo:'', origem:'', risco:'', benef:'', prest:'', tipo:'', natureza:'', congenere:'', solicitante:'', opme:'', uti:'', regimeAte:'', especialidade:'', dataDeEmissao:'', dataAteEmissao:'', sortCol:'', sortDir:'' },
+    filtros: { q:'', status:'', fluxo:'', origem:'', risco:'', benef:'', prest:'', tipo:'', natureza:'', congenere:'', solicitante:'', opme:'', uti:'', especialidade:'', dataDeEmissao:'', dataAteEmissao:'', sortCol:'', sortDir:'' },
     kanbanPeriodo: { de:'', ate:'' },
     dashboardPeriodo: (function(){
       var hj=new Date(), de=new Date(); de.setDate(hj.getDate()-30);
@@ -1443,7 +1443,7 @@
         '<select id="fEspec">'+(function(){var s='<option value="">Especialidade</option>';var seen={};guias.forEach(function(g){var e=_especMap[g.tipo];if(e&&!seen[e]){seen[e]=1;s+='<option value="'+esc(e)+'"'+(State.filtros.especialidade===e?' selected':'')+'>'+esc(e)+'</option>';}});return s;}())+'</select>'+
         '<select id="fOpme">'+opts(['Sim','Não'],State.filtros.opme,'OPME')+'</select>'+
         '<select id="fUti">'+opts(['Sim','Não'],State.filtros.uti,'UTI')+'</select>'+
-        '<select id="fRegimeAte">'+opts(['Ambulatorial','Internação'],State.filtros.regimeAte,'Regime de atendimento')+'</select>'+
+        '<select id="fNaturezaC">'+opts(['Ambulatorial','Internação'].concat(MOCK.SUB_INTERNACAO.map(function(s){return 'Internação '+s;})),State.filtros.natureza,'Natureza')+'</select>'+
         '<div class="spacer"></div>'+
         '<div id="fPeriodoWrap"></div>';
       wrap.appendChild(filt);
@@ -1647,7 +1647,6 @@
       if(f.opme==='Não'&&g.opme) return false;
       if(f.uti==='Sim'&&!g.uti) return false;
       if(f.uti==='Não'&&g.uti) return false;
-      if(f.regimeAte){var _isInter=g.natureza==='Internação'||g.tipo==='Cirurgia'||g.tipo==='Cirurgia neuro'||g.tipo==='Cirurgia ortopédica'||g.diariasTaxas.some(function(d){return d.desc.indexOf('Diária')>=0;});if(f.regimeAte==='Internação'&&!_isInter) return false; if(f.regimeAte==='Ambulatorial'&&_isInter) return false;}
       if(f.especialidade&&(_especMap[g.tipo]||'')!==f.especialidade) return false;
       if(f.dataDeEmissao&&g.dataEmissao<f.dataDeEmissao) return false;
       if(f.dataAteEmissao&&g.dataEmissao>f.dataAteEmissao) return false;
@@ -1862,9 +1861,9 @@
       $('#fRisco').onchange=function(){State.filtros.risco=this.value;render()};
       $('#fOpme').onchange=function(){State.filtros.opme=this.value;render()};
       $('#fUti').onchange=function(){State.filtros.uti=this.value;render()};
-      $('#fRegimeAte').onchange=function(){State.filtros.regimeAte=this.value;render()};
+      $('#fNaturezaC').onchange=function(){State.filtros.natureza=this.value;render()};
       var fesp=$('#fEspec'); if(fesp) fesp.onchange=function(){State.filtros.especialidade=this.value;render();};
-      ['#fStatus','#fFluxo','#fOrigem','#fRisco','#fEspec','#fOpme','#fUti','#fRegimeAte'].forEach(function(id){ var s=$(id); if(s) makeCustomSelect(s); });
+      ['#fStatus','#fFluxo','#fOrigem','#fRisco','#fEspec','#fOpme','#fUti','#fNaturezaC'].forEach(function(id){ var s=$(id); if(s) makeCustomSelect(s); });
       var _drpInstance = makeDateRangePicker(
         $('#fPeriodoWrap'),
         State.filtros.dataDeEmissao,
@@ -1872,7 +1871,7 @@
         function(de, ate){ State.filtros.dataDeEmissao=de; State.filtros.dataAteEmissao=ate; render(); }
       );
       $('#btnClear').onclick=function(){
-        State.filtros={q:'',status:'',fluxo:'',origem:'',risco:'',benef:'',prest:'',tipo:'',natureza:'',congenere:'',solicitante:'',opme:'',uti:'',regimeAte:'',especialidade:'',dataDeEmissao:'',dataAteEmissao:'',sortCol:'',sortDir:''};
+        State.filtros={q:'',status:'',fluxo:'',origem:'',risco:'',benef:'',prest:'',tipo:'',natureza:'',congenere:'',solicitante:'',opme:'',uti:'',especialidade:'',dataDeEmissao:'',dataAteEmissao:'',sortCol:'',sortDir:''};
         if(_drpInstance) _drpInstance.clear();
         $('#globalSearch').value=''; render();
       };
