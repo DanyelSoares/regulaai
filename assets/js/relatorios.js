@@ -643,13 +643,6 @@
         'Quantidade de alertas gerados pelo motor de detecção (concentração, recorrência, alto custo, inconsistência de OPME). Clique para abrir a aba Alertas Inteligentes.','alertas')+
     '</div>';
 
-    var riscoKpis='<div class="rel-kpi-grid">'+
-      kpiCard('Risco baixo',rc.baixo,'','#16a34a')+
-      kpiCard('Risco médio',rc.medio,'','#a16207')+
-      kpiCard('Risco alto',rc.alto,'','#c2410c')+
-      kpiCard('Risco crítico',rc.critico,'','#b91c1c')+
-    '</div>';
-
     var distRisco='<div class="rel-card"><div class="rel-card-hd">Distribuição por risco<span class="rel-card-sub" title="Clique numa barra para filtrar o painel pelas guias daquele nível de risco">clique para filtrar · nº de guias</span></div><div style="padding:6px 14px 12px">'+
       distRow('Baixo',rc.baixo,maxRisco,'#16a34a','baixo',fr==='baixo')+
       distRow('Médio',rc.medio,maxRisco,'#a16207','medio',fr==='medio')+
@@ -680,7 +673,7 @@
 
     return '<div class="rel-section">'+
       filtroBanner+
-      kpis+ riscoKpis+ distRisco+
+      kpis+ distRisco+
       '<div class="rel-grid2">'+rkMed+rkPrest+'</div>'+
       rkOpme+
     '</div>';
