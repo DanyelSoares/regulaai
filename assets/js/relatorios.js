@@ -16,7 +16,6 @@
     {id:'custos',      label:'Custos',           ico:'dollar-sign'},
     {id:'alertas',     label:'Alertas Inteligentes', ico:'bell-ring'},
     {id:'comparativos',label:'Comparativos',     ico:'git-compare'},
-    {id:'exportacoes', label:'Exportações',      ico:'download'}
   ];
 
   var _state = { tab: 'executivo', ordExec: { med:'custo_desc', prest:'custo_desc', opme:'valor_desc' }, buscaExec: { med:'', prest:'', opme:'' }, ordProc: 'qtd_desc', buscaProc: '', ordOpme: 'qtd_desc', buscaOpme: '', ordMm: 'qtd_desc', buscaMm: '', ordDt: 'qtd_desc', buscaDt: '',
@@ -391,6 +390,19 @@
     return '—';
   }
 
+  // Ícone SVG do Excel (moderno) reutilizável
+  function xlsxSvg(sz){
+    sz=sz||17;
+    return '<svg viewBox="0 0 32 32" width="'+sz+'" height="'+sz+'" aria-hidden="true">'+
+      '<path d="M15 4h13.5A1.5 1.5 0 0 1 30 5.5v21a1.5 1.5 0 0 1-1.5 1.5H15z" fill="#185C37"/>'+
+      '<rect x="15" y="4"  width="15" height="7.3" rx="1.5" fill="#33C481"/>'+
+      '<rect x="15" y="11.3" width="15" height="7.3" fill="#21A366"/>'+
+      '<rect x="15" y="18.6" width="15" height="7.3" fill="#107C41"/>'+
+      '<rect x="2" y="7" width="15" height="18" rx="2.2" fill="#107C41"/>'+
+      '<path d="M6.3 11.2l2.7 3.5 2.7-3.5h2.6l-3.9 5.3 4 5.5h-2.7l-2.7-3.7-2.7 3.7H3.6l4-5.5-3.9-5.3z" fill="#fff"/>'+
+    '</svg>';
+  }
+
   // Tabela de ranking genérica. opts.scroll=true → corpo com altura fixa e rolagem.
   function rankTable(titulo, cols, rows, opts){
     opts=opts||{};
@@ -406,18 +418,7 @@
     // Botão Excel (opcional): exporta a tabela como está na tela (respeita busca/ordem)
     var tblId = opts.xlsx ? ('reltbl-'+(_tblSeq++)) : '';
     var btnXlsx = opts.xlsx
-      ? '<button class="rel-xlsx-btn" data-xlsx="'+tblId+'" data-xlsx-nome="'+esc(opts.xlsx)+'" title="Exportar para Excel (.xlsx)" aria-label="Exportar para Excel">'+
-          '<svg viewBox="0 0 32 32" width="17" height="17" aria-hidden="true">'+
-            // folha à direita, dividida em faixas horizontais de verde (claro→escuro)
-            '<path d="M15 4h13.5A1.5 1.5 0 0 1 30 5.5v21a1.5 1.5 0 0 1-1.5 1.5H15z" fill="#185C37"/>'+
-            '<rect x="15" y="4"  width="15" height="7.3" rx="1.5" fill="#33C481"/>'+
-            '<rect x="15" y="11.3" width="15" height="7.3" fill="#21A366"/>'+
-            '<rect x="15" y="18.6" width="15" height="7.3" fill="#107C41"/>'+
-            // bloco arredondado à esquerda com o X branco (levemente sobreposto)
-            '<rect x="2" y="7" width="15" height="18" rx="2.2" fill="#107C41"/>'+
-            '<path d="M6.3 11.2l2.7 3.5 2.7-3.5h2.6l-3.9 5.3 4 5.5h-2.7l-2.7-3.7-2.7 3.7H3.6l4-5.5-3.9-5.3z" fill="#fff"/>'+
-          '</svg>'+
-        '</button>'
+      ? '<button class="rel-xlsx-btn" data-xlsx="'+tblId+'" data-xlsx-nome="'+esc(opts.xlsx)+'" title="Exportar para Excel (.xlsx)" aria-label="Exportar para Excel">'+xlsxSvg(17)+'</button>'
       : '';
     // Grupo à direita: filtro de ordenação (se houver) + botão Excel + contador, sempre juntos e alinhados à direita
     var direita =
@@ -479,7 +480,6 @@
     if(id==='procedimentos') return renderProcedimentos();
     if(id==='alertas') return renderAlertas();
     if(id==='comparativos') return renderComparativos();
-    if(id==='exportacoes') return renderExportacoes();
     return '';
   }
 
@@ -637,27 +637,6 @@
     '</div>';
   }
 
-  // ── Exportações (CSV real do que está agregado) ───────────────────
-  function renderExportacoes(){
-    return '<div class="rel-section">'+
-      '<div class="rel-note">'+ico('info',13)+' <span>Exporte os dados consolidados do período. A maioria dos conjuntos sai em <b>CSV</b>; <b>Procedimentos</b> sai em <b>Excel (.xlsx) com 4 abas</b> (Procedimentos, Diárias e Taxas, OPME e Mat/Med). Abre no Excel. PDF e agendamento entram em fase futura.</span></div>'+
-      '<div class="rel-card"><div class="rel-card-hd">Conjuntos disponíveis para exportação</div>'+
-      '<div class="rel-export-grid">'+
-        exportBtn('guias','Guias (visão geral)','file-check-2')+
-        exportBtn('alertas','Alertas detectados','bell-ring')+
-        exportBtn('beneficiarios','Beneficiários','users')+
-        exportBtn('medicos','Médicos solicitantes','stethoscope')+
-        exportBtn('prestadores','Prestadores','hospital')+
-        exportBtn('procedimentos','Procedimentos (Excel · 4 abas)','clipboard-list')+
-        exportBtn('opme','OPME','bone')+
-        exportBtn('matmed','Mat/Med','pill')+
-        exportBtn('diarias','Diárias e Taxas','calendar-days')+
-      '</div></div>'+
-    '</div>';
-  }
-  function exportBtn(tipo,label,icone){
-    return '<button class="rel-export-btn" data-export="'+tipo+'">'+ico(icone,16)+' <span>'+esc(label)+'</span>'+ico('download',14)+'</button>';
-  }
 
   // Retorna {head, rows} de um conjunto de dados para exportação
   function datasetExport(tipo){
@@ -723,32 +702,6 @@
   }
 
   // Gera e baixa o conjunto pedido. "procedimentos" vira um XLSX com 4 abas
-  // (Procedimentos, Diárias e Taxas, OPME, Mat/Med); os demais permanecem em CSV.
-  function exportarCSV(tipo){
-    if(tipo==='procedimentos'){
-      var abas=[
-        {nome:'Procedimentos',    tipo:'procedimentos'},
-        {nome:'Diárias e Taxas',  tipo:'diarias'},
-        {nome:'OPME',             tipo:'opme'},
-        {nome:'Mat-Med',          tipo:'matmed'}
-      ];
-      if(window.XLSX){
-        var wb=XLSX.utils.book_new();
-        abas.forEach(function(ab){
-          var ds=datasetExport(ab.tipo);
-          var ws=XLSX.utils.aoa_to_sheet([ds.head].concat(ds.rows));
-          XLSX.utils.book_append_sheet(wb, ws, ab.nome.slice(0,31)); // nome de aba: máx 31 chars
-        });
-        XLSX.writeFile(wb, 'relatorio-procedimentos-'+new Date().toISOString().slice(0,10)+'.xlsx');
-      } else {
-        // fallback (sem a lib): baixa os 4 CSVs separados
-        abas.forEach(function(ab){ baixarCSV('relatorio-'+ab.tipo, datasetExport(ab.tipo)); });
-      }
-      return;
-    }
-    baixarCSV('relatorio-'+tipo, datasetExport(tipo));
-  }
-
   // ── Painel Executivo (KPIs + rankings reais) ──────────────────────
   function renderExecutivo(){
     var fr=_state.filtroRisco||'';  // filtro de risco ativo (clique na barra de distribuição)
@@ -1124,7 +1077,9 @@
       resumo+
       '<div class="rel-note">'+ico('info',13)+' <span>Central de alertas — caixa de entrada da auditoria. Alertas <b>gerados automaticamente</b> pela varredura das guias (recorrência, concentração, alto custo, inconsistência de OPME). Clique numa linha para ver a explicação da IA e a ação sugerida.</span></div>'+
       '<div class="rel-card"><div class="rel-card-hd">Distribuição por tipo de inconsistência</div><div style="padding:6px 14px 12px">'+distTipo+'</div></div>'+
-      '<div class="rel-card"><div class="rel-card-hd">Alertas detectados ('+A.length+')</div>'+
+      '<div class="rel-card"><div class="rel-card-hd">Alertas detectados'+
+        '<span class="rel-card-actions"><button class="rel-xlsx-btn" data-xlsx-alertas="1" title="Exportar Alertas para Excel (.xlsx)" aria-label="Exportar Alertas para Excel">'+xlsxSvg(17)+'</button>'+
+        '<span class="rel-card-count" title="'+A.length+' alerta(s) detectado(s)">'+A.length+'</span></span></div>'+
       '<div class="table-wrap"><table class="cfg-table rel-alert-table"><thead><tr>'+
         '<th>ID</th><th>Data</th><th>Guia</th><th>Médico</th><th>Severidade</th><th>Tipo</th><th>Score</th><th>Valor</th><th>Status</th>'+
       '</tr></thead><tbody>'+linhas+'</tbody></table></div></div>'+
@@ -1182,16 +1137,7 @@
     var tabBar = el('div',{class:'rel-tab-bar'});
     // ícone de Excel no FINAL da barra: exporta "Guias (visão geral)" — completo (só no Painel Executivo)
     var xlsxGuias =
-      '<button class="rel-tabbar-xlsx" data-xlsx-guias="1" title="Exportar Guias (visão geral) para Excel" aria-label="Exportar Guias para Excel">'+
-        '<svg viewBox="0 0 32 32" width="17" height="17" aria-hidden="true">'+
-          '<path d="M15 4h13.5A1.5 1.5 0 0 1 30 5.5v21a1.5 1.5 0 0 1-1.5 1.5H15z" fill="#185C37"/>'+
-          '<rect x="15" y="4"  width="15" height="7.3" rx="1.5" fill="#33C481"/>'+
-          '<rect x="15" y="11.3" width="15" height="7.3" fill="#21A366"/>'+
-          '<rect x="15" y="18.6" width="15" height="7.3" fill="#107C41"/>'+
-          '<rect x="2" y="7" width="15" height="18" rx="2.2" fill="#107C41"/>'+
-          '<path d="M6.3 11.2l2.7 3.5 2.7-3.5h2.6l-3.9 5.3 4 5.5h-2.7l-2.7-3.7-2.7 3.7H3.6l4-5.5-3.9-5.3z" fill="#fff"/>'+
-        '</svg>'+
-      '</button>';
+      '<button class="rel-tabbar-xlsx" data-xlsx-guias="1" title="Exportar Guias (visão geral) para Excel" aria-label="Exportar Guias para Excel">'+xlsxSvg(17)+'</button>';
     tabBar.innerHTML = TABS.map(function(t){
       return '<button class="rel-tab'+(_state.tab===t.id?' active':'')+'" data-rtab="'+t.id+'">'+esc(t.label)+'</button>';
     }).join('') + '<span class="rel-tabbar-spacer"></span>' + xlsxGuias;
@@ -1259,13 +1205,13 @@
         if(det) det.style.display = det.style.display==='none'?'table-row':'none';
       };
     });
-    // botões de exportação CSV
-    container.querySelectorAll('[data-export]').forEach(function(btn){
-      btn.onclick=function(){ exportarCSV(btn.getAttribute('data-export')); };
-    });
     // botões de Excel direto no cabeçalho das tabelas (exporta o que está na tela)
     container.querySelectorAll('.rel-xlsx-btn[data-xlsx]').forEach(function(btn){
       btn.onclick=function(e){ e.stopPropagation(); exportarTabelaXlsx(btn.getAttribute('data-xlsx'), btn.getAttribute('data-xlsx-nome')); };
+    });
+    // botão Excel da tabela de Alertas (exporta o dataset completo, não a tela com linhas de detalhe)
+    container.querySelectorAll('[data-xlsx-alertas]').forEach(function(btn){
+      btn.onclick=function(e){ e.stopPropagation(); exportarDatasetXlsx('alertas','Alertas'); };
     });
     // linhas de ranking clicáveis → detalhe das guias (modal)
     container.querySelectorAll('.rel-rank-row[data-drill]').forEach(function(row){

@@ -495,12 +495,6 @@ body.pl--blurring .pl--blur-target{filter:blur(5px)}
 .rel-cmp-bar>span{display:block;height:100%;border-radius:20px;transition:width .4s}
 .rel-cmp-delta{font-size:11px;font-weight:700;margin-top:4px}
 .rel-cmp-delta.up{color:#c2410c}.rel-cmp-delta.down{color:#15803d}
-/* Exportações */
-.rel-export-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;padding:14px 16px}
-.rel-export-btn{display:flex;align-items:center;gap:10px;padding:12px 14px;border:1px solid var(--g-200);background:#fff;border-radius:10px;cursor:pointer;font-size:13px;font-weight:600;color:var(--g-700);transition:background .12s,border-color .12s}
-.rel-export-btn:hover{background:var(--g-50);border-color:var(--g-400)}
-.rel-export-btn>span{flex:1;text-align:left}
-.rel-export-btn svg:last-child{color:var(--muted)}
 @media(max-width:640px){
   .rel-kpi-grid{grid-template-columns:1fr 1fr}
   .rel-kpi-v{font-size:22px}
