@@ -2166,8 +2166,8 @@
       closeFltDrops();
       if(!wasOpen) drop.style.display='block';
     }
-    function fltItem(label,isSelected,onclick){
-      var item=el('div',{class:'k-flt-item'+(isSelected?' sel':'')});
+    function fltItem(label,isSelected,onclick,isSub){
+      var item=el('div',{class:'k-flt-item'+(isSelected?' sel':'')+(isSub?' k-flt-sub':'')});
       var chk=el('span',{class:'k-flt-chk'});
       if(isSelected) chk.innerHTML=ico('check',10);
       item.appendChild(chk);
@@ -2233,15 +2233,20 @@
       });
     }));
 
-    // Natureza (padronizada: mesmo componente .csel dos filtros de Guias)
-    var natWrap=el('div',{class:'k-flt-natwrap'});
-    natWrap.innerHTML=MOCK.naturezaSelectHTML(kf.tipo||'','id="kfNatureza"');
-    fbar.appendChild(natWrap);
-    var kfNat=natWrap.querySelector('#kfNatureza');
-    if(kfNat){
-      kfNat.onchange=function(){ State.kanbanFiltros.tipo=this.value; render(); };
-      makeCustomSelect(kfNat);
-    }
+    // Natureza (mesmo padrão dos demais filtros do Kanban: makeFltWrap + fltItem)
+    // Rótulo do botão: nome do subtipo/valor selecionado, ou "Natureza" quando sem filtro
+    var natLabel=kf.tipo ? kf.tipo.replace(/^Internação\s+/,'') : 'Natureza';
+    fbar.appendChild(makeFltWrap('bed',natLabel,kf.tipo!=='',function(drop){
+      function setNat(v){ return function(){ State.kanbanFiltros.tipo=v; render(); }; }
+      drop.appendChild(fltItem('Todos',kf.tipo==='',setNat('')));
+      drop.appendChild(fltItem('Ambulatorial',kf.tipo==='Ambulatorial',setNat('Ambulatorial')));
+      drop.appendChild(el('div',{class:'k-flt-sep'}));
+      drop.appendChild(fltItem('Internação (todas)',kf.tipo==='Internação',setNat('Internação')));
+      MOCK.SUB_INTERNACAO.forEach(function(s){
+        var v='Internação '+s;
+        drop.appendChild(fltItem(s,kf.tipo===v,setNat(v),true)); // isSub → recuo
+      });
+    }));
 
     // Especialidade (derivada do tipo da guia)
     var especOpts=(function(){var s={};guias.forEach(function(g){var e=MOCK.especialidadeDaGuia(g);if(e)s[e]=1;});return Object.keys(s).sort();}());

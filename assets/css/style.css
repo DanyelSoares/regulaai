@@ -459,7 +459,6 @@ body.pl--blurring .pl--blur-target{filter:blur(5px)}
 .rel-filter-clear{margin-left:auto;display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700;color:#92400e;background:#fff;border:1px solid #fcd34d;border-radius:7px;padding:4px 10px;cursor:pointer;transition:background .15s,border-color .15s}
 .rel-filter-clear:hover{background:#fffbeb;border-color:#f59e0b}
 /* seletor de Natureza no Kanban usa o mesmo componente .csel dos demais filtros */
-.k-flt-natwrap{display:inline-flex}
 /* quebra Ambulatorial × Internação */
 .rel-quebra{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px 14px}
 .rel-quebra-col{text-align:left;background:#fff;border:1.5px solid var(--g-100);border-left:4px solid var(--qc,var(--g-300));border-radius:10px;padding:11px 13px;cursor:pointer;transition:border-color .15s,box-shadow .15s,transform .1s}
@@ -963,6 +962,9 @@ body.sidebar-collapsed .modal-backdrop{left:66px}
 }
 .k-flt-item:hover{background:var(--g-50)}
 .k-flt-item.sel{color:var(--g-700);font-weight:600}
+/* subitem (subtipos de Internação) — recuo com marcador de árvore */
+.k-flt-item.k-flt-sub{padding-left:24px;position:relative;color:var(--g-600);font-size:11.5px}
+.k-flt-item.k-flt-sub::before{content:"";position:absolute;left:13px;top:50%;width:5px;height:5px;border-left:1.5px solid var(--g-300);border-bottom:1.5px solid var(--g-300);transform:translateY(-60%);border-bottom-left-radius:2px}
 .k-flt-chk{
   display:flex;align-items:center;justify-content:center;
   width:15px;height:15px;border-radius:4px;
