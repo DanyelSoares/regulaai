@@ -357,6 +357,8 @@ body.pl--blurring .pl--blur-target{filter:blur(5px)}
 .rel-kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
 .rel-kpi{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px 18px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
 .rel-kpi-v{font-size:26px;font-weight:800;line-height:1.1}
+/* valor textual (ex.: nome de procedimento) — fonte menor, quebra em até 2 linhas */
+.rel-kpi-txt{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:15px;font-weight:700;line-height:1.2}
 .rel-kpi-t{font-size:12.5px;color:var(--ink-2);margin-top:6px;font-weight:600}
 .rel-kpi-s{font-size:11px;color:var(--muted);margin-top:2px}
 .rel-note{display:flex;align-items:flex-start;gap:8px;background:#fef9e7;border:1px solid #f5e2a3;border-radius:9px;padding:10px 13px;font-size:12.5px;color:#7a5d00;line-height:1.55}

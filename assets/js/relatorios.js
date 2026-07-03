@@ -544,12 +544,12 @@
   function renderProcedimentos(){
     var M=analitico();
     var pr=M.procs.slice();
-    var maisCaros=pr.slice().sort(function(a,b){return b.custoMedio-a.custoMedio;}).slice(0,5);
+    var maisSolic=pr.slice().sort(function(a,b){return b.qtd-a.qtd || b.custo-a.custo;})[0];
     var maisNeg=pr.slice().sort(function(a,b){return b.taxaNeg-a.taxaNeg;}).slice(0,5);
     var kpis='<div class="rel-kpi-grid">'+
       kpiCard('Procedimentos distintos',pr.length,'no período','var(--g-700)')+
       kpiCard('Total solicitado',pr.reduce(function(s,p){return s+p.qtd;},0),'ocorrências','#0f766e')+
-      kpiCard('Mais caro',maisCaros.length?moeda(maisCaros[0].custoMedio):'R$ 0','médio','#b45309')+
+      kpiCard('Mais solicitado',maisSolic?'<span class="rel-kpi-txt">'+esc(maisSolic.desc)+'</span>':'—',maisSolic?maisSolic.qtd+'× · '+esc(maisSolic.cod):'','#b45309','Procedimento com maior número de solicitações no período.')+
       kpiCard('Maior negativa',maisNeg.length?maisNeg[0].taxaNeg+'%':'0%',maisNeg.length?maisNeg[0].cod:'','#b91c1c')+
     '</div>';
     // Div unificada por tipo: uma tabela (Qtd + Custo), um filtro de ordenação e uma busca.
