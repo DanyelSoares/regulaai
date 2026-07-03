@@ -163,8 +163,12 @@
 
   // Constrói (e cacheia) o modelo analítico a partir das guias do contexto.
   // filtroRisco (opcional): 'baixo'|'medio'|'alto'|'critico' — restringe às guias daquele nível.
-  // filtroAtend (opcional): 'Internação'|'Ambulatorial' — restringe pela natureza da guia.
+  // filtroAtend (opcional): 'Internação'|'Ambulatorial'|'Internação <Subtipo>' — restringe pela natureza.
+  //   Quando NÃO informado, usa o filtro de Natureza global do módulo (_state.filtroAtend),
+  //   de modo que a Natureza selecionada no cabeçalho valha em todas as abas.
+  //   Passe '' explicitamente para forçar "sem filtro de natureza" (ex.: totais de referência).
   function analitico(filtroRisco, filtroAtend){
+    if(filtroAtend===undefined) filtroAtend = _state.filtroAtend || '';
     // filtro de período (global do módulo) faz parte da chave de cache
     var pDe=_state.periodo.de||'', pAte=_state.periodo.ate||'';
     // cache separado por combinação de filtros + período
@@ -1115,9 +1119,9 @@
       window.makeDateRangePicker(periodoWrap, _state.periodo.de, _state.periodo.ate, aplicarPeriodo, {hideIcon:false});
     }
 
-    // (Re)constrói o filtro de Natureza no cabeçalho — visível apenas na aba Painel Executivo
+    // (Re)constrói o filtro de Natureza no cabeçalho — visível em todas as abas, exceto Comparativos
     function montarFiltroNatureza(){
-      var mostrar = _state.tab==='executivo';
+      var mostrar = _state.tab!=='comparativos';
       naturezaWrap.style.display = mostrar ? 'flex' : 'none';
       naturezaWrap.innerHTML = '';
       if(!mostrar || !(window.MOCK&&window.MOCK.naturezaSelectHTML)) return;
@@ -1158,7 +1162,8 @@
 
     function irParaAba(id){
       var btn=tabBar.querySelector('.rel-tab[data-rtab="'+id+'"]'); if(!btn) return;
-      if(id!=='executivo'){ _state.filtroRisco=''; _state.filtroAtend=''; } // sair do Painel Executivo limpa os filtros
+      if(id!=='executivo') _state.filtroRisco='';        // o filtro por barra de risco é exclusivo do Painel Executivo
+      if(id==='comparativos') _state.filtroAtend='';      // Natureza não se aplica em Comparativos
       _state.tab=id;
       tabBar.querySelectorAll('.rel-tab').forEach(function(x){x.classList.toggle('active',x===btn);});
       content.innerHTML=renderTab(id);
