@@ -20,7 +20,7 @@
     {id:'exportacoes', label:'Exportações',      ico:'download'}
   ];
 
-  var _state = { tab: 'executivo', ordExec: { med:'custo_desc', prest:'custo_desc', opme:'valor_desc' }, buscaExec: { med:'', prest:'', opme:'' }, ordProc: 'qtd_desc', buscaProc: '', filtroRisco: '', filtroAtend: '', periodo: { de:'', ate:'' } };
+  var _state = { tab: 'executivo', ordExec: { med:'custo_desc', prest:'custo_desc', opme:'valor_desc' }, buscaExec: { med:'', prest:'', opme:'' }, ordProc: 'qtd_desc', buscaProc: '', ordProcCaro: 'cmed_desc', buscaProcCaro: '', filtroRisco: '', filtroAtend: '', periodo: { de:'', ate:'' } };
 
   // Opções de ordenação por ranking do Painel Executivo
   var ORD_MED = [
@@ -40,6 +40,10 @@
     {v:'qtd_desc', lbl:'Mais solicitados'},
     {v:'qtd_asc',  lbl:'Menos solicitados'}
   ];
+  var ORD_PROC_CARO = [
+    {v:'cmed_desc', lbl:'Maior custo'},
+    {v:'cmed_asc',  lbl:'Menor custo'}
+  ];
   // Ordena um array conforme a chave de ordenação escolhida
   function ordenarRank(arr, ord, campoValor){
     var vc = campoValor || 'custo'; // 'custo' p/ médicos/prestadores, 'cobrado' p/ OPME
@@ -52,6 +56,8 @@
         case 'guias_asc':  return (nGuias(a)-nGuias(b)) || (a[vc]-b[vc]);
         case 'qtd_desc':   return ((b.qtd||0)-(a.qtd||0)) || ((b.custo||0)-(a.custo||0)); // procedimentos: por quantidade
         case 'qtd_asc':    return ((a.qtd||0)-(b.qtd||0)) || ((a.custo||0)-(b.custo||0));
+        case 'cmed_desc':  return ((b.custoMedio||0)-(a.custoMedio||0)) || ((b.qtd||0)-(a.qtd||0)); // procedimentos: por custo médio
+        case 'cmed_asc':   return ((a.custoMedio||0)-(b.custoMedio||0)) || ((a.qtd||0)-(b.qtd||0));
         case 'custo_desc':
         case 'valor_desc':
         default:           return (b[vc]-a[vc]) || (nGuias(b)-nGuias(a));
@@ -535,10 +541,15 @@
       {h:'Qtd',num:true,f:function(r){return r.qtd;}}
     ],procRank,{scroll:true,count:true,countLabel:function(n){return n+' procedimento(s) distinto(s) no ranking';},
       sortControl:searchBox('proc',_state.buscaProc)+sortSelect('proc',ORD_PROC,_state.ordProc)});
-    var rkB=rankTable('Mais caros (custo médio)',[
+    // Ranking "Mais caros": lista completa por custo médio + busca + ordenação + scroll
+    var procCaroRank = ordenarRank(filtrarRank(pr, _state.buscaProcCaro), _state.ordProcCaro, 'custoMedio');
+    var rkB=rankTable('Mais caros',[
+      {h:'#',f:function(r,i){return '<b>'+(i+1)+'</b>';}},
+      {h:'Código',f:function(r){return esc(r.cod);}},
       {h:'Procedimento',f:function(r){return esc(r.desc);}},
       {h:'Custo médio',num:true,f:function(r){return moeda(r.custoMedio);}}
-    ],maisCaros);
+    ],procCaroRank,{scroll:true,count:true,countLabel:function(n){return n+' procedimento(s) distinto(s) no ranking';},
+      sortControl:searchBox('procCaro',_state.buscaProcCaro)+sortSelect('procCaro',ORD_PROC_CARO,_state.ordProcCaro)});
     return '<div class="rel-section">'+kpis+'<div class="rel-grid2">'+rkA+rkB+'</div></div>';
   }
 
@@ -1131,6 +1142,7 @@
       sel.onchange=function(){
         var rank=sel.getAttribute('data-rank');
         if(rank==='proc'){ _state.ordProc=sel.value; if(irParaAba) irParaAba('procedimentos'); return; }
+        if(rank==='procCaro'){ _state.ordProcCaro=sel.value; if(irParaAba) irParaAba('procedimentos'); return; }
         _state.ordExec[rank]=sel.value;
         if(irParaAba) irParaAba('executivo'); // re-renderiza mantendo a aba
       };
@@ -1143,6 +1155,12 @@
         _relBuscaFoco={rank:rank, pos:inp.selectionStart};
         if(rank==='proc'){
           _state.buscaProc=inp.value;
+          clearTimeout(_relBuscaTimer);
+          _relBuscaTimer=setTimeout(function(){ if(irParaAba) irParaAba('procedimentos'); }, 180);
+          return;
+        }
+        if(rank==='procCaro'){
+          _state.buscaProcCaro=inp.value;
           clearTimeout(_relBuscaTimer);
           _relBuscaTimer=setTimeout(function(){ if(irParaAba) irParaAba('procedimentos'); }, 180);
           return;
