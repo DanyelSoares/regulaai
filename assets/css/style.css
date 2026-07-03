@@ -343,6 +343,9 @@ body.pl--blurring .pl--blur-target{filter:blur(5px)}
 /* ═══════════════════════════════════════════
    Módulo Relatórios (BI / Inteligência Assistencial)
 ═══════════════════════════════════════════ */
+/* Subtítulo de seção dentro de uma aba de Relatórios (ex.: OPME, Mat/Med) */
+.rel-subhd{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:800;color:var(--g-700);text-transform:uppercase;letter-spacing:.5px;margin:22px 0 10px;padding-bottom:7px;border-bottom:2px solid var(--g-100)}
+.rel-subhd svg{opacity:.8}
 /* Filtros no cabeçalho do módulo Relatórios (Natureza + Período lado a lado) */
 .rel-hdr-filtros{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .rel-hdr-nat{display:flex;align-items:center;gap:7px}
