@@ -1045,7 +1045,7 @@
     // Barra de abas (rolável horizontalmente)
     var tabBar = el('div',{class:'rel-tab-bar'});
     tabBar.innerHTML = TABS.map(function(t){
-      return '<button class="rel-tab'+(_state.tab===t.id?' active':'')+'" data-rtab="'+t.id+'">'+ico(t.ico,13)+' '+t.label+'</button>';
+      return '<button class="rel-tab'+(_state.tab===t.id?' active':'')+'" data-rtab="'+t.id+'">'+esc(t.label)+'</button>';
     }).join('');
     wrap.appendChild(tabBar);
 
