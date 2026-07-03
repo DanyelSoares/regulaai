@@ -59,9 +59,6 @@
     {cod:'40803045',desc:'Ecocardiograma',peso:2,obrig:true,ia:'auto'},
     {cod:'31602050',desc:'Artroplastia total de joelho',peso:5,obrig:true,ia:'auto',dut:true},
     {cod:'31602069',desc:'Artroplastia total de quadril',peso:5,obrig:true,ia:'auto',dut:true},
-    {cod:'10103035',desc:'Diária de UTI adulto',peso:4,obrig:true,ia:'auto'},
-    {cod:'10103019',desc:'Diária de enfermaria',peso:2,obrig:true,ia:'auto'},
-    {cod:'10103027',desc:'Diária de apartamento',peso:2,obrig:true,ia:'auto'},
     {cod:'30729050',desc:'Quimioterapia ambulatorial',peso:4,obrig:true,ia:'auto',dut:true},
     {cod:'30730066',desc:'Imunobiológico de alto custo',peso:5,obrig:true,ia:'auto',dut:true},
     {cod:'21010059',desc:'Cirurgia de coluna - artrodese',peso:5,obrig:true,ia:'auto',dut:true},
@@ -209,7 +206,7 @@
   function pickItems(arr, n){ var o=[]; for(var i=0;i<n && i<arr.length;i++){ o.push(arr[i*Math.max(1,Math.floor(arr.length/n))%arr.length]); } return o; }
 
   var GUIAS_RAW = [
-    {numero:'101848029',benId:'B1',presS:'P1',presE:'P1',solicitante:'DIOGO SOARES DE MENDES',tipo:'Internação',natureza:'Internação',subInternacao:'Clínica',regime:'Urgência',fluxoId:'F1',status:'Em análise',origem:'Site',uti:true,opme:true,dut:true,anexos:true,prio:'Alta',procs:['10103035','40901327','31602050'],pacs:[],mm:['MM-001','MM-008'],dt:['DT-001','DT-005'],risco:'alto',internacao:'2026-06-05',obs:'Internação urgência com UTI e OPME ortopédico.'},
+    {numero:'101848029',benId:'B1',presS:'P1',presE:'P1',solicitante:'DIOGO SOARES DE MENDES',tipo:'Internação',natureza:'Internação',subInternacao:'Clínica',regime:'Urgência',fluxoId:'F1',status:'Em análise',origem:'Site',uti:true,opme:true,dut:true,anexos:true,prio:'Alta',procs:['40901327','31602050'],pacs:[],mm:['MM-001','MM-008'],dt:['DT-001','DT-005'],risco:'alto',internacao:'2026-06-05',obs:'Internação urgência com UTI e OPME ortopédico.'},
     {numero:'203741856',benId:'B2',presS:'P1',presE:'P1',solicitante:'CARLOS HENRIQUE PINTO LIMA',tipo:'Cirurgia',natureza:'Internação',subInternacao:'Cirúrgica',regime:'Eletivo',fluxoId:'F6',status:'Aguardando complemento',origem:'Web Prestador',uti:false,opme:false,dut:true,anexos:false,prio:'Média',procs:['30912018'],pacs:['PKT-BAR-01'],mm:[],dt:['DT-005'],risco:'medio',obs:'Bariátrica eletiva — DUT incompleta, faltam relatórios.'},
     {numero:'304529173',benId:'B3',presS:'P3',presE:'P3',solicitante:'FERNANDA OLIVEIRA COSTA',tipo:'Quimioterapia',natureza:'Ambulatorial',regime:'Eletivo',fluxoId:'F8',status:'Em junta médica',origem:'Emissão guias',uti:false,opme:false,dut:true,anexos:true,prio:'Alta',procs:['30729050'],pacs:['PKT-ONC-01'],mm:['MM-005','MM-006'],dt:[],risco:'alto',obs:'Imunobiológico de alto custo — junta médica.'},
     {numero:'405837264',benId:'B4',presS:'P2',presE:'P2',solicitante:'RICARDO ALVES FONSECA',tipo:'Exame imagem',natureza:'Ambulatorial',regime:'Eletivo',fluxoId:'F3',status:'Em análise',origem:'Site',uti:false,opme:false,dut:true,anexos:true,prio:'Baixa',procs:['40901114'],pacs:[],mm:['MM-009','MM-010'],dt:[],risco:'baixo',obs:'RM crânio com sedação.'},

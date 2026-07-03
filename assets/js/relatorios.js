@@ -569,7 +569,7 @@
         sortControl:searchBox(rk,busca,{wide:true})+sortSelect(rk,ORD_ITEM,ord)});
     }
     var divProc = divRanking('Procedimentos','Procedimento','procedimento(s)', pr, 'Proc');
-    var divDt   = divRanking('Taxas e Diárias','Taxa/Diária','taxa(s)/diária(s)', (M.diarias||[]).slice(), 'Dt');
+    var divDt   = divRanking('Diárias e Taxas','Diária/Taxa','diária(s)/taxa(s)', (M.diarias||[]).slice(), 'Dt');
     var divOpme = divRanking('OPME','OPME','item(ns) de OPME', M.opmes.slice(), 'Opme');
     var divMm   = divRanking('Mat/Med','Mat/Med','item(ns) de Mat/Med', (M.matmeds||[]).slice(), 'Mm');
 
