@@ -646,11 +646,6 @@
 
     var RISCO_LBL={baixo:'Baixo',medio:'Médio',alto:'Alto',critico:'Crítico'};
 
-    // Seletor de natureza padronizado (mesmo componente .csel dos filtros de Guias/Kanban)
-    var segAtend = (window.MOCK&&window.MOCK.naturezaSelectHTML)
-      ? window.MOCK.naturezaSelectHTML(fa, 'data-atend-sel="1" aria-label="Natureza da guia"')
-      : '';
-
     // Banner de filtro ativo (risco e/ou atendimento)
     var partes=[];
     if(fa) partes.push('natureza <b>'+esc(fa)+'</b>');
@@ -722,7 +717,6 @@
 
     return '<div class="rel-section">'+
       filtroBanner+
-      '<div class="rel-exec-toolbar">'+segAtend+'</div>'+
       kpis+
       '<div class="rel-grid2">'+quebra+distRisco+'</div>'+
       '<div class="rel-grid2">'+rkMed+rkPrest+'</div>'+
@@ -1023,12 +1017,16 @@
     _cache = null; // recalcula a cada entrada (guias podem mudar por perfil/filtro)
     var wrap = el('div');
 
-    // Cabeçalho do módulo com filtro de PERÍODO global (à direita, padrão do Dashboard)
+    // Cabeçalho do módulo: filtros globais à direita (Natureza + Período, padrão do Dashboard)
     var hdr = el('div',{class:'page-title'},
       '<div><h1>'+ico('bar-chart-3',18)+' Relatórios</h1><p>Centro de Business Intelligence e Inteligência Assistencial — recorrências, custos, desvios e riscos.</p></div>'
     );
+    var hdrFiltros = el('div',{class:'rel-hdr-filtros'});
+    var naturezaWrap = el('div',{id:'relNaturezaWrap',class:'rel-hdr-nat'});   // só aparece no Painel Executivo
     var periodoWrap = el('div',{id:'relPeriodoWrap',style:'display:flex;align-items:center'});
-    hdr.appendChild(periodoWrap);
+    hdrFiltros.appendChild(naturezaWrap);
+    hdrFiltros.appendChild(periodoWrap);
+    hdr.appendChild(hdrFiltros);
     wrap.appendChild(hdr);
 
     var content;
@@ -1040,6 +1038,25 @@
     }
     if(window.makeDateRangePicker){
       window.makeDateRangePicker(periodoWrap, _state.periodo.de, _state.periodo.ate, aplicarPeriodo, {hideIcon:false});
+    }
+
+    // (Re)constrói o filtro de Natureza no cabeçalho — visível apenas na aba Painel Executivo
+    function montarFiltroNatureza(){
+      var mostrar = _state.tab==='executivo';
+      naturezaWrap.style.display = mostrar ? 'flex' : 'none';
+      naturezaWrap.innerHTML = '';
+      if(!mostrar || !(window.MOCK&&window.MOCK.naturezaSelectHTML)) return;
+      naturezaWrap.innerHTML =
+        '<span class="rel-hdr-lbl">Natureza</span>'+
+        window.MOCK.naturezaSelectHTML(_state.filtroAtend, 'data-atend-sel="1" aria-label="Natureza da guia"');
+      var sel = naturezaWrap.querySelector('[data-atend-sel]');
+      if(sel){
+        sel.onchange=function(){
+          _state.filtroAtend=sel.value; _cache=null;
+          content.innerHTML=renderTab(_state.tab); if(ctx.lcIcons) ctx.lcIcons(); bindConteudo(content, irParaAba);
+        };
+        if(window.makeCustomSelect) window.makeCustomSelect(sel);
+      }
     }
 
     // Barra de abas (rolável horizontalmente)
@@ -1062,6 +1079,7 @@
       content.innerHTML=renderTab(id);
       if(ctx.lcIcons) ctx.lcIcons();
       bindConteudo(content, irParaAba);
+      montarFiltroNatureza(); // mostra/oculta o filtro de Natureza conforme a aba
       if(window.innerWidth<=640) btn.scrollIntoView({inline:'center',block:'nearest'});
     }
 
@@ -1070,6 +1088,7 @@
         b.onclick=function(){ irParaAba(b.getAttribute('data-rtab')); };
       });
       bindConteudo(content, irParaAba);
+      montarFiltroNatureza(); // filtro de Natureza no cabeçalho (aba inicial)
       if(ctx.lcIcons) ctx.lcIcons();
     },0);
 
@@ -1143,11 +1162,7 @@
         if(irParaAba) irParaAba('executivo');
       };
     });
-    // seletor de natureza — decorado com o componente padrão .csel (mesmo de Guias/Kanban)
-    container.querySelectorAll('[data-atend-sel]').forEach(function(sel){
-      sel.onchange=function(){ _state.filtroAtend=sel.value; if(irParaAba) irParaAba('executivo'); };
-      if(window.makeCustomSelect && !sel.__csel){ sel.__csel=1; window.makeCustomSelect(sel); }
-    });
+    // (o filtro de Natureza agora vive no cabeçalho do módulo — ver montarFiltroNatureza)
     // botão "Limpar filtros" do banner (risco + atendimento)
     container.querySelectorAll('[data-clear-filtros]').forEach(function(btn){
       btn.onclick=function(){ _state.filtroRisco=''; _state.filtroAtend=''; if(irParaAba) irParaAba('executivo'); };

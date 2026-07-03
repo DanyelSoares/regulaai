@@ -343,6 +343,11 @@ body.pl--blurring .pl--blur-target{filter:blur(5px)}
 /* ═══════════════════════════════════════════
    Módulo Relatórios (BI / Inteligência Assistencial)
 ═══════════════════════════════════════════ */
+/* Filtros no cabeçalho do módulo Relatórios (Natureza + Período lado a lado) */
+.rel-hdr-filtros{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.rel-hdr-nat{display:flex;align-items:center;gap:7px}
+.rel-hdr-lbl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--g-500)}
+@media(max-width:640px){.rel-hdr-filtros{width:100%;justify-content:flex-start}}
 /* Abas de Relatórios — estilo sublinhado (clean), sem ícones, quebra em linhas */
 .rel-tab-bar{display:flex;flex-wrap:wrap;gap:1px 2px;align-items:center;border-bottom:2px solid var(--g-100);padding:4px 4px 0;margin-bottom:16px;background:var(--g-50);border-radius:8px 8px 0 0}
 .rel-tab{flex:0 0 auto;display:inline-flex;align-items:center;white-space:nowrap;padding:7px 12px;border:0;background:transparent;color:var(--muted);font-weight:600;font-size:12px;border-bottom:2px solid transparent;cursor:pointer;border-radius:6px 6px 0 0;transition:color .12s,background .12s;margin-bottom:-2px}
@@ -434,7 +439,6 @@ body.pl--blurring .pl--blur-target{filter:blur(5px)}
 .rel-filter-banner b{color:#7a4f00}
 .rel-filter-clear{margin-left:auto;display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700;color:#92400e;background:#fff;border:1px solid #fcd34d;border-radius:7px;padding:4px 10px;cursor:pointer;transition:background .15s,border-color .15s}
 .rel-filter-clear:hover{background:#fffbeb;border-color:#f59e0b}
-.rel-exec-toolbar{display:flex;justify-content:flex-end;margin-bottom:12px}
 /* seletor de Natureza no Kanban usa o mesmo componente .csel dos demais filtros */
 .k-flt-natwrap{display:inline-flex}
 /* quebra Ambulatorial × Internação */
