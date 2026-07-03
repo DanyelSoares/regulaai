@@ -547,7 +547,7 @@
       {h:'#',f:function(r,i){return '<b>'+(i+1)+'</b>';}},
       {h:'Código',f:function(r){return esc(r.cod);}},
       {h:'Procedimento',f:function(r){return esc(r.desc);}},
-      {h:'Custo médio',num:true,f:function(r){return moeda(r.custoMedio);}}
+      {h:'Custo',num:true,f:function(r){return moeda(r.custoMedio);}}
     ],procCaroRank,{scroll:true,count:true,countLabel:function(n){return n+' procedimento(s) distinto(s) no ranking';},
       sortControl:searchBox('procCaro',_state.buscaProcCaro)+sortSelect('procCaro',ORD_PROC_CARO,_state.ordProcCaro)});
     return '<div class="rel-section">'+kpis+'<div class="rel-grid2">'+rkA+rkB+'</div></div>';
