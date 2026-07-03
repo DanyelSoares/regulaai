@@ -484,7 +484,7 @@
       kpiCard('Prestadores',ps.length,'no período','var(--g-700)')+
       kpiCard('Custo médio/guia',moeda(custoMedioGeral),'geral','#0f766e')+
       kpiCard('Acima da média',ps.filter(function(p){return p.custoMedio>custoMedioGeral;}).length,'custo/guia','#c2410c')+
-      kpiCard('Maior custo',ps.length?moedaK(ps[0].custo):'R$ 0',ps.length?ps[0].nome:'','#b91c1c')+
+      kpiCard('Maior custo',ps.length?moeda(ps[0].custo):'R$ 0',ps.length?ps[0].nome:'','#b91c1c')+
     '</div>';
     var tab=rankTable('Prestadores — visão consolidada',[
       {h:'Prestador',f:function(r){return esc(r.nome);}},
