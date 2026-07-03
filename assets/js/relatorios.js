@@ -207,10 +207,11 @@
 
       // Prestador executante
       var pn = g.prestadorExe && g.prestadorExe.nome || '—';
-      var pr = porPrestador[pn] || (porPrestador[pn]={nome:pn,guias:0,custo:0,opme:0,medicos:{},internacoes:0,guiasRef:[]});
+      var pr = porPrestador[pn] || (porPrestador[pn]={nome:pn,guias:0,custo:0,opme:0,medicos:{},internacoes:0,ambulatoriais:0,guiasRef:[]});
       pr.guias++; pr.custo+=c; pr.opme+=(g.matmed||[]).filter(function(x){return x.opme;}).length; pr.guiasRef.push(g);
       if(g.solicitante) pr.medicos[g.solicitante]=1;
-      if(g.tipo&&/Interna/i.test(g.tipo)) pr.internacoes++;
+      // Contagem por natureza (campo limpo): Internação × Ambulatorial
+      if(g.natureza==='Internação') pr.internacoes++; else pr.ambulatoriais++;
 
       // Procedimentos
       (g.procedimentos||[]).forEach(function(p){
@@ -488,6 +489,7 @@
     var tab=rankTable('Prestadores — visão consolidada',[
       {h:'Prestador',f:function(r){return esc(r.nome);}},
       {h:'Guias',num:true,f:function(r){return r.guias;}},
+      {h:'Ambulatorial',num:true,f:function(r){return r.ambulatoriais;}},
       {h:'Internações',num:true,f:function(r){return r.internacoes;}},
       {h:'OPME',num:true,f:function(r){return r.opme;}},
       {h:'Médicos',num:true,f:function(r){return r.nMedicos+(r.nMedicos===1&&r.guias>1?' ⚠':'');}},
@@ -609,7 +611,7 @@
     if(tipo==='alertas'){ head=['ID','Data','Guia','Medico','Severidade','Tipo','Score','Valor','Status','Descricao']; rows=M.alertas.map(function(a){return [a.id,a.data,a.guia,a.medico,SEV_LBL[a.sev],TIPO_LBL[a.tipo]||a.tipo,a.score,a.valor,STATUS_LBL[a.status]||a.status,a.desc];}); }
     else if(tipo==='beneficiarios'){ head=['Nome','Idade','Guias','Procedimentos','OPME','Medicos','Negadas','Custo','Score']; rows=M.benefs.map(function(b){return [b.nome,b.idade||'',b.guias,b.procs,b.opme,b.nMedicos,b.negadas,b.custo,b.score];}); }
     else if(tipo==='medicos'){ head=['Medico','Guias','Beneficiarios','Prestadores','OPME','TaxaAprov','Custo','Score']; rows=M.medicos.map(function(m){return [m.nome,m.guias,m.nBenefs,m.nPrestadores,m.opme,m.taxaAprov+'%',m.custo,m.score];}); }
-    else if(tipo==='prestadores'){ head=['Prestador','Guias','Internacoes','OPME','Medicos','CustoMedio','CustoTotal','Score']; rows=M.prestadores.map(function(p){return [p.nome,p.guias,p.internacoes,p.opme,p.nMedicos,p.custoMedio,p.custo,p.score];}); }
+    else if(tipo==='prestadores'){ head=['Prestador','Guias','Ambulatorial','Internacoes','OPME','Medicos','CustoMedio','CustoTotal','Score']; rows=M.prestadores.map(function(p){return [p.nome,p.guias,p.ambulatoriais,p.internacoes,p.opme,p.nMedicos,p.custoMedio,p.custo,p.score];}); }
     else if(tipo==='procedimentos'){ head=['Codigo','Descricao','Qtd','Negadas','TaxaNeg','CustoTotal','CustoMedio']; rows=M.procs.map(function(p){return [p.cod,p.desc,p.qtd,p.negadas,p.taxaNeg+'%',p.custo,p.custoMedio];}); }
     else if(tipo==='opme'){ head=['Codigo','Descricao','Guias','Fornecedor','Qtd','Autorizado','Cobrado','Variacao','Score']; rows=M.opmes.map(function(o){return [o.cod,o.desc,(o.guias||[]).join(' | '),o.fornecedor||'',o.qtd,o.autorizado,o.cobrado,o.varPreco+'%',o.score];}); }
     var csv=[head].concat(rows).map(function(r){return r.map(function(c){var s=(''+c).replace(/"/g,'""');return /[";\n]/.test(s)?'"'+s+'"':s;}).join(';');}).join('\r\n');
