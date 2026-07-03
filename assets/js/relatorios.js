@@ -406,9 +406,17 @@
     // Botão Excel (opcional): exporta a tabela como está na tela (respeita busca/ordem)
     var tblId = opts.xlsx ? ('reltbl-'+(_tblSeq++)) : '';
     var btnXlsx = opts.xlsx
-      ? '<button class="rel-xlsx-btn" data-xlsx="'+tblId+'" data-xlsx-nome="'+esc(opts.xlsx)+'" title="Exportar para Excel (.xlsx)">'+
-          '<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2.5" fill="#1D6F42"/><path d="M8.4 8l2 2.6L12.5 8h1.9l-3.1 4 3.2 4h-2l-2.1-2.7L8.2 16H6.3l3.2-4-3.1-4z" fill="#fff"/></svg>'+
-          '<span>Excel</span>'+
+      ? '<button class="rel-xlsx-btn" data-xlsx="'+tblId+'" data-xlsx-nome="'+esc(opts.xlsx)+'" title="Exportar para Excel (.xlsx)" aria-label="Exportar para Excel">'+
+          '<svg viewBox="0 0 32 32" width="17" height="17" aria-hidden="true">'+
+            // folha à direita, dividida em faixas horizontais de verde (claro→escuro)
+            '<path d="M15 4h13.5A1.5 1.5 0 0 1 30 5.5v21a1.5 1.5 0 0 1-1.5 1.5H15z" fill="#185C37"/>'+
+            '<rect x="15" y="4"  width="15" height="7.3" rx="1.5" fill="#33C481"/>'+
+            '<rect x="15" y="11.3" width="15" height="7.3" fill="#21A366"/>'+
+            '<rect x="15" y="18.6" width="15" height="7.3" fill="#107C41"/>'+
+            // bloco arredondado à esquerda com o X branco (levemente sobreposto)
+            '<rect x="2" y="7" width="15" height="18" rx="2.2" fill="#107C41"/>'+
+            '<path d="M6.3 11.2l2.7 3.5 2.7-3.5h2.6l-3.9 5.3 4 5.5h-2.7l-2.7-3.7-2.7 3.7H3.6l4-5.5-3.9-5.3z" fill="#fff"/>'+
+          '</svg>'+
         '</button>'
       : '';
     var hd='<div class="rel-card-hd">'+esc(titulo)+

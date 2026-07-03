@@ -383,9 +383,12 @@ body.pl--blurring .pl--blur-target{filter:blur(5px)}
 .rel-card-xlsx{display:inline-flex;align-items:center}
 .rel-card-xlsx.pushright{margin-left:auto}
 .rel-card-sort~.rel-card-xlsx{margin-left:6px}
-.rel-xlsx-btn{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700;color:#1D6F42;background:#eafaf0;border:1px solid #b7e4c7;border-radius:7px;padding:3px 9px 3px 6px;cursor:pointer;transition:background .14s,border-color .14s}
-.rel-xlsx-btn:hover{background:#d6f5e0;border-color:#1D6F42}
-.rel-xlsx-btn svg{flex:0 0 auto}
+/* botão Excel discreto: só o ícone, com leve realce no hover */
+.rel-xlsx-btn{display:inline-flex;align-items:center;justify-content:center;background:transparent;border:1px solid transparent;border-radius:7px;padding:3px;cursor:pointer;opacity:.75;transition:opacity .14s,background .14s,border-color .14s,transform .1s}
+.rel-xlsx-btn svg{flex:0 0 auto;display:block}
+.rel-xlsx-btn:hover{opacity:1;background:#f0faf4;border-color:#cdebd8;transform:translateY(-1px)}
+.rel-xlsx-btn:active{transform:translateY(0)}
+.rel-xlsx-btn:focus-visible{outline:none;opacity:1;box-shadow:0 0 0 2px rgba(33,163,102,.25)}
 .rel-sort{font-size:11.5px;font-weight:600;color:var(--g-700);background:#fff;border:1px solid var(--g-200);border-radius:7px;padding:3px 24px 3px 9px;cursor:pointer;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23555' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 7px center}
 .rel-sort:hover{border-color:var(--g-400)}
 .rel-sort:focus{outline:none;border-color:var(--g-500);box-shadow:0 0 0 2px var(--g-100)}
