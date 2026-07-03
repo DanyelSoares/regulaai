@@ -374,15 +374,12 @@ body.pl--blurring .pl--blur-target{filter:blur(5px)}
 .rel-card{background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden}
 .rel-card-hd{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--g-700);padding:12px 16px;background:var(--g-50);border-bottom:1px solid var(--g-100)}
 .rel-card-sub{margin-left:auto;font-size:10.5px;font-weight:600;color:var(--muted);text-transform:none;letter-spacing:0;cursor:help}
-.rel-card-count{margin-left:auto;font-size:11px;font-weight:700;color:var(--muted);background:var(--g-100);border-radius:20px;padding:1px 9px;cursor:help}
+.rel-card-count{font-size:11px;font-weight:700;color:var(--muted);background:var(--g-100);border-radius:20px;padding:1px 9px;cursor:help}
 .rel-card-count[title]:hover{background:var(--g-200);color:var(--g-700)}
-/* com filtro de ordenação: o select empurra para a direita e o contador vem logo após */
-.rel-card-sort{margin-left:auto;display:inline-flex;align-items:center;gap:6px}
-.rel-card-sort~.rel-card-count{margin-left:6px}
-/* botão Excel no cabeçalho da tabela */
+/* grupo de ações à direita do cabeçalho: ordenação + Excel + contador, sempre juntos */
+.rel-card-actions{margin-left:auto;display:inline-flex;align-items:center;gap:8px}
+.rel-card-sort-inner{display:inline-flex;align-items:center;gap:6px}
 .rel-card-xlsx{display:inline-flex;align-items:center}
-.rel-card-xlsx.pushright{margin-left:auto}
-.rel-card-sort~.rel-card-xlsx{margin-left:6px}
 /* botão Excel discreto: só o ícone, com leve realce no hover */
 .rel-xlsx-btn{display:inline-flex;align-items:center;justify-content:center;background:transparent;border:1px solid transparent;border-radius:7px;padding:3px;cursor:pointer;opacity:.75;transition:opacity .14s,background .14s,border-color .14s,transform .1s}
 .rel-xlsx-btn svg{flex:0 0 auto;display:block}

@@ -419,10 +419,14 @@
           '</svg>'+
         '</button>'
       : '';
+    // Grupo à direita: filtro de ordenação (se houver) + botão Excel + contador, sempre juntos e alinhados à direita
+    var direita =
+      (opts.sortControl?'<span class="rel-card-sort-inner">'+opts.sortControl+'</span>':'')+
+      (btnXlsx?'<span class="rel-card-xlsx">'+btnXlsx+'</span>':'')+
+      (opts.count?'<span class="rel-card-count" title="'+esc(cntLbl)+'">'+rows.length+'</span>':'');
     var hd='<div class="rel-card-hd">'+esc(titulo)+
-      (opts.sortControl?'<span class="rel-card-sort">'+opts.sortControl+'</span>':'')+
-      (btnXlsx?'<span class="rel-card-xlsx'+(opts.sortControl?'':' pushright')+'">'+btnXlsx+'</span>':'')+
-      (opts.count?'<span class="rel-card-count" title="'+esc(cntLbl)+'">'+rows.length+'</span>':'')+'</div>';
+      (direita?'<span class="rel-card-actions">'+direita+'</span>':'')+
+    '</div>';
     // No modo scroll usamos só .rel-scroll (sem .table-wrap, que tem overflow:hidden e cortaria a barra)
     var wrapCls = opts.scroll ? 'rel-scroll' : 'table-wrap';
     return '<div class="rel-card">'+hd+
