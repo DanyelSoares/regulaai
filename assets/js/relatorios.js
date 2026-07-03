@@ -202,11 +202,11 @@
 
       // Beneficiário
       var bid = g.beneficiario && g.beneficiario.id || '?';
-      var b = porBenef[bid] || (porBenef[bid]={id:bid,nome:(g.beneficiario&&g.beneficiario.nome)||'—',idade:(g.beneficiario&&g.beneficiario.idade)||null,guias:0,custo:0,opme:0,medicos:{},prestadores:{},procs:0,negadas:0,internacoes:0,altoRisco:0});
+      var b = porBenef[bid] || (porBenef[bid]={id:bid,nome:(g.beneficiario&&g.beneficiario.nome)||'—',idade:(g.beneficiario&&g.beneficiario.idade)||null,guias:0,custo:0,opme:0,medicos:{},prestadores:{},procs:0,negadas:0,internacoes:0,ambulatoriais:0,altoRisco:0});
       b.guias++; b.custo+=c; b.opme+=(g.matmed||[]).filter(function(m){return m.opme;}).length;
       b.procs+=(g.procedimentos||[]).length;
       if(g.status==='Negada') b.negadas++;
-      if(g.tipo&&/Interna/i.test(g.tipo)) b.internacoes++;
+      if(g.natureza==='Internação') b.internacoes++; else b.ambulatoriais++; // por natureza (campo limpo)
       if(g.risco==='alto'||g.risco==='critico') b.altoRisco++;
       if(g.solicitante) b.medicos[g.solicitante]=1;
       if(g.prestadorExe&&g.prestadorExe.nome) b.prestadores[g.prestadorExe.nome]=1;
@@ -621,12 +621,15 @@
       '<div class="rel-note">'+ico('info',13)+' <span>Exporte os dados consolidados do período em <b>CSV</b> (abre no Excel). PDF e agendamento entram em fase futura.</span></div>'+
       '<div class="rel-card"><div class="rel-card-hd">Conjuntos disponíveis para exportação</div>'+
       '<div class="rel-export-grid">'+
+        exportBtn('guias','Guias (visão geral)','file-check-2')+
         exportBtn('alertas','Alertas detectados','bell-ring')+
         exportBtn('beneficiarios','Beneficiários','users')+
         exportBtn('medicos','Médicos solicitantes','stethoscope')+
         exportBtn('prestadores','Prestadores','hospital')+
         exportBtn('procedimentos','Procedimentos','clipboard-list')+
         exportBtn('opme','OPME','bone')+
+        exportBtn('matmed','Mat/Med','pill')+
+        exportBtn('diarias','Diárias e Taxas','calendar-days')+
       '</div></div>'+
     '</div>';
   }
@@ -637,12 +640,24 @@
   // Gera e baixa um CSV do conjunto pedido
   function exportarCSV(tipo){
     var M=analitico(); var rows=[], head=[];
-    if(tipo==='alertas'){ head=['ID','Data','Guia','Medico','Severidade','Tipo','Score','Valor','Status','Descricao']; rows=M.alertas.map(function(a){return [a.id,a.data,a.guia,a.medico,SEV_LBL[a.sev],TIPO_LBL[a.tipo]||a.tipo,a.score,a.valor,STATUS_LBL[a.status]||a.status,a.desc];}); }
-    else if(tipo==='beneficiarios'){ head=['Nome','Idade','Guias','Procedimentos','OPME','Medicos','Negadas','Custo','Score']; rows=M.benefs.map(function(b){return [b.nome,b.idade||'',b.guias,b.procs,b.opme,b.nMedicos,b.negadas,b.custo,b.score];}); }
-    else if(tipo==='medicos'){ head=['Medico','Guias','Beneficiarios','Prestadores','OPME','TaxaAprov','Custo','Score']; rows=M.medicos.map(function(m){return [m.nome,m.guias,m.nBenefs,m.nPrestadores,m.opme,m.taxaAprov+'%',m.custo,m.score];}); }
+    var MK=window.MOCK||{};
+    if(tipo==='guias'){
+      head=['Guia','DataEmissao','Beneficiario','Natureza','Regime','Especialidade','CID','Solicitante','Executante','Status','Risco','Custo'];
+      rows=(M.guias||[]).map(function(g){
+        var nat=MK.naturezaDetalhada?MK.naturezaDetalhada(g):(g.natureza||'');
+        var esp=MK.especialidadeDaGuia?MK.especialidadeDaGuia(g):'';
+        var cid=MK.cidGuia?MK.cidGuia(g).codigo:'';
+        return [g.numero,g.dataEmissao,(g.beneficiario&&g.beneficiario.nome)||'',nat,g.regime||'',esp,cid,g.solicitante||'',(g.prestadorExe&&g.prestadorExe.nome)||'',g.status||'',g.risco||'',custoGuia(g)];
+      });
+    }
+    else if(tipo==='alertas'){ head=['ID','Data','Guia','Medico','Severidade','Tipo','Score','Valor','Status','Descricao']; rows=M.alertas.map(function(a){return [a.id,a.data,a.guia,a.medico,SEV_LBL[a.sev],TIPO_LBL[a.tipo]||a.tipo,a.score,a.valor,STATUS_LBL[a.status]||a.status,a.desc];}); }
+    else if(tipo==='beneficiarios'){ head=['Nome','Idade','Guias','Ambulatorial','Internacoes','Procedimentos','OPME','Medicos','Negadas','Custo','Score']; rows=M.benefs.map(function(b){return [b.nome,b.idade||'',b.guias,b.ambulatoriais,b.internacoes,b.procs,b.opme,b.nMedicos,b.negadas,b.custo,b.score];}); }
+    else if(tipo==='medicos'){ head=['Medico','Especialidade','Guias','Beneficiarios','Prestadores','OPME','TaxaAprov','Custo','Score']; rows=M.medicos.map(function(m){return [m.nome,m.especialidade||'',m.guias,m.nBenefs,m.nPrestadores,m.opme,m.taxaAprov+'%',m.custo,m.score];}); }
     else if(tipo==='prestadores'){ head=['Prestador','Guias','Ambulatorial','Internacoes','OPME','Medicos','CustoMedio','CustoTotal','Score']; rows=M.prestadores.map(function(p){return [p.nome,p.guias,p.ambulatoriais,p.internacoes,p.opme,p.nMedicos,p.custoMedio,p.custo,p.score];}); }
     else if(tipo==='procedimentos'){ head=['Codigo','Descricao','Qtd','Negadas','TaxaNeg','CustoTotal','CustoMedio']; rows=M.procs.map(function(p){return [p.cod,p.desc,p.qtd,p.negadas,p.taxaNeg+'%',p.custo,p.custoMedio];}); }
     else if(tipo==='opme'){ head=['Codigo','Descricao','Guias','Fornecedor','Qtd','Autorizado','Cobrado','Variacao','Score']; rows=M.opmes.map(function(o){return [o.cod,o.desc,(o.guias||[]).join(' | '),o.fornecedor||'',o.qtd,o.autorizado,o.cobrado,o.varPreco+'%',o.score];}); }
+    else if(tipo==='matmed'){ head=['Codigo','Descricao','Qtd','CustoTotal','CustoMedio']; rows=(M.matmeds||[]).map(function(m){return [m.cod,m.desc,m.qtd,m.custo,m.custoMedio];}); }
+    else if(tipo==='diarias'){ head=['Codigo','Descricao','Qtd','CustoTotal','CustoMedio']; rows=(M.diarias||[]).map(function(d){return [d.cod,d.desc,d.qtd,d.custo,d.custoMedio];}); }
     var csv=[head].concat(rows).map(function(r){return r.map(function(c){var s=(''+c).replace(/"/g,'""');return /[";\n]/.test(s)?'"'+s+'"':s;}).join(';');}).join('\r\n');
     var blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8;'});
     var url=URL.createObjectURL(blob); var a=document.createElement('a');
@@ -901,7 +916,7 @@
     var custoMedioGuia=M.totalGuias?Math.round(M.totalCusto/M.totalGuias):0;
 
     var kpis='<div class="rel-kpi-grid">'+
-      kpiCard('Custo total',moedaK(M.totalCusto),'estimado','#0f766e',
+      kpiCard('Custo total',moeda(M.totalCusto),'estimado','#0f766e',
         'Soma dos custos estimados de todas as guias do período. Valores simulados.')+
       kpiCard('Custo médio por guia',moeda(custoMedioGuia),'no período','#0f766e')+
       kpiCard('Maior custo (guia)',moeda(maiorCusto.custo),'guia '+maiorCusto.numero,'#b91c1c')+
@@ -948,8 +963,8 @@
 
     var kpis='<div class="rel-kpi-grid">'+
       kpiCard('OPMEs distintos',opmes.length,'no período','var(--g-700)')+
-      kpiCard('Valor autorizado',moedaK(totalAut),'total','#0f766e')+
-      kpiCard('Valor cobrado',moedaK(totalCob),'total','#b45309')+
+      kpiCard('Valor autorizado',moeda(totalAut),'total','#0f766e')+
+      kpiCard('Valor cobrado',moeda(totalCob),'total','#b45309')+
       kpiCard('Com variação anormal',divergentes,'≥25% acima','#b91c1c')+
     '</div>';
 
