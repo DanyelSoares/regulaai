@@ -112,6 +112,7 @@
   // agregações por entidade e os alertas detectados. Resultado em cache.
   // ═══════════════════════════════════════════════════════════════
   var _cache = null;
+  var _tblSeq = 0; // sequência para ids únicos das tabelas exportáveis
 
   // Hash determinístico simples (custos estáveis entre renders)
   function seed(str){ var h=0,s=''+str; for(var i=0;i<s.length;i++){ h=(h*31+s.charCodeAt(i))|0; } return Math.abs(h); }
@@ -402,13 +403,22 @@
     }).join('');
     // Contador com rótulo/tooltip explicando o que está sendo contado
     var cntLbl = opts.countLabel ? opts.countLabel(rows.length) : (rows.length+' registro(s)');
+    // Botão Excel (opcional): exporta a tabela como está na tela (respeita busca/ordem)
+    var tblId = opts.xlsx ? ('reltbl-'+(_tblSeq++)) : '';
+    var btnXlsx = opts.xlsx
+      ? '<button class="rel-xlsx-btn" data-xlsx="'+tblId+'" data-xlsx-nome="'+esc(opts.xlsx)+'" title="Exportar para Excel (.xlsx)">'+
+          '<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2.5" fill="#1D6F42"/><path d="M8.4 8l2 2.6L12.5 8h1.9l-3.1 4 3.2 4h-2l-2.1-2.7L8.2 16H6.3l3.2-4-3.1-4z" fill="#fff"/></svg>'+
+          '<span>Excel</span>'+
+        '</button>'
+      : '';
     var hd='<div class="rel-card-hd">'+esc(titulo)+
       (opts.sortControl?'<span class="rel-card-sort">'+opts.sortControl+'</span>':'')+
+      (btnXlsx?'<span class="rel-card-xlsx'+(opts.sortControl?'':' pushright')+'">'+btnXlsx+'</span>':'')+
       (opts.count?'<span class="rel-card-count" title="'+esc(cntLbl)+'">'+rows.length+'</span>':'')+'</div>';
     // No modo scroll usamos só .rel-scroll (sem .table-wrap, que tem overflow:hidden e cortaria a barra)
     var wrapCls = opts.scroll ? 'rel-scroll' : 'table-wrap';
     return '<div class="rel-card">'+hd+
-      '<div class="'+wrapCls+'"><table class="cfg-table'+(opts.scroll?' rel-sticky-head':'')+'"><thead><tr>'+head+'</tr></thead><tbody>'+body+'</tbody></table></div></div>';
+      '<div class="'+wrapCls+'"><table'+(tblId?' id="'+tblId+'"':'')+' class="cfg-table'+(opts.scroll?' rel-sticky-head':'')+'"><thead><tr>'+head+'</tr></thead><tbody>'+body+'</tbody></table></div></div>';
   }
   // Selo de score (0-100) com cor por faixa
   function scoreBadge(s){
@@ -481,7 +491,7 @@
       {h:'Negadas',num:true,f:function(r){return r.negadas;}},
       {h:'Custo',num:true,f:function(r){return moeda(r.custo);}},
       {h:'Score',num:true,f:function(r){return scoreBadge(r.score);}}
-    ],bs);
+    ],bs,{count:true,xlsx:'Beneficiários'});
     return '<div class="rel-section">'+kpis+tab+'</div>';
   }
 
@@ -507,7 +517,7 @@
       {h:'Aprov.',num:true,f:function(r){return r.taxaAprov+'%';}},
       {h:'Custo',num:true,f:function(r){return moeda(r.custo);}},
       {h:'Score',num:true,f:function(r){return scoreBadge(r.score);}}
-    ],ms,{scroll:true,count:true,countLabel:function(n){return n+' médico(s) solicitante(s) na lista';}});
+    ],ms,{scroll:true,count:true,xlsx:'Médicos solicitantes',countLabel:function(n){return n+' médico(s) solicitante(s) na lista';}});
     var nota='<div class="rel-note">'+ico('info',13)+' <span><b>▲ desvio</b> = médico com volume/custo acima da média dos pares da <b>mesma especialidade</b> (comparação estatística, requer ≥2 médicos na especialidade).<br><b>⚠</b> = todas as solicitações concentradas em um único prestador.<br>Ambas geram alertas em <b>Alertas Inteligentes</b>.</span></div>';
     return '<div class="rel-section">'+kpis+nota+tab+'</div>';
   }
@@ -534,7 +544,7 @@
       {h:'Custo médio',num:true,f:function(r){var alto=r.custoMedio>custoMedioGeral;return '<span style="'+(alto?'color:#c2410c;font-weight:700':'')+'">'+moeda(r.custoMedio)+'</span>';}},
       {h:'Custo total',num:true,f:function(r){return moeda(r.custo);}},
       {h:'Score',num:true,f:function(r){return scoreBadge(r.score);}}
-    ],ps);
+    ],ps,{count:true,xlsx:'Prestadores'});
     return '<div class="rel-section">'+kpis+tab+'</div>';
   }
 
@@ -562,7 +572,7 @@
         {h:colLbl,f:function(r){return esc(r.desc);}},
         {h:'Qtd',num:true,f:function(r){return r.qtd;}},
         {h:'Custo',num:true,f:function(r){return moeda(r.custoMedio);}}
-      ],lista,{scroll:true,count:true,
+      ],lista,{scroll:true,count:true,xlsx:titulo,
         countLabel:function(n){return n+' '+itemLbl+' distinto(s) no ranking';},
         sortControl:searchBox(rk,busca,{wide:true})+sortSelect(rk,ORD_ITEM,ord)});
     }
@@ -661,6 +671,24 @@
     return {head:[], rows:[]};
   }
 
+  // Exporta uma tabela renderizada (respeita busca/ordem atuais) para .xlsx (ou CSV como fallback)
+  function exportarTabelaXlsx(tblId, nome){
+    var tbl=document.getElementById(tblId); if(!tbl) return;
+    function textos(tr){ return Array.prototype.map.call(tr.children,function(td){ return (td.textContent||'').replace(/\s+/g,' ').trim(); }); }
+    var head = tbl.tHead ? textos(tbl.tHead.rows[0]) : [];
+    var rows = tbl.tBodies[0] ? Array.prototype.map.call(tbl.tBodies[0].rows, textos) : [];
+    var aoa=[head].concat(rows);
+    var arq='relatorio-'+(nome||'tabela').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')+'-'+new Date().toISOString().slice(0,10);
+    if(window.XLSX){
+      var wb=XLSX.utils.book_new();
+      var ws=XLSX.utils.aoa_to_sheet(aoa);
+      XLSX.utils.book_append_sheet(wb, ws, (nome||'Dados').slice(0,31));
+      XLSX.writeFile(wb, arq+'.xlsx');
+    } else {
+      baixarCSV('relatorio-'+(nome||'tabela'), {head:head, rows:rows});
+    }
+  }
+
   // Baixa um CSV (ponto-e-vírgula, BOM) de um único conjunto
   function baixarCSV(nome, ds){
     var csv=[ds.head].concat(ds.rows).map(function(r){return r.map(function(c){var s=(''+c).replace(/"/g,'""');return /[";\n]/.test(s)?'"'+s+'"':s;}).join(';');}).join('\r\n');
@@ -748,13 +776,13 @@
       {h:'Médico',f:function(r){return esc(r.nome);}},
       {h:'Guias',num:true,f:function(r){return r.guias;}},
       {h:'Custo',num:true,f:function(r){return moeda(r.custo);}}
-    ],rkMedicos,{scroll:true,count:true,countLabel:function(n){return n+' médico(s) solicitante(s) no ranking';},rowDrill:function(r){return 'med:'+r.nome;},sortControl:searchBox('med',busca.med)+sortSelect('med',ORD_MED,ord.med)});
+    ],rkMedicos,{scroll:true,count:true,xlsx:'Ranking de médicos',countLabel:function(n){return n+' médico(s) solicitante(s) no ranking';},rowDrill:function(r){return 'med:'+r.nome;},sortControl:searchBox('med',busca.med)+sortSelect('med',ORD_MED,ord.med)});
     var rkPrest=rankTable('Ranking de prestadores por custo',[
       {h:'#',f:function(r,i){return '<b>'+(i+1)+'</b>';}},
       {h:'Prestador',f:function(r){return esc(r.nome);}},
       {h:'Guias',num:true,f:function(r){return r.guias;}},
       {h:'Custo',num:true,f:function(r){return moeda(r.custo);}}
-    ],rkPrestadores,{scroll:true,count:true,countLabel:function(n){return n+' prestador(es) no ranking';},rowDrill:function(r){return 'prest:'+r.nome;},sortControl:searchBox('prest',busca.prest)+sortSelect('prest',ORD_PREST,ord.prest)});
+    ],rkPrestadores,{scroll:true,count:true,xlsx:'Ranking de prestadores',countLabel:function(n){return n+' prestador(es) no ranking';},rowDrill:function(r){return 'prest:'+r.nome;},sortControl:searchBox('prest',busca.prest)+sortSelect('prest',ORD_PREST,ord.prest)});
     var rkOpme=rankTable('Ranking de OPME por valor',[
       {h:'#',f:function(r,i){return '<b>'+(i+1)+'</b>';}},
       {h:'OPME',f:function(r){return esc(r.desc);}},
@@ -762,7 +790,7 @@
       {h:'Fornecedor',f:function(r){return esc(r.fornecedor||'—');}},
       {h:'Qtd',num:true,f:function(r){return r.qtd;}},
       {h:'Valor cobrado',num:true,f:function(r){return moeda(r.cobrado);}}
-    ],rkOpmes,{scroll:true,count:true,countLabel:function(n){return n+' item(ns) de OPME distintos no ranking';},rowDrill:function(r){return 'opme:'+r.cod;},sortControl:searchBox('opme',busca.opme)+sortSelect('opme',ORD_OPME,ord.opme)});
+    ],rkOpmes,{scroll:true,count:true,xlsx:'Ranking de OPME',countLabel:function(n){return n+' item(ns) de OPME distintos no ranking';},rowDrill:function(r){return 'opme:'+r.cod;},sortControl:searchBox('opme',busca.opme)+sortSelect('opme',ORD_OPME,ord.opme)});
 
     // Quebra Ambulatorial × Internação (sempre sobre o total, para comparação)
     var MTotal=analitico();
@@ -962,7 +990,7 @@
       {h:'Beneficiário',f:function(r){return esc(r.nome);}},
       {h:'Tipo',f:function(r){return esc(r.tipo);}},
       {h:'Custo',num:true,f:function(r){return moeda(r.custo);}}
-    ],guiasC.slice(0,8));
+    ],guiasC.slice(0,8),{count:true,xlsx:'Guias de maior custo'});
 
     var benC=M.benefs.slice().sort(function(a,b){return b.custo-a.custo;}).slice(0,6);
     var rkBen=rankTable('Maior custo por beneficiário',[
@@ -1008,7 +1036,7 @@
       {h:'Autorizado',num:true,f:function(r){return moeda(r.autorizado);}},
       {h:'Cobrado',num:true,f:function(r){return moeda(r.cobrado);}},
       {h:'Variação',num:true,f:function(r){var cls=r.varPreco>=25?'color:#b91c1c;font-weight:700':(r.varPreco<=0?'color:#15803d':'');return '<span style="'+cls+'">'+(r.varPreco>0?'+':'')+r.varPreco+'%</span>';}}
-    ],opmes);
+    ],opmes,{count:true,xlsx:'OPME'});
 
     return '<div class="rel-section">'+
       '<div class="rel-note">'+ico('info',13)+' <span>Painel exclusivo de OPME. Valor autorizado x cobrado e variação de preço <b>simulados</b> por código. Variações ≥25% geram alerta na central de Alertas.</span></div>'+
@@ -1186,6 +1214,10 @@
     // botões de exportação CSV
     container.querySelectorAll('[data-export]').forEach(function(btn){
       btn.onclick=function(){ exportarCSV(btn.getAttribute('data-export')); };
+    });
+    // botões de Excel direto no cabeçalho das tabelas (exporta o que está na tela)
+    container.querySelectorAll('.rel-xlsx-btn[data-xlsx]').forEach(function(btn){
+      btn.onclick=function(e){ e.stopPropagation(); exportarTabelaXlsx(btn.getAttribute('data-xlsx'), btn.getAttribute('data-xlsx-nome')); };
     });
     // linhas de ranking clicáveis → detalhe das guias (modal)
     container.querySelectorAll('.rel-rank-row[data-drill]').forEach(function(row){
