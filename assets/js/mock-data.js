@@ -445,7 +445,7 @@
       return '<option value="'+esc2(v)+'" data-sub="1"'+(sel===v?' selected':'')+'>'+esc2(v)+'</option>';
     }).join('');
     return '<select'+(extraAttrs?' '+extraAttrs:'')+'>'+
-      '<option value=""'+(sel===''?' selected':'')+'>Todas as naturezas</option>'+
+      '<option value=""'+(sel===''?' selected':'')+'>Natureza</option>'+
       '<option value="Ambulatorial"'+(sel==='Ambulatorial'?' selected':'')+'>Ambulatorial</option>'+
       '<option value="Internação"'+(sel==='Internação'?' selected':'')+'>Internação (todas)</option>'+
       subOpts+

@@ -1048,7 +1048,6 @@
       naturezaWrap.innerHTML = '';
       if(!mostrar || !(window.MOCK&&window.MOCK.naturezaSelectHTML)) return;
       naturezaWrap.innerHTML =
-        '<span class="rel-hdr-lbl">Natureza</span>'+
         window.MOCK.naturezaSelectHTML(_state.filtroAtend, 'data-atend-sel="1" aria-label="Natureza da guia"');
       var sel = naturezaWrap.querySelector('[data-atend-sel]');
       if(sel){
