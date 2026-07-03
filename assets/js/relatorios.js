@@ -81,12 +81,14 @@
   function el(tag,attrs,html){ var c=ctxRef(); return c.el(tag,attrs,html); }
 
   // Card de KPI simples (placeholder com valor)
-  function kpiCard(titulo, valor, sub, cor, tip, gotoTab){
+  function kpiCard(titulo, valor, sub, cor, tip, gotoTab, drillKpi){
     var infoIco = tip ? ' <span class="rel-kpi-info" title="'+esc(tip)+'">'+ico('info',11)+'</span>' : '';
-    var clsClick = gotoTab ? ' rel-kpi-click' : '';
+    var clicavel = gotoTab || drillKpi;
+    var clsClick = clicavel ? ' rel-kpi-click' : '';
     var attrGoto = gotoTab ? ' data-goto="'+gotoTab+'"' : '';
-    var subHtml = sub ? '<div class="rel-kpi-s">'+sub+(gotoTab?' '+ico('arrow-right',11):'')+'</div>' : '';
-    return '<div class="rel-kpi'+clsClick+'"'+attrGoto+(tip?' title="'+esc(tip)+'"':'')+'>'+
+    var attrDrill = drillKpi ? ' data-drill-kpi="'+esc(drillKpi)+'"' : '';
+    var subHtml = sub ? '<div class="rel-kpi-s">'+sub+(clicavel?' '+ico('arrow-right',11):'')+'</div>' : '';
+    return '<div class="rel-kpi'+clsClick+'"'+attrGoto+attrDrill+(tip?' title="'+esc(tip)+'"':'')+'>'+
       '<div class="rel-kpi-v" style="color:'+(cor||'var(--g-700)')+'">'+valor+'</div>'+
       '<div class="rel-kpi-t">'+esc(titulo)+infoIco+'</div>'+
       subHtml+
@@ -483,7 +485,8 @@
     var kpis='<div class="rel-kpi-grid">'+
       kpiCard('Prestadores',ps.length,'no período','var(--g-700)')+
       kpiCard('Custo médio/guia',moeda(custoMedioGeral),'geral','#0f766e')+
-      kpiCard('Acima da média',ps.filter(function(p){return p.custoMedio>custoMedioGeral;}).length,'custo/guia','#c2410c')+
+      kpiCard('Acima da média',ps.filter(function(p){return p.custoMedio>custoMedioGeral;}).length,'ver quem','#c2410c',
+        'Prestadores cujo custo médio por guia está acima da média geral. Clique para ver a lista.',null,'prestAcimaMedia')+
       kpiCard('Maior custo',ps.length?moeda(ps[0].custo):'R$ 0',ps.length?ps[0].nome:'','#b91c1c')+
     '</div>';
     var tab=rankTable('Prestadores — visão consolidada',[
@@ -723,6 +726,42 @@
   }
 
   // ── Detalhe (modal) das guias de uma entidade do ranking ──────────
+  // Modal: prestadores com custo médio/guia acima da média geral
+  function abrirPrestAcimaMedia(){
+    var M=analitico();
+    var mediaGeral = M.totalGuias ? Math.round(M.totalCusto/M.totalGuias) : 0;
+    var acima = M.prestadores.filter(function(p){return p.custoMedio>mediaGeral;})
+      .sort(function(a,b){return b.custoMedio-a.custoMedio;});
+    var titulo='Prestadores acima da média';
+    var sub=acima.length+' prestador(es) · média geral '+moeda(mediaGeral)+' por guia';
+    var linhas = acima.map(function(p,i){
+      var desvioPct = mediaGeral ? Math.round((p.custoMedio-mediaGeral)/mediaGeral*100) : 0;
+      return '<tr class="rel-rank-row" data-drill="prest:'+esc(p.nome)+'">'+
+        '<td><b>'+(i+1)+'</b></td>'+
+        '<td>'+esc(p.nome)+'</td>'+
+        '<td style="text-align:right">'+p.guias+'</td>'+
+        '<td style="text-align:right;font-weight:700;color:#c2410c">'+moeda(p.custoMedio)+'</td>'+
+        '<td style="text-align:right;color:#b91c1c;font-weight:700">+'+desvioPct+'%</td>'+
+        '<td style="text-align:right">'+moeda(p.custo)+'</td>'+
+      '</tr>';
+    }).join('');
+    var body = acima.length
+      ? '<div class="rel-note">'+ico('info',13)+' <span>Prestadores cujo <b>custo médio por guia</b> supera a média geral ('+moeda(mediaGeral)+'). A coluna <b>Desvio</b> mostra o quanto cada um está acima. Clique numa linha para ver as guias.</span></div>'+
+        '<div class="table-wrap"><table class="cfg-table"><thead><tr>'+
+          '<th>#</th><th>Prestador</th><th style="text-align:right">Guias</th><th style="text-align:right">Custo médio/guia</th><th style="text-align:right">Desvio</th><th style="text-align:right">Custo total</th>'+
+        '</tr></thead><tbody>'+linhas+'</tbody></table></div>'
+      : '<div style="padding:16px;color:var(--muted)">Nenhum prestador acima da média.</div>';
+    var m = ctxRef().modal ? ctxRef().modal(titulo, sub, body) : null;
+    // linhas clicáveis abrem o detalhe do prestador
+    if(m){ setTimeout(function(){
+      m.querySelectorAll('.rel-rank-row[data-drill]').forEach(function(row){
+        row.onclick=function(){ abrirDetalhe(row.getAttribute('data-drill')); };
+      });
+      if(ctxRef().lcIcons) ctxRef().lcIcons();
+    },0); }
+    return m;
+  }
+
   function abrirDetalhe(drill){
     var M=analitico();
     var tipo=drill.split(':')[0], chave=drill.split(':').slice(1).join(':');
@@ -1022,6 +1061,13 @@
     // KPIs clicáveis que navegam para outra aba
     container.querySelectorAll('.rel-kpi-click[data-goto]').forEach(function(k){
       k.onclick=function(){ if(irParaAba) irParaAba(k.getAttribute('data-goto')); };
+    });
+    // KPIs clicáveis que abrem um modal de detalhe (ex.: Acima da média)
+    container.querySelectorAll('.rel-kpi-click[data-drill-kpi]').forEach(function(k){
+      k.onclick=function(){
+        var d=k.getAttribute('data-drill-kpi');
+        if(d==='prestAcimaMedia') abrirPrestAcimaMedia();
+      };
     });
     // linhas de alerta (expandir explicação)
     container.querySelectorAll('.rel-alert-row').forEach(function(row){
