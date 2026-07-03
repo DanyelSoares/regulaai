@@ -15,7 +15,6 @@
     {id:'opme',        label:'OPME',             ico:'bone'},
     {id:'custos',      label:'Custos',           ico:'dollar-sign'},
     {id:'alertas',     label:'Alertas Inteligentes', ico:'bell-ring'},
-    {id:'tendencias',  label:'Tendências',       ico:'trending-up'},
     {id:'comparativos',label:'Comparativos',     ico:'git-compare'},
     {id:'exportacoes', label:'Exportações',      ico:'download'}
   ];
@@ -457,7 +456,6 @@
     if(id==='prestadores') return renderPrestadores();
     if(id==='procedimentos') return renderProcedimentos();
     if(id==='alertas') return renderAlertas();
-    if(id==='tendencias') return renderTendencias();
     if(id==='comparativos') return renderComparativos();
     if(id==='exportacoes') return renderExportacoes();
     return '';
@@ -580,21 +578,6 @@
   }
 
 
-  // ── Tendências (honesto: base de 1 mês) ───────────────────────────
-  function renderTendencias(){
-    var M=analitico();
-    // Distribui as guias por dia de emissão (único campo temporal disponível)
-    var porDia={};
-    M.guias.forEach(function(g){ var d=(g.dataEmissao||'').slice(-2)||'?'; porDia[d]=(porDia[d]||0)+1; });
-    var dias=Object.keys(porDia).sort();
-    var maxD=Math.max.apply(null,dias.map(function(d){return porDia[d];}).concat([1]));
-    var serie=dias.map(function(d){return distRow('Dia '+d, porDia[d], maxD, 'var(--g-500)');}).join('');
-    return '<div class="rel-section">'+
-      '<div class="rel-note">'+ico('alert-triangle',13)+' <span><b>Dados insuficientes para tendência real:</b> a base atual cobre um único período (mesmo mês). Evolução mensal, sazonalidade e previsão exigem histórico de vários meses. Abaixo, a distribuição diária do período disponível como demonstração.</span></div>'+
-      '<div class="rel-card"><div class="rel-card-hd">Guias por dia de emissão (período atual)</div><div style="padding:8px 14px 14px">'+(serie||'<div style="padding:14px;color:var(--muted);font-size:12.5px">Sem dados.</div>')+'</div></div>'+
-      emBreve('Tendências — requer histórico','Quando houver dados de múltiplos meses, esta aba mostrará:',['Evolução mensal de guias e de custo','Crescimento/redução percentual','Sazonalidade por procedimento/especialidade','Projeção e tendência futura'])+
-    '</div>';
-  }
 
   // ── Comparativos (entidade x média do grupo) ──────────────────────
   function renderComparativos(){
