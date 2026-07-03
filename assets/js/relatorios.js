@@ -20,7 +20,7 @@
     {id:'exportacoes', label:'Exportações',      ico:'download'}
   ];
 
-  var _state = { tab: 'executivo', ordExec: { med:'custo_desc', prest:'custo_desc', opme:'valor_desc' }, buscaExec: { med:'', prest:'', opme:'' }, ordProc: 'qtd_desc', buscaProc: '', ordOpme: 'qtd_desc', buscaOpme: '', ordMm: 'qtd_desc', buscaMm: '',
+  var _state = { tab: 'executivo', ordExec: { med:'custo_desc', prest:'custo_desc', opme:'valor_desc' }, buscaExec: { med:'', prest:'', opme:'' }, ordProc: 'qtd_desc', buscaProc: '', ordOpme: 'qtd_desc', buscaOpme: '', ordMm: 'qtd_desc', buscaMm: '', ordDt: 'qtd_desc', buscaDt: '',
     filtroRisco: '', filtroAtend: '', periodo: { de:'', ate:'' } };
 
   // Opções de ordenação por ranking do Painel Executivo
@@ -184,7 +184,7 @@
         return (MK&&MK.naturezaDetalhada?MK.naturezaDetalhada(g):(g.natureza||'Ambulatorial'))===filtroAtend;
       });
     }
-    var porBenef={}, porMedico={}, porPrestador={}, porProc={}, porOpme={}, porMatmed={};
+    var porBenef={}, porMedico={}, porPrestador={}, porProc={}, porOpme={}, porMatmed={}, porDiaria={};
     var totalCusto=0, custoNegado=0, qtdNegadas=0, servNegados=0, qtdEmAberto=0;
     var riscoCnt={baixo:0,medio:0,alto:0,critico:0};
     var ABERTO={'Em análise':1,'Aguardando complemento':1,'Em junta médica':1,'Cotação de OPME':1};
@@ -259,6 +259,14 @@
         mo.qtd++; mo.custo+=mc;
         if(mo.guias.indexOf(g.numero)<0){ mo.guias.push(g.numero); mo.guiasRef.push(g); }
       });
+
+      // Diárias e Taxas (mesmo custo determinístico usado em custoGuia/drill)
+      (g.diariasTaxas||[]).forEach(function(d){
+        var dc=150 + seed(d.cod)%900;
+        var dobj=porDiaria[d.cod]||(porDiaria[d.cod]={cod:d.cod,desc:d.desc,qtd:0,custo:0,guias:[],guiasRef:[]});
+        dobj.qtd++; dobj.custo+=dc;
+        if(dobj.guias.indexOf(g.numero)<0){ dobj.guias.push(g.numero); dobj.guiasRef.push(g); }
+      });
     });
 
     function toArr(obj,extra){ return Object.keys(obj).map(function(k){ var o=obj[k]; if(extra) extra(o); return o; }); }
@@ -304,12 +312,13 @@
     var procs=toArr(porProc,function(o){o.custoMedio=o.qtd?Math.round(o.custo/o.qtd):0;o.taxaNeg=o.qtd?Math.round(o.negadas/o.qtd*100):0;});
     var opmes=toArr(porOpme,function(o){o.varPreco=o.autorizado?Math.round((o.cobrado-o.autorizado)/o.autorizado*100):0;o.nBenefs=Object.keys(o.benefs).length;o.nMedicos=Object.keys(o.medicos).length;o.custoMedio=o.qtd?Math.round(o.cobrado/o.qtd):0;o.score=clamp(Math.max(0,o.varPreco)*1.2 + o.qtd*8);});
     var matmeds=toArr(porMatmed,function(o){o.custoMedio=o.qtd?Math.round(o.custo/o.qtd):0;});
+    var diarias=toArr(porDiaria,function(o){o.custoMedio=o.qtd?Math.round(o.custo/o.qtd):0;});
 
     _cache = {
       __key:ck,
       guias:guias, totalGuias:guias.length, totalCusto:totalCusto,
       custoNegado:custoNegado, qtdNegadas:qtdNegadas, servNegados:servNegados, qtdEmAberto:qtdEmAberto, riscoCnt:riscoCnt,
-      benefs:benefs, medicos:medicos, prestadores:prestadores, procs:procs, opmes:opmes, matmeds:matmeds, especStats:especStats
+      benefs:benefs, medicos:medicos, prestadores:prestadores, procs:procs, opmes:opmes, matmeds:matmeds, diarias:diarias, especStats:especStats
     };
     _cache.alertas = detectarAlertas(_cache);
     return _cache;
@@ -560,12 +569,13 @@
         sortControl:searchBox(rk,busca,{wide:true})+sortSelect(rk,ORD_ITEM,ord)});
     }
     var divProc = divRanking('Procedimentos','Procedimento','procedimento(s)', pr, 'Proc');
+    var divDt   = divRanking('Taxas e Diárias','Taxa/Diária','taxa(s)/diária(s)', (M.diarias||[]).slice(), 'Dt');
     var divOpme = divRanking('OPME','OPME','item(ns) de OPME', M.opmes.slice(), 'Opme');
     var divMm   = divRanking('Mat/Med','Mat/Med','item(ns) de Mat/Med', (M.matmeds||[]).slice(), 'Mm');
 
     return '<div class="rel-section">'+kpis+
-      '<div class="rel-grid2">'+divProc+divOpme+'</div>'+
-      divMm+
+      '<div class="rel-grid2">'+divProc+divDt+'</div>'+
+      '<div class="rel-grid2">'+divOpme+divMm+'</div>'+
     '</div>';
   }
 
@@ -1158,7 +1168,7 @@
       sel.onchange=function(){
         var rank=sel.getAttribute('data-rank');
         // rankings da aba Procedimentos (Proc/Opme/Mm): estado 'ord<Rank>'
-        if(rank==='Proc'||rank==='Opme'||rank==='Mm'){
+        if(rank==='Proc'||rank==='Opme'||rank==='Mm'||rank==='Dt'){
           _state['ord'+rank]=sel.value;
           if(irParaAba) irParaAba('procedimentos'); return;
         }
@@ -1172,7 +1182,7 @@
       inp.oninput=function(){
         var rank=inp.getAttribute('data-rank');
         _relBuscaFoco={rank:rank, pos:inp.selectionStart};
-        if(rank==='Proc'||rank==='Opme'||rank==='Mm'){
+        if(rank==='Proc'||rank==='Opme'||rank==='Mm'||rank==='Dt'){
           _state['busca'+rank]=inp.value;
           clearTimeout(_relBuscaTimer);
           _relBuscaTimer=setTimeout(function(){ if(irParaAba) irParaAba('procedimentos'); }, 180);
