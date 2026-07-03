@@ -20,7 +20,7 @@
     {id:'exportacoes', label:'Exportações',      ico:'download'}
   ];
 
-  var _state = { tab: 'executivo', ordExec: { med:'custo_desc', prest:'custo_desc', opme:'valor_desc' }, buscaExec: { med:'', prest:'', opme:'' }, filtroRisco: '', filtroAtend: '' };
+  var _state = { tab: 'executivo', ordExec: { med:'custo_desc', prest:'custo_desc', opme:'valor_desc' }, buscaExec: { med:'', prest:'', opme:'' }, filtroRisco: '', filtroAtend: '', periodo: { de:'', ate:'' } };
 
   // Opções de ordenação por ranking do Painel Executivo
   var ORD_MED = [
@@ -153,10 +153,15 @@
   // filtroRisco (opcional): 'baixo'|'medio'|'alto'|'critico' — restringe às guias daquele nível.
   // filtroAtend (opcional): 'Internação'|'Ambulatorial' — restringe pela natureza da guia.
   function analitico(filtroRisco, filtroAtend){
-    // cache separado por combinação de filtros
-    var ck = (filtroRisco||'_all')+'|'+(filtroAtend||'_all');
+    // filtro de período (global do módulo) faz parte da chave de cache
+    var pDe=_state.periodo.de||'', pAte=_state.periodo.ate||'';
+    // cache separado por combinação de filtros + período
+    var ck = (filtroRisco||'_all')+'|'+(filtroAtend||'_all')+'|'+pDe+'~'+pAte;
     if(_cache && _cache.__key===ck) return _cache;
     var guias = (ctxRef().guias) || [];
+    // Período: compara pela data de emissão (formato ISO AAAA-MM-DD, comparável como string)
+    if(pDe)  guias = guias.filter(function(g){ return (g.dataEmissao||'') >= pDe; });
+    if(pAte) guias = guias.filter(function(g){ return (g.dataEmissao||'') <= pAte; });
     if(filtroRisco){ guias = guias.filter(function(g){ return (g.risco||'baixo')===filtroRisco; }); }
     if(filtroAtend){
       var MK=window.MOCK;
@@ -1018,9 +1023,24 @@
     _cache = null; // recalcula a cada entrada (guias podem mudar por perfil/filtro)
     var wrap = el('div');
 
-    wrap.appendChild(el('div',{class:'page-title'},
+    // Cabeçalho do módulo com filtro de PERÍODO global (à direita, padrão do Dashboard)
+    var hdr = el('div',{class:'page-title'},
       '<div><h1>'+ico('bar-chart-3',18)+' Relatórios</h1><p>Centro de Business Intelligence e Inteligência Assistencial — recorrências, custos, desvios e riscos.</p></div>'
-    ));
+    );
+    var periodoWrap = el('div',{id:'relPeriodoWrap',style:'display:flex;align-items:center'});
+    hdr.appendChild(periodoWrap);
+    wrap.appendChild(hdr);
+
+    var content;
+    // Filtro de período: reaplica em TODAS as abas (invalida cache e re-renderiza a aba atual)
+    function aplicarPeriodo(de, ate){
+      _state.periodo = { de:de||'', ate:ate||'' };
+      _cache = null;
+      if(content){ content.innerHTML = renderTab(_state.tab); if(ctx.lcIcons) ctx.lcIcons(); bindConteudo(content, irParaAba); }
+    }
+    if(window.makeDateRangePicker){
+      window.makeDateRangePicker(periodoWrap, _state.periodo.de, _state.periodo.ate, aplicarPeriodo, {hideIcon:false});
+    }
 
     // Barra de abas (rolável horizontalmente)
     var tabBar = el('div',{class:'rel-tab-bar'});
@@ -1029,7 +1049,7 @@
     }).join('');
     wrap.appendChild(tabBar);
 
-    var content = el('div',{class:'rel-content'});
+    content = el('div',{class:'rel-content'});
     content.innerHTML = renderTab(_state.tab);
     wrap.appendChild(content);
 

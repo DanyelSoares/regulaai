@@ -612,6 +612,7 @@
   }
   document.addEventListener('click',function(){ document.querySelectorAll('.csel.open').forEach(function(x){x.classList.remove('open')}); });
   window.makeCustomSelect = makeCustomSelect; // exposto para o módulo Relatórios padronizar seus selects
+  window.makeDateRangePicker = makeDateRangePicker; // exposto para o módulo Relatórios usar o filtro de período padrão
 
   /* === Sidebar collapse === */
   var _sidebarCollapsed = localStorage.getItem('regula_sidebar')==='1';
