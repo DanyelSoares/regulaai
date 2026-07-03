@@ -642,6 +642,130 @@
   }
 
 
+  // ══════════════════════════════════════════════════════════════════
+  //  EXCEL ESTILIZADO (ExcelJS) — cores do sistema, cabeçalhos, zebra,
+  //  bordas, larguras e cabeçalho congelado. Visual impactante.
+  // ══════════════════════════════════════════════════════════════════
+  var XT = { // paleta (ARGB, sem #)
+    verde900:'FF054F27', verde700:'FF066B34', verde500:'FF0A8A43',
+    verde100:'FFCFEAD9', verde50:'FFEAF6EF', branco:'FFFFFFFF',
+    ink:'FF15321F', muted:'FF5B7566', zebra:'FFF4FBF7', danger:'FFB3261E',
+    linha:'FFCFEAD9', tituloBg:'FF054F27'
+  };
+  function _borda(){ return {style:'thin', color:{argb:XT.linha}}; }
+  function _bordasAll(){ return {top:_borda(),left:_borda(),bottom:_borda(),right:_borda()}; }
+  // detecta se um valor é numérico "de dinheiro" p/ formatar como moeda
+  function _ehMoeda(cab){ return /custo|valor|autorizado|cobrado|total|R\$/i.test(cab); }
+  function _ehPercent(v){ return typeof v==='string' && /%$/.test(v); }
+
+  // Escreve uma "seção" (título + tabela) numa worksheet ExcelJS a partir da linha atual.
+  // Retorna a próxima linha livre.
+  function _escreverTabela(ws, linha, titulo, head, rows){
+    var nCols=Math.max(head.length,1);
+    // faixa de título da tabela (mesclada, verde médio)
+    ws.mergeCells(linha,1,linha,nCols);
+    var cT=ws.getCell(linha,1);
+    cT.value=titulo;
+    cT.font={bold:true,size:12,color:{argb:XT.branco}};
+    cT.fill={type:'pattern',pattern:'solid',fgColor:{argb:XT.verde700}};
+    cT.alignment={vertical:'middle',indent:1};
+    ws.getRow(linha).height=22;
+    linha++;
+    // cabeçalho da tabela (verde escuro, texto branco)
+    var hr=ws.getRow(linha);
+    head.forEach(function(h,i){
+      var c=hr.getCell(i+1);
+      c.value=h;
+      c.font={bold:true,size:10.5,color:{argb:XT.branco}};
+      c.fill={type:'pattern',pattern:'solid',fgColor:{argb:XT.verde900}};
+      c.alignment={vertical:'middle',horizontal:(i===0?'left':(i>1?'right':'left')),indent:(i===0?1:0)};
+      c.border=_bordasAll();
+    });
+    hr.height=19; linha++;
+    // linhas de dados (zebra)
+    rows.forEach(function(r,ri){
+      var row=ws.getRow(linha);
+      r.forEach(function(v,i){
+        var c=row.getCell(i+1);
+        // moeda: numérico e coluna de valor → formato R$
+        if(typeof v==='number' && _ehMoeda(head[i]||'')){ c.value=v; c.numFmt='"R$" #,##0.00'; }
+        else if(typeof v==='number'){ c.value=v; }
+        else { c.value=v; }
+        c.font={size:10.5,color:{argb:XT.ink}};
+        c.alignment={vertical:'middle',horizontal:(i===0?'left':(typeof v==='number'||_ehPercent(v)?'right':'left')),indent:(i===0?1:0)};
+        c.fill={type:'pattern',pattern:'solid',fgColor:{argb:(ri%2?XT.zebra:XT.branco)}};
+        c.border={bottom:{style:'hair',color:{argb:XT.verde100}}};
+      });
+      row.height=17; linha++;
+    });
+    return linha+1; // deixa 1 linha em branco após a tabela
+  }
+
+  // Escreve o bloco de KPIs (Indicador / Valor) e retorna a próxima linha.
+  function _escreverKpis(ws, linha, kpis){
+    if(!kpis||!kpis.length) return linha;
+    ws.mergeCells(linha,1,linha,2);
+    var t=ws.getCell(linha,1);
+    t.value='INDICADORES'; t.font={bold:true,size:11,color:{argb:XT.branco}};
+    t.fill={type:'pattern',pattern:'solid',fgColor:{argb:XT.verde500}};
+    t.alignment={vertical:'middle',indent:1}; ws.getRow(linha).height=20; linha++;
+    kpis.forEach(function(k,ri){
+      var row=ws.getRow(linha);
+      var cA=row.getCell(1), cB=row.getCell(2);
+      cA.value=k[0]; cA.font={bold:true,size:10.5,color:{argb:XT.verde700}};
+      cA.alignment={vertical:'middle',indent:1};
+      var v=k[1];
+      if(typeof v==='number' && _ehMoeda(k[0])){ cB.value=v; cB.numFmt='"R$" #,##0.00'; }
+      else cB.value=v;
+      cB.font={size:11,bold:(typeof v==='number'),color:{argb:XT.ink}};
+      cB.alignment={vertical:'middle',horizontal:(typeof v==='number'?'right':'left')};
+      [cA,cB].forEach(function(c){ c.fill={type:'pattern',pattern:'solid',fgColor:{argb:(ri%2?XT.zebra:XT.verde50)}}; c.border={bottom:{style:'hair',color:{argb:XT.verde100}}}; });
+      row.height=18; linha++;
+    });
+    return linha+1;
+  }
+
+  // Constrói uma worksheet estilizada a partir de {nome, kpis, tabelas}
+  function _montarWorksheet(wb, ab){
+    var ws=wb.addWorksheet(ab.nome.slice(0,31), {views:[{state:'frozen', ySplit:0, showGridLines:false}], properties:{defaultRowHeight:16}});
+    // faixa-título da aba (banner) — mescla 6 colunas
+    ws.mergeCells(1,1,1,6);
+    var band=ws.getCell(1,1);
+    band.value='  RegulaAI Saúde · Relatórios — '+ab.nome;
+    band.font={bold:true,size:14,color:{argb:XT.branco}};
+    band.fill={type:'pattern',pattern:'solid',fgColor:{argb:XT.verde900}};
+    band.alignment={vertical:'middle'};
+    ws.getRow(1).height=30;
+    ws.mergeCells(2,1,2,6);
+    var sub=ws.getCell(2,1);
+    sub.value='  Gerado em '+new Date().toLocaleString('pt-BR');
+    sub.font={italic:true,size:9,color:{argb:XT.muted}};
+    ws.getRow(2).height=15;
+    var linha=4;
+    linha=_escreverKpis(ws, linha, ab.kpis);
+    (ab.tabelas||[]).forEach(function(t){ linha=_escreverTabela(ws, linha, t.titulo, t.head, t.rows||[]); });
+    // larguras de coluna automáticas (com limites)
+    var maxCols=1;
+    ws.eachRow(function(r){ maxCols=Math.max(maxCols,r.cellCount); });
+    for(var col=1; col<=Math.max(maxCols,6); col++){
+      var w=10;
+      ws.eachRow(function(r){ var c=r.getCell(col); var len=c.value!=null?(''+(c.numFmt?fmtLen(c.value):c.value)).length:0; if(len>w) w=len; });
+      ws.getColumn(col).width=Math.min(Math.max(w+3,12), 46);
+    }
+    return ws;
+  }
+  function fmtLen(v){ return typeof v==='number' ? Math.round(v).toLocaleString('pt-BR') : v; }
+
+  // Salva o workbook ExcelJS como arquivo .xlsx (Blob + download)
+  function _salvarWorkbook(wb, nomeArq){
+    wb.xlsx.writeBuffer().then(function(buf){
+      var blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+      var url=URL.createObjectURL(blob); var a=document.createElement('a');
+      a.href=url; a.download=nomeArq+'.xlsx';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+    });
+  }
+
   // Retorna {head, rows} de um conjunto de dados para exportação
   function datasetExport(tipo){
     var M=analitico();
@@ -672,28 +796,167 @@
     function textos(tr){ return Array.prototype.map.call(tr.children,function(td){ return (td.textContent||'').replace(/\s+/g,' ').trim(); }); }
     var head = tbl.tHead ? textos(tbl.tHead.rows[0]) : [];
     var rows = tbl.tBodies[0] ? Array.prototype.map.call(tbl.tBodies[0].rows, textos) : [];
-    var aoa=[head].concat(rows);
     var arq='relatorio-'+(nome||'tabela').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')+'-'+new Date().toISOString().slice(0,10);
-    if(window.XLSX){
-      var wb=XLSX.utils.book_new();
-      var ws=XLSX.utils.aoa_to_sheet(aoa);
-      XLSX.utils.book_append_sheet(wb, ws, (nome||'Dados').slice(0,31));
-      XLSX.writeFile(wb, arq+'.xlsx');
-    } else {
-      baixarCSV('relatorio-'+(nome||'tabela'), {head:head, rows:rows});
-    }
+    exportarPlanilhaEstilizada(nome||'Dados', head, rows, arq);
   }
 
-  // Exporta um conjunto (datasetExport) como .xlsx de uma aba (fallback: CSV)
+  // Exporta um conjunto (datasetExport) como .xlsx estilizado de uma aba
   function exportarDatasetXlsx(tipo, nomeAba){
     var ds=datasetExport(tipo);
-    var arq='relatorio-'+tipo+'-'+new Date().toISOString().slice(0,10);
-    if(window.XLSX){
-      var wb=XLSX.utils.book_new();
-      var ws=XLSX.utils.aoa_to_sheet([ds.head].concat(ds.rows));
-      XLSX.utils.book_append_sheet(wb, ws, (nomeAba||'Dados').slice(0,31));
-      XLSX.writeFile(wb, arq+'.xlsx');
-    } else { baixarCSV('relatorio-'+tipo, ds); }
+    exportarPlanilhaEstilizada(nomeAba||'Dados', ds.head, ds.rows, 'relatorio-'+tipo+'-'+new Date().toISOString().slice(0,10));
+  }
+
+  // Cria um .xlsx estilizado com UMA planilha (banner + tabela). Fallback: CSV.
+  function exportarPlanilhaEstilizada(nomeAba, head, rows, arq){
+    if(window.ExcelJS){
+      var wb=new ExcelJS.Workbook(); wb.creator='RegulaAI Saúde'; wb.created=new Date();
+      _montarWorksheet(wb, {nome:nomeAba, kpis:[], tabelas:[{titulo:nomeAba, head:head, rows:rows}]});
+      _salvarWorkbook(wb, arq);
+    } else { baixarCSV(arq, {head:head, rows:rows}); }
+  }
+
+  // ══════════════════════════════════════════════════════════════════
+  // Exportação COMPLETA do módulo: um arquivo Excel com uma planilha por
+  // aba de Relatórios (exceto Comparativos). Cada planilha traz um bloco
+  // "Indicador / Valor" (KPIs) no topo, seguido das tabelas daquela aba.
+  // Respeita os filtros ativos (período + natureza).
+  // ══════════════════════════════════════════════════════════════════
+  function abasExportModulo(){
+    var M=analitico(); // respeita período + natureza (via _state)
+    var pctAprov=function(m){return (m.taxaAprov||0)+'%';};
+    var somaQtd=function(arr){return arr.reduce(function(s,x){return s+(x.qtd||0);},0);};
+    // helper de aba
+    function aba(nome, kpis, tabelas){ return {nome:nome, kpis:kpis, tabelas:tabelas}; }
+    function tab(titulo, head, rows){ return {titulo:titulo, head:head, rows:rows}; }
+
+    // ---- Painel Executivo ----
+    var custoMedioGeralExec=M.totalGuias?Math.round(M.totalCusto/M.totalGuias):0;
+    var execKpis=[
+      ['Guias recebidas', M.totalGuias],
+      ['Custo total analisado', M.totalCusto],
+      ['Custo de serviços negados', M.custoNegado],
+      ['Alertas ativos', M.alertas.length],
+      ['Risco baixo', M.riscoCnt.baixo],['Risco médio', M.riscoCnt.medio],
+      ['Risco alto', M.riscoCnt.alto],['Risco crítico', M.riscoCnt.critico]
+    ];
+    var execTabs=[
+      tab('Ranking de médicos por custo',['#','Médico','Guias','Custo'],
+        M.medicos.slice().sort(function(a,b){return b.custo-a.custo;}).map(function(m,i){return [i+1,m.nome,m.guias,m.custo];})),
+      tab('Ranking de prestadores por custo',['#','Prestador','Guias','Custo'],
+        M.prestadores.slice().sort(function(a,b){return b.custo-a.custo;}).map(function(p,i){return [i+1,p.nome,p.guias,p.custo];})),
+      tab('Ranking de OPME por valor',['#','Código','OPME','Fornecedor','Qtd','Valor cobrado'],
+        M.opmes.slice().sort(function(a,b){return b.cobrado-a.cobrado;}).map(function(o,i){return [i+1,o.cod,o.desc,o.fornecedor||'',o.qtd,o.cobrado];}))
+    ];
+
+    // ---- Beneficiários ----
+    var benTab=datasetExport('beneficiarios');
+    var benKpis=[
+      ['Beneficiários', M.benefs.length],
+      ['Com recorrência (≥2 guias)', M.benefs.filter(function(b){return b.guias>=2;}).length],
+      ['Custo médio por beneficiário', M.benefs.length?Math.round(M.totalCusto/M.benefs.length):0]
+    ];
+
+    // ---- Médicos ----
+    var medTab=datasetExport('medicos');
+    var medKpis=[
+      ['Médicos solicitantes', M.medicos.length],
+      ['Acima da especialidade (desvio)', M.medicos.filter(function(m){return m.desvio;}).length]
+    ];
+
+    // ---- Prestadores ----
+    var prestTab=datasetExport('prestadores');
+    var prestKpis=[
+      ['Prestadores', M.prestadores.length],
+      ['Custo médio por guia (geral)', custoMedioGeralExec],
+      ['Acima da média (custo/guia)', M.prestadores.filter(function(p){return p.custoMedio>custoMedioGeralExec;}).length]
+    ];
+
+    // ---- Procedimentos (com Diárias, OPME, Mat/Med) ----
+    var maisSolicP=M.procs.slice().sort(function(a,b){return b.qtd-a.qtd;})[0];
+    var procKpis=[
+      ['Procedimentos distintos', M.procs.length],
+      ['Total solicitado (ocorrências)', somaQtd(M.procs)],
+      ['Mais solicitado', maisSolicP?(maisSolicP.desc+' ('+maisSolicP.qtd+'x)'):'—']
+    ];
+    var procTabs=[
+      tab('Procedimentos',['Código','Descrição','Qtd','Custo médio','Custo total','Negadas','Taxa neg.'],
+        M.procs.slice().sort(function(a,b){return b.qtd-a.qtd;}).map(function(p){return [p.cod,p.desc,p.qtd,p.custoMedio,p.custo,p.negadas,p.taxaNeg+'%'];})),
+      tab('Diárias e Taxas',['Código','Descrição','Qtd','Custo médio','Custo total'],
+        (M.diarias||[]).slice().sort(function(a,b){return b.qtd-a.qtd;}).map(function(d){return [d.cod,d.desc,d.qtd,d.custoMedio,d.custo];})),
+      tab('OPME',['Código','Descrição','Qtd','Custo médio','Cobrado','Autorizado'],
+        M.opmes.slice().sort(function(a,b){return b.qtd-a.qtd;}).map(function(o){return [o.cod,o.desc,o.qtd,o.custoMedio,o.cobrado,o.autorizado];})),
+      tab('Mat/Med',['Código','Descrição','Qtd','Custo médio','Custo total'],
+        (M.matmeds||[]).slice().sort(function(a,b){return b.qtd-a.qtd;}).map(function(m){return [m.cod,m.desc,m.qtd,m.custoMedio,m.custo];}))
+    ];
+
+    // ---- OPME (painel exclusivo) ----
+    var totAut=M.opmes.reduce(function(s,o){return s+o.autorizado;},0);
+    var totCob=M.opmes.reduce(function(s,o){return s+o.cobrado;},0);
+    var opmeKpis=[
+      ['OPMEs distintos', M.opmes.length],
+      ['Valor autorizado (total)', totAut],
+      ['Valor cobrado (total)', totCob],
+      ['Com variação anormal (≥25%)', M.opmes.filter(function(o){return o.varPreco>=25;}).length]
+    ];
+    var opmeTabs=[
+      tab('OPME — autorizado x cobrado',['Código','OPME','Fornecedor','Qtd','Autorizado','Cobrado','Variação'],
+        M.opmes.slice().sort(function(a,b){return b.cobrado-a.cobrado;}).map(function(o){return [o.cod,o.desc,o.fornecedor||'',o.qtd,o.autorizado,o.cobrado,o.varPreco+'%'];}))
+    ];
+
+    // ---- Custos ----
+    var guiasC=M.guias.map(function(g){return {numero:g.numero,nome:(g.beneficiario&&g.beneficiario.nome)||'—',tipo:g.tipo,custo:custoGuia(g)};}).sort(function(a,b){return b.custo-a.custo;});
+    var custoKpis=[
+      ['Custo total', M.totalCusto],
+      ['Custo médio por guia', custoMedioGeralExec],
+      ['Maior custo (guia)', guiasC[0]?guiasC[0].custo:0],
+      ['Custo de serviços negados', M.custoNegado]
+    ];
+    var custoTabs=[
+      tab('Guias de maior custo',['#','Guia','Beneficiário','Tipo','Custo'],
+        guiasC.map(function(r,i){return [i+1,r.numero,r.nome,r.tipo,r.custo];})),
+      tab('Maior custo por beneficiário',['Beneficiário','Guias','Custo'],
+        M.benefs.slice().sort(function(a,b){return b.custo-a.custo;}).map(function(b){return [b.nome,b.guias,b.custo];})),
+      tab('Maior custo por procedimento',['Código','Procedimento','Qtd','Custo total'],
+        M.procs.slice().sort(function(a,b){return b.custo-a.custo;}).map(function(p){return [p.cod,p.desc,p.qtd,p.custo];}))
+    ];
+
+    // ---- Alertas ----
+    var alTab=datasetExport('alertas');
+    var alKpis=[
+      ['Alertas ativos', M.alertas.filter(function(a){return a.status==='novo'||a.status==='em_analise';}).length],
+      ['Críticos', M.alertas.filter(function(a){return a.sev==='critica';}).length],
+      ['Alta severidade', M.alertas.filter(function(a){return a.sev==='alta';}).length],
+      ['Total detectado', M.alertas.length]
+    ];
+
+    return [
+      aba('Painel Executivo', execKpis, execTabs),
+      aba('Beneficiários', benKpis, [tab('Beneficiários — visão consolidada', benTab.head, benTab.rows)]),
+      aba('Médicos', medKpis, [tab('Médicos solicitantes', medTab.head, medTab.rows)]),
+      aba('Prestadores', prestKpis, [tab('Prestadores — visão consolidada', prestTab.head, prestTab.rows)]),
+      aba('Procedimentos', procKpis, procTabs),
+      aba('OPME', opmeKpis, opmeTabs),
+      aba('Custos', custoKpis, custoTabs),
+      aba('Alertas', alKpis, [tab('Alertas detectados', alTab.head, alTab.rows)])
+    ];
+  }
+
+  // Gera o Excel COMPLETO do módulo, estilizado (ExcelJS): uma planilha por aba, exceto Comparativos
+  function exportarModuloCompleto(){
+    var abas=abasExportModulo();
+    var arq='relatorios-completo-'+new Date().toISOString().slice(0,10);
+    if(window.ExcelJS){
+      var wb=new ExcelJS.Workbook();
+      wb.creator='RegulaAI Saúde'; wb.created=new Date();
+      abas.forEach(function(ab){ _montarWorksheet(wb, ab); });
+      _salvarWorkbook(wb, arq);
+    } else {
+      // fallback (sem a lib): um CSV por aba
+      abas.forEach(function(ab){
+        var rows=[]; (ab.tabelas||[]).forEach(function(t){ rows.push([t.titulo]); rows.push(t.head); t.rows.forEach(function(r){rows.push(r);}); rows.push([]); });
+        baixarCSV('relatorios-'+ab.nome.toLowerCase().replace(/[^a-z0-9]+/g,'-'), {head:['Indicador','Valor'], rows:(ab.kpis||[]).concat([[]]).concat(rows)});
+      });
+    }
   }
 
   // Baixa um CSV (ponto-e-vírgula, BOM) de um único conjunto
@@ -1139,9 +1402,10 @@
 
     // Barra de abas (rolável horizontalmente)
     var tabBar = el('div',{class:'rel-tab-bar'});
-    // ícone de Excel no FINAL da barra: exporta "Guias (visão geral)" — completo (só no Painel Executivo)
+    // ícone de Excel no FINAL da barra: exporta o MÓDULO COMPLETO (uma aba por aba de Relatórios,
+    // com KPIs + tabelas). Visível em todas as abas, exceto Comparativos. Respeita os filtros ativos.
     var xlsxGuias =
-      '<button class="rel-tabbar-xlsx" data-xlsx-guias="1" title="Exportar Guias (visão geral) para Excel" aria-label="Exportar Guias para Excel">'+xlsxSvg(17)+'</button>';
+      '<button class="rel-tabbar-xlsx" data-xlsx-modulo="1" title="Exportar Relatórios completo para Excel (todas as abas, KPIs e tabelas)" aria-label="Exportar Relatórios completo para Excel">'+xlsxSvg(17)+'</button>';
     tabBar.innerHTML = TABS.map(function(t){
       return '<button class="rel-tab'+(_state.tab===t.id?' active':'')+'" data-rtab="'+t.id+'">'+esc(t.label)+'</button>';
     }).join('') + '<span class="rel-tabbar-spacer"></span>' + xlsxGuias;
@@ -1152,10 +1416,10 @@
     wrap.appendChild(content);
 
     // Troca de aba reutilizável (usada pelos botões de aba e pelos KPIs clicáveis)
-    // mostra o ícone de Excel (Guias) só na aba Painel Executivo
+    // mostra o ícone de Excel (módulo completo) em todas as abas, exceto Comparativos
     function toggleXlsxGuias(){
       var b=tabBar.querySelector('.rel-tabbar-xlsx'), sp=tabBar.querySelector('.rel-tabbar-spacer');
-      var mostrar=_state.tab==='executivo';
+      var mostrar=_state.tab!=='comparativos';
       if(b) b.style.display=mostrar?'':'none';
       if(sp) sp.style.display=mostrar?'':'none';
     }
@@ -1178,8 +1442,8 @@
       tabBar.querySelectorAll('.rel-tab').forEach(function(b){
         b.onclick=function(){ irParaAba(b.getAttribute('data-rtab')); };
       });
-      var bx=tabBar.querySelector('[data-xlsx-guias]');
-      if(bx) bx.onclick=function(){ exportarDatasetXlsx('guias','Guias'); };
+      var bx=tabBar.querySelector('[data-xlsx-modulo]');
+      if(bx) bx.onclick=function(){ exportarModuloCompleto(); };
       bindConteudo(content, irParaAba);
       montarFiltroNatureza(); // filtro de Natureza no cabeçalho (aba inicial)
       toggleXlsxGuias();
