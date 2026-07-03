@@ -20,9 +20,7 @@
     {id:'exportacoes', label:'Exportações',      ico:'download'}
   ];
 
-  var _state = { tab: 'executivo', ordExec: { med:'custo_desc', prest:'custo_desc', opme:'valor_desc' }, buscaExec: { med:'', prest:'', opme:'' }, ordProc: 'qtd_desc', buscaProc: '', ordProcCaro: 'cmed_desc', buscaProcCaro: '',
-    ordOpmeSol: 'qtd_desc', buscaOpmeSol: '', ordOpmeCaro: 'cmed_desc', buscaOpmeCaro: '',
-    ordMmSol: 'qtd_desc', buscaMmSol: '', ordMmCaro: 'cmed_desc', buscaMmCaro: '',
+  var _state = { tab: 'executivo', ordExec: { med:'custo_desc', prest:'custo_desc', opme:'valor_desc' }, buscaExec: { med:'', prest:'', opme:'' }, ordProc: 'qtd_desc', buscaProc: '', ordOpme: 'qtd_desc', buscaOpme: '', ordMm: 'qtd_desc', buscaMm: '',
     filtroRisco: '', filtroAtend: '', periodo: { de:'', ate:'' } };
 
   // Opções de ordenação por ranking do Painel Executivo
@@ -39,11 +37,10 @@
     {v:'guias_desc', lbl:'Mais guias'},
     {v:'guias_asc',  lbl:'Menos guias'}
   ];
-  var ORD_PROC = [
-    {v:'qtd_desc', lbl:'Mais solicitados'},
-    {v:'qtd_asc',  lbl:'Menos solicitados'}
-  ];
-  var ORD_PROC_CARO = [
+  // Ordenação unificada por div (Procedimentos/OPME/Mat-Med): solicitações + custo
+  var ORD_ITEM = [
+    {v:'qtd_desc',  lbl:'Mais solicitados'},
+    {v:'qtd_asc',   lbl:'Menos solicitados'},
     {v:'cmed_desc', lbl:'Maior custo'},
     {v:'cmed_asc',  lbl:'Menor custo'}
   ];
@@ -73,9 +70,10 @@
     return '<select class="rel-sort" data-rank="'+rankKey+'">'+options+'</select>';
   }
   // Caixa de busca discreta (expande ao focar) para o cabeçalho de um ranking
-  function searchBox(rankKey, valor){
-    var v = valor||'';
-    return '<span class="rel-search-wrap'+(v?' has-val':'')+'">'+ico('search',13)+
+  function searchBox(rankKey, valor, opts){
+    var v = valor||''; opts=opts||{};
+    var wide = opts.wide ? ' rel-search-wide' : '';
+    return '<span class="rel-search-wrap'+(v?' has-val':'')+wide+'">'+ico('search',13)+
       '<input type="text" class="rel-search" data-rank="'+rankKey+'" value="'+esc(v)+'" placeholder="Buscar" aria-label="Buscar no ranking" />'+
     '</span>';
   }
@@ -545,54 +543,29 @@
       kpiCard('Mais caro',maisCaros.length?moeda(maisCaros[0].custoMedio):'R$ 0','médio','#b45309')+
       kpiCard('Maior negativa',maisNeg.length?maisNeg[0].taxaNeg+'%':'0%',maisNeg.length?maisNeg[0].cod:'','#b91c1c')+
     '</div>';
-    // Ranking de procedimentos "Mais solicitados": lista completa + busca + ordenação + scroll
-    var procRank = ordenarRank(filtrarRank(pr, _state.buscaProc), _state.ordProc, 'custo');
-    var rkA=rankTable('Mais solicitados',[
-      {h:'#',f:function(r,i){return '<b>'+(i+1)+'</b>';}},
-      {h:'Código',f:function(r){return esc(r.cod);}},
-      {h:'Procedimento',f:function(r){return esc(r.desc);}},
-      {h:'Qtd',num:true,f:function(r){return r.qtd;}}
-    ],procRank,{scroll:true,count:true,countLabel:function(n){return n+' procedimento(s) distinto(s) no ranking';},
-      sortControl:searchBox('proc',_state.buscaProc)+sortSelect('proc',ORD_PROC,_state.ordProc)});
-    // Ranking "Mais caros": lista completa por custo médio + busca + ordenação + scroll
-    var procCaroRank = ordenarRank(filtrarRank(pr, _state.buscaProcCaro), _state.ordProcCaro, 'custoMedio');
-    var rkB=rankTable('Mais caros',[
-      {h:'#',f:function(r,i){return '<b>'+(i+1)+'</b>';}},
-      {h:'Código',f:function(r){return esc(r.cod);}},
-      {h:'Procedimento',f:function(r){return esc(r.desc);}},
-      {h:'Custo',num:true,f:function(r){return moeda(r.custoMedio);}}
-    ],procCaroRank,{scroll:true,count:true,countLabel:function(n){return n+' procedimento(s) distinto(s) no ranking';},
-      sortControl:searchBox('procCaro',_state.buscaProcCaro)+sortSelect('procCaro',ORD_PROC_CARO,_state.ordProcCaro)});
-
-    // Helper: gera o par de rankings (Mais solicitados / Mais caros) para OPME ou Mat/Med.
-    // colLbl = rótulo da coluna do item; dados = array; rankSol/rankCaro = chaves de estado/handler.
-    function parRankings(colLbl, itemLbl, dados, rankSol, rankCaro){
-      var solRank = ordenarRank(filtrarRank(dados, _state['busca'+rankSol]), _state['ord'+rankSol], 'custo');
-      var caroRank = ordenarRank(filtrarRank(dados, _state['busca'+rankCaro]), _state['ord'+rankCaro], 'custoMedio');
-      var cLbl=function(n){return n+' '+itemLbl+' distinto(s) no ranking';};
-      var rSol=rankTable('Mais solicitados',[
+    // Div unificada por tipo: uma tabela (Qtd + Custo), um filtro de ordenação e uma busca.
+    // titulo/colLbl/itemLbl textuais; dados = array; rk = chave de estado/handler (Proc/Opme/Mm).
+    function divRanking(titulo, colLbl, itemLbl, dados, rk){
+      var ord=_state['ord'+rk], busca=_state['busca'+rk];
+      // ordena por qtd ou por custo médio conforme a opção escolhida
+      var lista = ordenarRank(filtrarRank(dados, busca), ord, 'custoMedio');
+      return rankTable(titulo,[
         {h:'#',f:function(r,i){return '<b>'+(i+1)+'</b>';}},
         {h:'Código',f:function(r){return esc(r.cod);}},
         {h:colLbl,f:function(r){return esc(r.desc);}},
-        {h:'Qtd',num:true,f:function(r){return r.qtd;}}
-      ],solRank,{scroll:true,count:true,countLabel:cLbl,
-        sortControl:searchBox(rankSol,_state['busca'+rankSol])+sortSelect(rankSol,ORD_PROC,_state['ord'+rankSol])});
-      var rCaro=rankTable('Mais caros',[
-        {h:'#',f:function(r,i){return '<b>'+(i+1)+'</b>';}},
-        {h:'Código',f:function(r){return esc(r.cod);}},
-        {h:colLbl,f:function(r){return esc(r.desc);}},
+        {h:'Qtd',num:true,f:function(r){return r.qtd;}},
         {h:'Custo',num:true,f:function(r){return moeda(r.custoMedio);}}
-      ],caroRank,{scroll:true,count:true,countLabel:cLbl,
-        sortControl:searchBox(rankCaro,_state['busca'+rankCaro])+sortSelect(rankCaro,ORD_PROC_CARO,_state['ord'+rankCaro])});
-      return '<div class="rel-grid2">'+rSol+rCaro+'</div>';
+      ],lista,{scroll:true,count:true,
+        countLabel:function(n){return n+' '+itemLbl+' distinto(s) no ranking';},
+        sortControl:searchBox(rk,busca,{wide:true})+sortSelect(rk,ORD_ITEM,ord)});
     }
-    var blocoOpme = parRankings('OPME','item(ns) de OPME', M.opmes.slice(), 'OpmeSol','OpmeCaro');
-    var blocoMm   = parRankings('Mat/Med','item(ns) de Mat/Med', (M.matmeds||[]).slice(), 'MmSol','MmCaro');
+    var divProc = divRanking('Procedimentos','Procedimento','procedimento(s)', pr, 'Proc');
+    var divOpme = divRanking('OPME','OPME','item(ns) de OPME', M.opmes.slice(), 'Opme');
+    var divMm   = divRanking('Mat/Med','Mat/Med','item(ns) de Mat/Med', (M.matmeds||[]).slice(), 'Mm');
 
     return '<div class="rel-section">'+kpis+
-      '<div class="rel-grid2">'+rkA+rkB+'</div>'+
-      '<div class="rel-subhd">'+ico('wrench',14)+' OPME</div>'+ blocoOpme+
-      '<div class="rel-subhd">'+ico('pill',14)+' Mat/Med</div>'+ blocoMm+
+      '<div class="rel-grid2">'+divProc+divOpme+'</div>'+
+      divMm+
     '</div>';
   }
 
@@ -1184,9 +1157,9 @@
       sel.onclick=function(e){ e.stopPropagation(); };
       sel.onchange=function(){
         var rank=sel.getAttribute('data-rank');
-        // rankings da aba Procedimentos (proc/procCaro + OPME/MatMed): estado 'ord<Rank>'
-        if(rank==='proc'||rank==='procCaro'||rank==='OpmeSol'||rank==='OpmeCaro'||rank==='MmSol'||rank==='MmCaro'){
-          _state['ord'+(rank.charAt(0).toUpperCase()+rank.slice(1))]=sel.value;
+        // rankings da aba Procedimentos (Proc/Opme/Mm): estado 'ord<Rank>'
+        if(rank==='Proc'||rank==='Opme'||rank==='Mm'){
+          _state['ord'+rank]=sel.value;
           if(irParaAba) irParaAba('procedimentos'); return;
         }
         _state.ordExec[rank]=sel.value;
@@ -1199,8 +1172,8 @@
       inp.oninput=function(){
         var rank=inp.getAttribute('data-rank');
         _relBuscaFoco={rank:rank, pos:inp.selectionStart};
-        if(rank==='proc'||rank==='procCaro'||rank==='OpmeSol'||rank==='OpmeCaro'||rank==='MmSol'||rank==='MmCaro'){
-          _state['busca'+(rank.charAt(0).toUpperCase()+rank.slice(1))]=inp.value;
+        if(rank==='Proc'||rank==='Opme'||rank==='Mm'){
+          _state['busca'+rank]=inp.value;
           clearTimeout(_relBuscaTimer);
           _relBuscaTimer=setTimeout(function(){ if(irParaAba) irParaAba('procedimentos'); }, 180);
           return;
