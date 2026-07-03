@@ -701,6 +701,18 @@
     }
   }
 
+  // Exporta um conjunto (datasetExport) como .xlsx de uma aba (fallback: CSV)
+  function exportarDatasetXlsx(tipo, nomeAba){
+    var ds=datasetExport(tipo);
+    var arq='relatorio-'+tipo+'-'+new Date().toISOString().slice(0,10);
+    if(window.XLSX){
+      var wb=XLSX.utils.book_new();
+      var ws=XLSX.utils.aoa_to_sheet([ds.head].concat(ds.rows));
+      XLSX.utils.book_append_sheet(wb, ws, (nomeAba||'Dados').slice(0,31));
+      XLSX.writeFile(wb, arq+'.xlsx');
+    } else { baixarCSV('relatorio-'+tipo, ds); }
+  }
+
   // Baixa um CSV (ponto-e-vírgula, BOM) de um único conjunto
   function baixarCSV(nome, ds){
     var csv=[ds.head].concat(ds.rows).map(function(r){return r.map(function(c){var s=(''+c).replace(/"/g,'""');return /[";\n]/.test(s)?'"'+s+'"':s;}).join(';');}).join('\r\n');
@@ -1168,9 +1180,21 @@
 
     // Barra de abas (rolável horizontalmente)
     var tabBar = el('div',{class:'rel-tab-bar'});
+    // ícone de Excel no FINAL da barra: exporta "Guias (visão geral)" — completo (só no Painel Executivo)
+    var xlsxGuias =
+      '<button class="rel-tabbar-xlsx" data-xlsx-guias="1" title="Exportar Guias (visão geral) para Excel" aria-label="Exportar Guias para Excel">'+
+        '<svg viewBox="0 0 32 32" width="17" height="17" aria-hidden="true">'+
+          '<path d="M15 4h13.5A1.5 1.5 0 0 1 30 5.5v21a1.5 1.5 0 0 1-1.5 1.5H15z" fill="#185C37"/>'+
+          '<rect x="15" y="4"  width="15" height="7.3" rx="1.5" fill="#33C481"/>'+
+          '<rect x="15" y="11.3" width="15" height="7.3" fill="#21A366"/>'+
+          '<rect x="15" y="18.6" width="15" height="7.3" fill="#107C41"/>'+
+          '<rect x="2" y="7" width="15" height="18" rx="2.2" fill="#107C41"/>'+
+          '<path d="M6.3 11.2l2.7 3.5 2.7-3.5h2.6l-3.9 5.3 4 5.5h-2.7l-2.7-3.7-2.7 3.7H3.6l4-5.5-3.9-5.3z" fill="#fff"/>'+
+        '</svg>'+
+      '</button>';
     tabBar.innerHTML = TABS.map(function(t){
       return '<button class="rel-tab'+(_state.tab===t.id?' active':'')+'" data-rtab="'+t.id+'">'+esc(t.label)+'</button>';
-    }).join('');
+    }).join('') + '<span class="rel-tabbar-spacer"></span>' + xlsxGuias;
     wrap.appendChild(tabBar);
 
     content = el('div',{class:'rel-content'});
@@ -1178,6 +1202,14 @@
     wrap.appendChild(content);
 
     // Troca de aba reutilizável (usada pelos botões de aba e pelos KPIs clicáveis)
+    // mostra o ícone de Excel (Guias) só na aba Painel Executivo
+    function toggleXlsxGuias(){
+      var b=tabBar.querySelector('.rel-tabbar-xlsx'), sp=tabBar.querySelector('.rel-tabbar-spacer');
+      var mostrar=_state.tab==='executivo';
+      if(b) b.style.display=mostrar?'':'none';
+      if(sp) sp.style.display=mostrar?'':'none';
+    }
+
     function irParaAba(id){
       var btn=tabBar.querySelector('.rel-tab[data-rtab="'+id+'"]'); if(!btn) return;
       if(id!=='executivo'){ _state.filtroRisco=''; _state.filtroAtend=''; } // sair do Painel Executivo limpa os filtros
@@ -1187,6 +1219,7 @@
       if(ctx.lcIcons) ctx.lcIcons();
       bindConteudo(content, irParaAba);
       montarFiltroNatureza(); // mostra/oculta o filtro de Natureza conforme a aba
+      toggleXlsxGuias();
       if(window.innerWidth<=640) btn.scrollIntoView({inline:'center',block:'nearest'});
     }
 
@@ -1194,8 +1227,11 @@
       tabBar.querySelectorAll('.rel-tab').forEach(function(b){
         b.onclick=function(){ irParaAba(b.getAttribute('data-rtab')); };
       });
+      var bx=tabBar.querySelector('[data-xlsx-guias]');
+      if(bx) bx.onclick=function(){ exportarDatasetXlsx('guias','Guias'); };
       bindConteudo(content, irParaAba);
       montarFiltroNatureza(); // filtro de Natureza no cabeçalho (aba inicial)
+      toggleXlsxGuias();
       if(ctx.lcIcons) ctx.lcIcons();
     },0);
 
