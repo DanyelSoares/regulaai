@@ -728,33 +728,47 @@
   // Constrói uma worksheet estilizada a partir de {nome, kpis, tabelas}
   function _montarWorksheet(wb, ab){
     var ws=wb.addWorksheet(ab.nome.slice(0,31), {views:[{state:'frozen', ySplit:0, showGridLines:false}], properties:{defaultRowHeight:16}});
-    // faixa-título da aba (banner) — mescla 6 colunas
-    ws.mergeCells(1,1,1,6);
+    // nº de colunas real da planilha (maior largura entre KPIs=2 e as tabelas)
+    var nCols=2;
+    (ab.tabelas||[]).forEach(function(t){ nCols=Math.max(nCols, (t.head||[]).length); });
+    nCols=Math.max(nCols,3);
+    // faixa-título da aba (banner) — mesclada na largura real da planilha
+    ws.mergeCells(1,1,1,nCols);
     var band=ws.getCell(1,1);
     band.value='  RegulaAI Saúde · Relatórios — '+ab.nome;
     band.font={bold:true,size:14,color:{argb:XT.branco}};
     band.fill={type:'pattern',pattern:'solid',fgColor:{argb:XT.verde900}};
     band.alignment={vertical:'middle'};
     ws.getRow(1).height=30;
-    ws.mergeCells(2,1,2,6);
+    ws.mergeCells(2,1,2,nCols);
     var sub=ws.getCell(2,1);
-    sub.value='  Gerado em '+new Date().toLocaleString('pt-BR');
+    sub.value='  Gerado em '+new Date().toLocaleString('pt-BR')+_sufixoFiltros();
     sub.font={italic:true,size:9,color:{argb:XT.muted}};
+    sub.fill={type:'pattern',pattern:'solid',fgColor:{argb:XT.verde50}};
     ws.getRow(2).height=15;
     var linha=4;
     linha=_escreverKpis(ws, linha, ab.kpis);
     (ab.tabelas||[]).forEach(function(t){ linha=_escreverTabela(ws, linha, t.titulo, t.head, t.rows||[]); });
-    // larguras de coluna automáticas (com limites)
-    var maxCols=1;
-    ws.eachRow(function(r){ maxCols=Math.max(maxCols,r.cellCount); });
-    for(var col=1; col<=Math.max(maxCols,6); col++){
+    // larguras de coluna automáticas (medindo o texto exibido, com limites)
+    for(var col=1; col<=nCols; col++){
       var w=10;
-      ws.eachRow(function(r){ var c=r.getCell(col); var len=c.value!=null?(''+(c.numFmt?fmtLen(c.value):c.value)).length:0; if(len>w) w=len; });
-      ws.getColumn(col).width=Math.min(Math.max(w+3,12), 46);
+      ws.eachRow(function(r){
+        var c=r.getCell(col); if(c.value==null) return;
+        var txt = (typeof c.value==='number' && c.numFmt) ? ('R$ '+Math.round(c.value).toLocaleString('pt-BR')+',00') : (''+c.value);
+        if(txt.length>w) w=txt.length;
+      });
+      ws.getColumn(col).width=Math.min(Math.max(w+3,12), 48);
     }
     return ws;
   }
-  function fmtLen(v){ return typeof v==='number' ? Math.round(v).toLocaleString('pt-BR') : v; }
+  // Sufixo informando filtros ativos (período/natureza) na linha de "Gerado em"
+  function _sufixoFiltros(){
+    var p=_state.periodo||{}, fa=_state.filtroAtend||'';
+    var partes=[];
+    if(p.de||p.ate) partes.push('período '+(p.de||'…')+' a '+(p.ate||'…'));
+    if(fa) partes.push('natureza: '+fa);
+    return partes.length ? '  ·  Filtros: '+partes.join(' · ') : '';
+  }
 
   // Salva o workbook ExcelJS como arquivo .xlsx (Blob + download)
   function _salvarWorkbook(wb, nomeArq){
