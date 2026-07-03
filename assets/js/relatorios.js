@@ -537,10 +537,9 @@
       {h:'Taxa neg.',num:true,f:function(r){return r.taxaNeg+'%';}},
       {h:'Custo total',num:true,f:function(r){return moeda(r.custo);}}
     ],pr.sort(function(a,b){return b.custo-a.custo;}));
-    return '<div class="rel-section">'+notaSim()+kpis+'<div class="rel-grid2">'+rkA+rkB+'</div>'+tab+'</div>';
+    return '<div class="rel-section">'+kpis+'<div class="rel-grid2">'+rkA+rkB+'</div>'+tab+'</div>';
   }
 
-  function notaSim(){ return '<div class="rel-note">'+ico('info',13)+' <span>Análise sobre as guias do período. <b>Valores em R$ são simulados</b> (determinísticos por código) para demonstração.</span></div>'; }
 
   // ── Tendências (honesto: base de 1 mês) ───────────────────────────
   function renderTendencias(){
