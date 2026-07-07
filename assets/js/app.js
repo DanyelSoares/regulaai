@@ -2593,11 +2593,105 @@
             _wTbody.appendChild(tr);
           });
           _wTbl.appendChild(_wTbody);
-          _wTbl.addEventListener('input',function(e){
-            if(e.target.classList.contains('ia-peso-range'))
-              e.target.parentNode.querySelector('.ia-peso-val').textContent=e.target.value;
-          });
           _wWrap.appendChild(_wTbl);
+
+          // ── SIMULADOR AO VIVO: mostra o impacto dos pesos numa guia-exemplo ──
+          // Fatores de cumprimento por critério (iguais aos do ai-engine.js):
+          var CUMPR={documental:1, dut:1, procedimento:0.9, pacote:1, matmed:0.8, diaria:0.85, contratual:0.95, historico:0.9};
+          // Estado da guia-exemplo (o que ela "tem" / cumpre)
+          var simGuia={ documental:true, temDut:true, dutOk:true, procedimento:true, pacote:true, matmed:true, diaria:true };
+          function lerPesosAtuais(){
+            var p={}; _wTbl.querySelectorAll('.ia-peso-range').forEach(function(inp){ p[inp.getAttribute('data-key')]=+inp.value; }); return p;
+          }
+          // Recalcula a aderência da guia-exemplo com os pesos atuais (mesma lógica do motor)
+          function calcSim(){
+            var p=lerPesosAtuais();
+            var linhas=[], total=0, cumpr=0;
+            function add(nome,aplica,pesoBase,fator,cumpreBool,obs){
+              if(!aplica){ linhas.push({nome:nome, na:true, obs:obs}); return; }
+              var teto=pesoBase; total+=teto;
+              var got = cumpreBool ? Math.round(pesoBase*fator*10)/10 : 0;
+              cumpr+=got;
+              linhas.push({nome:nome, got:got, teto:teto, ok:cumpreBool, obs:obs});
+            }
+            add('Documental', true, p.documental, CUMPR.documental, simGuia.documental, simGuia.documental?'anexos presentes':'sem anexos');
+            add('DUT', simGuia.temDut, p.dut, CUMPR.dut, simGuia.dutOk, simGuia.temDut?(simGuia.dutOk?'comprovada':'não comprovada'):'não se aplica');
+            add('Procedimentos', simGuia.procedimento, p.procedimento, CUMPR.procedimento, true, 'vinculado');
+            add('Pacotes', simGuia.pacote, p.pacote, CUMPR.pacote, true, 'vinculado');
+            add('Mat/Med', simGuia.matmed, p.matmed, CUMPR.matmed, true, 'vinculado');
+            add('Diárias/Taxas', simGuia.diaria, p.diaria, CUMPR.diaria, true, 'vinculado');
+            add('Contratual/Histórico', true, p.contratual, CUMPR.contratual, true, 'cobertura verificada');
+            var perc = total>0 ? Math.round((cumpr/total)*100) : 0;
+            return {linhas:linhas, total:Math.round(total*10)/10, cumpr:Math.round(cumpr*10)/10, perc:perc};
+          }
+          function faixaCor(p){ return p>=90?'#16a34a':(p>=70?'#a16207':(p>=50?'#c2410c':'#b91c1c')); }
+          function faixaLbl(p){ return p>=90?'Alta':(p>=70?'Moderada':(p>=50?'Baixa':'Crítica')); }
+
+          var _sim=el('div',{class:'pesos-sim'});
+          function renderSim(){
+            var r=calcSim();
+            var toggles=[
+              ['documental','Documentação anexada'],
+              ['temDut','Tem procedimento com DUT'],
+              ['dutOk','DUT comprovada', 'temDut'],
+              ['procedimento','Procedimentos vinculados'],
+              ['pacote','Pacotes vinculados'],
+              ['matmed','Mat/Med vinculados'],
+              ['diaria','Diárias/Taxas vinculadas']
+            ];
+            var togHTML=toggles.map(function(t){
+              var on=simGuia[t[0]];
+              var dep=t[2]; var disabled=dep && !simGuia[dep];
+              return '<label class="sim-tog'+(on&&!disabled?' on':'')+(disabled?' dis':'')+'" data-sim="'+t[0]+'">'+
+                '<span class="sim-tog-box">'+(on&&!disabled?ico('check',11):'')+'</span>'+esc(t[1])+'</label>';
+            }).join('');
+            var rows=r.linhas.map(function(l){
+              if(l.na) return '<tr class="sim-na"><td>'+esc(l.nome)+'</td><td colspan="2" style="color:var(--muted);font-size:11.5px">— não se aplica ('+esc(l.obs)+')</td></tr>';
+              var pctLinha = l.teto>0?Math.round(l.got/l.teto*100):0;
+              return '<tr'+(l.ok?'':' class="sim-fail"')+'>'+
+                '<td>'+esc(l.nome)+'</td>'+
+                '<td style="text-align:right;white-space:nowrap"><b>'+l.got+'</b> / '+l.teto+' pts</td>'+
+                '<td style="width:110px"><span class="sim-bar"><span style="width:'+pctLinha+'%;background:'+(l.ok?'var(--g-500)':'#e5c07b')+'"></span></span></td>'+
+              '</tr>';
+            }).join('');
+            _sim.innerHTML=
+              '<div class="pesos-sim-hd">'+ico('sliders-horizontal',14)+' Simulador ao vivo — impacto dos pesos</div>'+
+              '<div class="pesos-sim-body">'+
+                '<div class="sim-left">'+
+                  '<div class="sim-sub">Guia de exemplo (marque o que ela cumpre):</div>'+
+                  '<div class="sim-togs">'+togHTML+'</div>'+
+                '</div>'+
+                '<div class="sim-right">'+
+                  '<div class="sim-score" style="color:'+faixaCor(r.perc)+'">'+r.perc+'%<span class="sim-score-lbl">'+faixaLbl(r.perc)+'</span></div>'+
+                  '<div class="sim-prog"><span style="width:'+r.perc+'%;background:'+faixaCor(r.perc)+'"></span></div>'+
+                  '<div class="sim-formula">'+r.cumpr+' pts cumpridos ÷ '+r.total+' pts de teto</div>'+
+                '</div>'+
+              '</div>'+
+              '<table class="sim-tbl"><thead><tr><th>Critério</th><th style="text-align:right">Cumprido / Teto</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>'+
+              '<div class="sim-hint">'+ico('info',12)+' Os pesos não se somam entre si por regra — o que os liga é o <b>teto</b> (denominador). Como aderência = cumprido ÷ teto, <b>aumentar o peso de um critério faz a falha nele "pesar" mais</b> e dilui o peso relativo dos demais. Mova os sliders acima e veja o percentual mudar.</div>';
+            lcIcons();
+            // liga os toggles
+            _sim.querySelectorAll('.sim-tog').forEach(function(el2){
+              el2.onclick=function(){
+                var k=el2.getAttribute('data-sim');
+                if(el2.classList.contains('dis')) return;
+                simGuia[k]=!simGuia[k];
+                if(k==='temDut' && !simGuia.temDut) simGuia.dutOk=false;
+                renderSim();
+              };
+            });
+          }
+          renderSim();
+          _wWrap.appendChild(_sim);
+
+          // Recalcula o simulador ao mover qualquer slider (além de atualizar o número)
+          _wTbl.addEventListener('input',function(e){
+            if(e.target.classList.contains('ia-peso-range')){
+              e.target.parentNode.querySelector('.ia-peso-val').textContent=e.target.value;
+              renderSim();
+            }
+          });
+
           var _wBar=el('div',{style:'display:flex;justify-content:flex-end;margin-top:14px'});
           var _wSave=el('button',{class:'btn-animated'},ico('save',13)+' Salvar pesos deste fluxo');
           _wSave.onclick=function(){
