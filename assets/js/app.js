@@ -4790,6 +4790,7 @@
             '<dt>Carteirinha</dt><dd>'+esc(g.beneficiario.carteirinha||'—')+'</dd>'+
             '<dt>CPF</dt><dd>'+mask(g.beneficiario.cpf)+'</dd>'+
             '<dt>Plano / Contrato</dt><dd>'+esc(g.beneficiario.plano)+' · '+esc(g.beneficiario.contrato)+'</dd>'+
+            '<dt>Acomodação</dt><dd>'+esc(g.beneficiario.acomodacao||'—')+'</dd>'+
             '<dt>Data de inclusão</dt><dd>'+esc(g.beneficiario.dataInclusao||'—')+(MOCK.anosContrato(g.beneficiario.dataInclusao)!=null?' <span style="color:var(--muted)">('+MOCK.anosContrato(g.beneficiario.dataInclusao)+' '+(MOCK.anosContrato(g.beneficiario.dataInclusao)===1?'ano':'anos')+' de contrato)</span>':'')+'</dd>'+
           '</dl>'+
           '<dl class="kv">'+
@@ -5952,6 +5953,7 @@
               ['Carteirinha','Número da carteirinha do beneficiário'],
               ['CPF','CPF do beneficiário, parcialmente mascarado (privacidade de dados)'],
               ['Plano / Contrato','Nome do plano e código do contrato'],
+              ['Acomodação','Acomodação contratada pelo beneficiário (APARTAMENTO ou ENFERMARIA)'],
               ['Data de inclusão','Data em que o beneficiário entrou no plano; o tempo de contrato (anos) é calculado automaticamente e exibido entre parênteses'],
             ])+
             '<p style="margin-top:12px"><b>Coluna direita — Solicitação:</b></p>'+
