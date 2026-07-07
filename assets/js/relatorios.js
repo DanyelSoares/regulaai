@@ -1567,6 +1567,15 @@
   }
   var _relBuscaTimer=null, _relBuscaFoco=null;
 
-  global.RELATORIOS = { view: view };
+  // Estado atual dos filtros do módulo (para o Assistente RAI saber o recorte analisado)
+  function getFiltros(){
+    return {
+      periodo: { de:_state.periodo.de||'', ate:_state.periodo.ate||'' },
+      natureza: _state.filtroAtend||'',
+      risco: _state.filtroRisco||''
+    };
+  }
+
+  global.RELATORIOS = { view: view, getFiltros: getFiltros };
 
 })(window);

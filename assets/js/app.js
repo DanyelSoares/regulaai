@@ -6496,8 +6496,19 @@
       });
       function top(obj,campo,n){ return Object.keys(obj).map(function(k){var o=obj[k];o._k=k;return o;}).sort(function(a,b){return (b[campo]||0)-(a[campo]||0);}).slice(0,n); }
       function moedaTxt(v){ return 'R$ '+(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+      function brData(iso){ if(!iso) return ''; var p=String(iso).split('-'); return p.length===3?(p[2]+'/'+p[1]+'/'+p[0]):iso; }
+      // Filtros ativos no módulo Relatórios (período + natureza)
+      var flt=(window.RELATORIOS&&window.RELATORIOS.getFiltros)?window.RELATORIOS.getFiltros():{periodo:{de:'',ate:''},natureza:'',risco:''};
       var L=[];
-      L.push('DADOS ANALÍTICOS ATUAIS (período/natureza conforme filtros do módulo):');
+      // PERÍODO SELECIONADO (para a RAI conseguir informar o intervalo analisado)
+      if(flt.periodo.de || flt.periodo.ate){
+        L.push('PERÍODO SELECIONADO: de '+(brData(flt.periodo.de)||'início')+' até '+(brData(flt.periodo.ate)||'hoje')+' (filtro de Período do módulo).');
+      } else {
+        L.push('PERÍODO SELECIONADO: nenhum filtro de período aplicado — considerando TODAS as guias disponíveis.');
+      }
+      if(flt.natureza) L.push('FILTRO DE NATUREZA ATIVO: '+flt.natureza+'.');
+      if(flt.risco) L.push('FILTRO DE RISCO ATIVO: '+flt.risco+'.');
+      L.push('DADOS ANALÍTICOS ATUAIS (correspondem ao período/natureza acima):');
       L.push('Total de guias analisadas: '+gs.length);
       L.push('Custo total analisado: '+moedaTxt(totalCusto));
       L.push('Custo de serviços negados: '+moedaTxt(negCusto)+' ('+nNeg+' guia(s) negada(s))');
@@ -6513,6 +6524,7 @@
       return CTX_BASE+
         'MODO: RELATÓRIOS. Você atua como analista de BI assistencial do RegulaAI, conversando sobre os dados dos relatórios (recorrências, custos, desvios, riscos, OPME, alertas). '+
         'Responda SEMPRE com base nos DADOS ANALÍTICOS fornecidos abaixo — cite números reais (valores, quantidades, nomes). Se o usuário pedir algo que não está nos dados, diga que aquele recorte não está disponível no resumo atual e sugira a aba/filtro do módulo Relatórios onde ele encontra. NÃO invente números. Valores em R$ são estimativas simuladas do sistema para demonstração. '+
+        'PERÍODO: você RECEBE o período atualmente selecionado (linha "PERÍODO SELECIONADO" abaixo) e os dados já correspondem a ele. Quando perguntarem qual período está sendo analisado, INFORME o intervalo exato dessa linha. Os dados são atualizados em tempo real conforme o usuário altera o filtro de Período no módulo — a cada pergunta você recebe o recorte vigente. '+
         MAPA_RELATORIOS+
         resumoRelatoriosTexto();
     }
