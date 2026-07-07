@@ -6167,12 +6167,14 @@
           '<p><b>Importante para os demais perfis:</b> Auditor, Enfermeiro e Gestor <b>não veem</b> esta aba, mas <b>usam o chat normalmente</b> com a chave que o Administrador configurou. Caso a chave ainda não esteja configurada naquele dispositivo, o chat orienta a contatar o Administrador.</p>'+
           '<p style="padding:9px 12px;background:#fef9e7;border:1px solid #f5e2a3;border-radius:8px;font-size:12.5px"><b>'+ico('info',12)+' Chave por dispositivo:</b> a chave é salva por navegador/dispositivo. Para habilitar a RAI em um novo computador, o <b>Administrador</b> deve abrir o sistema naquele dispositivo e inserir a chave uma vez — os demais usuários daquele navegador passam a usar o assistente sem precisar da chave. <i>(A análise de aderência das guias é local e funciona para todos, independentemente da chave.)</i></p>')+
         manualBox('Assistente RAI: modos de atendimento',
-          '<p>Ao abrir o chat, a RAI se apresenta e oferece <b>dois modos</b>. O usuário escolhe um pelos botões:</p>'+
+          '<p>Ao abrir o chat, a RAI se apresenta e oferece <b>três modos</b>. O usuário escolhe um pelos botões:</p>'+
           manualTable(['Modo','O que faz'],[
             ['Uso do sistema','Atua como o manual interativo — tira dúvidas sobre telas, fluxos, aderência, pontuações e usabilidade da plataforma.'],
             ['Conversa técnica','Apoio técnico-assistencial sobre uma guia específica: esclarece o parecer, discute a indicação técnica dos serviços solicitados, contraindicações e alternativas possíveis.'],
+            ['Relatórios','Conversa sobre os dados dos relatórios (Painel Executivo, Beneficiários, Médicos, Prestadores, Procedimentos, OPME, Custos, Alertas, Comparativos). A RAI responde com base nos números reais das guias do período.'],
           ])+
           '<p>No modo <b>Conversa técnica</b>, a RAI primeiro solicita o <b>número da guia</b>. Ao informar, ela carrega automaticamente os dados da guia (procedimentos, aderência, parecer da IA, pendências e alertas) e passa a responder com base nesse contexto.</p>'+
+          '<p>No modo <b>Relatórios</b>, a RAI recebe automaticamente um resumo analítico das guias visíveis (custos, riscos, top médicos/prestadores, OPME, natureza) e responde perguntas como "quais os 3 médicos de maior custo?" ou "quanto foi economizado com serviços negados?".</p>'+
           '<p style="padding:9px 12px;background:var(--g-50);border-radius:8px;font-size:12.5px"><b>'+ico('info',12)+' Apoio à decisão:</b> no modo técnico a RAI <b>não autoriza nem nega</b> procedimentos — é apoio ao auditor. A decisão final é exclusiva da operadora. Para trocar de modo ou de guia, inicie uma <b>nova conversa</b> (botão de histórico → fechar).</p>');
     }
 
@@ -6415,7 +6417,7 @@
       chatHistory=[];
     }
 
-    // Base de identidade comum aos dois modos
+    // Base de identidade comum aos modos
     var CTX_BASE='Você é a RAI, assistente virtual integrada ao RegulaAI Saúde, plataforma de auditoria assistencial para operadoras de saúde. Você CONHECE o sistema real e a navegação exata dele. '+
       'NÃO se apresente nem use saudações como "Olá! Sou a RAI" nas respostas — a apresentação já foi feita na abertura do chat. Vá direto ao ponto. '+
       'Se o usuário perguntar o que significa RAI ou o motivo do nome, responda: "RAI é a combinação da primeira letra de Regulação (R) + AI (Artificial Intelligence)." '+
@@ -6455,14 +6457,75 @@
         'DADOS DA GUIA EM ANÁLISE:\n'+resumoGuia;
     }
 
+    // Modo "Relatórios" — conversa sobre os dados analíticos do módulo Relatórios
+    var MAPA_RELATORIOS=
+      'ABAS DO MÓDULO RELATÓRIOS (nomes exatos):\n'+
+      ' - Painel Executivo: KPIs (Guias recebidas, Custo total analisado, Custo de serviços negados, Alertas ativos), Distribuição por risco (clicável p/ filtrar), quebra Ambulatorial × Internação, e rankings de médicos, prestadores e OPME.\n'+
+      ' - Beneficiários: consolidado por paciente (guias, ambulatorial/internação, procedimentos, OPME, negadas, custo, score de recorrência).\n'+
+      ' - Médicos Solicitantes: perfil por médico (especialidade, guias, custo, taxa de aprovação, desvio vs. média da especialidade, concentração em prestador).\n'+
+      ' - Prestadores: consolidado por prestador executante (guias, ambulatorial, internações, OPME, custo médio/total, score). KPI "Acima da média" lista quem supera o custo médio/guia.\n'+
+      ' - Procedimentos: rankings (Mais solicitados / Mais caros) para Procedimentos, Diárias e Taxas, OPME e Mat/Med.\n'+
+      ' - OPME: valor autorizado × cobrado por item, variação de preço; alerta quando ≥25% acima.\n'+
+      ' - Custos: custo total, médio por guia, maior custo, custo de serviços negados; rankings por guia/beneficiário/procedimento.\n'+
+      ' - Alertas Inteligentes: alertas gerados pelo motor (concentração, desvio de especialidade, recorrência, alto custo, inconsistência de OPME) com severidade e ação sugerida.\n'+
+      ' - Comparativos: destaque de cada grupo contra a média do próprio grupo.\n'+
+      'FILTROS: há filtro de Período e de Natureza (Ambulatorial/Internação e subtipos) que valem em todas as abas, exceto Comparativos. Todas as tabelas podem ser exportadas para Excel.\n';
+
+    // Resumo REAL dos dados analíticos (calculado a partir das guias visíveis)
+    function resumoRelatoriosTexto(){
+      var gs=(typeof guiasVisiveis==='function'?guiasVisiveis():State.guias)||[];
+      function custoG(g){
+        var t=0;
+        (g.procedimentos||[]).forEach(function(p){ t+= (p.valor||0) || (500 + (hashStr(p.cod)%6000)); });
+        (g.matmed||[]).forEach(function(m){ var d=MOCK.matmedDetalhe?MOCK.matmedDetalhe(m):null; t+= m.opme? (d?d.totalAutorizado:8000) : (d?d.totalAutorizado:(400+hashStr(m.cod)%6000)); });
+        (g.diariasTaxas||[]).forEach(function(d){ t+= 150 + hashStr(d.cod)%900; });
+        if(g.uti) t+= 2400*(1+(g.diasAuditoria||1)%4);
+        return Math.round(t);
+      }
+      function hashStr(s){ var h=0;s=''+s;for(var i=0;i<s.length;i++){h=(h*31+s.charCodeAt(i))|0;}return Math.abs(h); }
+      var totalCusto=0, negCusto=0, nNeg=0, risco={baixo:0,medio:0,alto:0,critico:0}, nat={Internação:0,Ambulatorial:0};
+      var porMed={}, porPrest={}, porOpme={};
+      gs.forEach(function(g){
+        var c=custoG(g); totalCusto+=c;
+        if(g.status==='Negada'){ negCusto+=c; nNeg++; }
+        if(risco[g.risco]!=null) risco[g.risco]++;
+        if(g.natureza==='Internação') nat['Internação']++; else nat['Ambulatorial']++;
+        var med=g.solicitante||'—'; porMed[med]=porMed[med]||{guias:0,custo:0}; porMed[med].guias++; porMed[med].custo+=c;
+        var pr=(g.prestadorExe&&g.prestadorExe.nome)||'—'; porPrest[pr]=porPrest[pr]||{guias:0,custo:0}; porPrest[pr].guias++; porPrest[pr].custo+=c;
+        (g.matmed||[]).forEach(function(m){ if(!m.opme)return; porOpme[m.cod]=porOpme[m.cod]||{desc:m.desc,qtd:0}; porOpme[m.cod].qtd++; });
+      });
+      function top(obj,campo,n){ return Object.keys(obj).map(function(k){var o=obj[k];o._k=k;return o;}).sort(function(a,b){return (b[campo]||0)-(a[campo]||0);}).slice(0,n); }
+      function moedaTxt(v){ return 'R$ '+(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+      var L=[];
+      L.push('DADOS ANALÍTICOS ATUAIS (período/natureza conforme filtros do módulo):');
+      L.push('Total de guias analisadas: '+gs.length);
+      L.push('Custo total analisado: '+moedaTxt(totalCusto));
+      L.push('Custo de serviços negados: '+moedaTxt(negCusto)+' ('+nNeg+' guia(s) negada(s))');
+      L.push('Distribuição por risco: baixo '+risco.baixo+', médio '+risco.medio+', alto '+risco.alto+', crítico '+risco.critico+'.');
+      L.push('Natureza: Ambulatorial '+nat['Ambulatorial']+', Internação '+nat['Internação']+'.');
+      L.push('Top médicos por custo: '+top(porMed,'custo',5).map(function(o){return o._k+' ('+moedaTxt(o.custo)+', '+o.guias+' guia(s))';}).join('; '));
+      L.push('Top prestadores por custo: '+top(porPrest,'custo',5).map(function(o){return o._k+' ('+moedaTxt(o.custo)+', '+o.guias+' guia(s))';}).join('; '));
+      L.push('OPME mais solicitados: '+top(porOpme,'qtd',5).map(function(o){return o._k+' '+o.desc+' ('+o.qtd+'x)';}).join('; '));
+      return L.join('\n');
+    }
+
+    function ctxRelatorios(){
+      return CTX_BASE+
+        'MODO: RELATÓRIOS. Você atua como analista de BI assistencial do RegulaAI, conversando sobre os dados dos relatórios (recorrências, custos, desvios, riscos, OPME, alertas). '+
+        'Responda SEMPRE com base nos DADOS ANALÍTICOS fornecidos abaixo — cite números reais (valores, quantidades, nomes). Se o usuário pedir algo que não está nos dados, diga que aquele recorte não está disponível no resumo atual e sugira a aba/filtro do módulo Relatórios onde ele encontra. NÃO invente números. Valores em R$ são estimativas simuladas do sistema para demonstração. '+
+        MAPA_RELATORIOS+
+        resumoRelatoriosTexto();
+    }
+
     // Estado do modo de atendimento
-    var chatMode=null;        // null | 'sistema' | 'tecnica'
+    var chatMode=null;        // null | 'sistema' | 'tecnica' | 'relatorios'
     var chatGuia=null;        // guia carregada no modo técnico
     var aguardandoGuia=false; // true quando esperamos o usuário digitar o nº da guia
 
     // System context conforme o modo atual
     function systemContextAtual(){
       if(chatMode==='tecnica' && chatGuia) return ctxTecnico(resumoGuiaTexto(chatGuia));
+      if(chatMode==='relatorios') return ctxRelatorios();
       return CTX_SISTEMA;
     }
 
@@ -6564,6 +6627,7 @@
             '<div class="mchat-modes">'+
               '<button class="mchat-mode-btn" data-mode="sistema">'+ico('book-open',14)+' Uso do sistema</button>'+
               '<button class="mchat-mode-btn" data-mode="tecnica">'+ico('stethoscope',14)+' Conversa técnica</button>'+
+              '<button class="mchat-mode-btn" data-mode="relatorios">'+ico('bar-chart-3',14)+' Relatórios</button>'+
             '</div>'+
           '</div>'+
         '</div>';
@@ -6599,6 +6663,11 @@
         chatMode='tecnica'; chatGuia=null; aguardandoGuia=true;
         addMsg('bot','Modo <b>Conversa técnica</b> ativado. Para começar, informe o <b>número da guia</b> que deseja analisar.',true);
         chatInp.placeholder='Digite o número da guia...';
+        chatInp.focus();
+      } else if(modo==='relatorios'){
+        chatMode='relatorios'; chatGuia=null; aguardandoGuia=false;
+        addMsg('bot','Modo <b>Relatórios</b> ativado. Posso conversar sobre os dados dos relatórios — <b>Painel Executivo, Beneficiários, Médicos Solicitantes, Prestadores, Procedimentos, OPME, Custos, Alertas Inteligentes</b> e <b>Comparativos</b>. Pergunte, por exemplo: "quais os 3 médicos de maior custo?", "quanto foi economizado com serviços negados?" ou "há algum alerta crítico?". As análises consideram as guias do período.',true);
+        chatInp.placeholder='Pergunte sobre os relatórios...';
         chatInp.focus();
       }
     }
