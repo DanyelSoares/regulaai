@@ -4643,9 +4643,7 @@
       {id:'resumo',        label:'Resumo',           ico:'layout-dashboard', grp:0},
       {id:'matmed',        label:'Mat/Med',           ico:'pill',             grp:1},
       {id:'opme',          label:'OPME',              ico:'wrench',           grp:1},
-      {id:'criticas',      label:'Críticas',          ico:'triangle-alert',   grp:2},
       {id:'ia',            label:'Parecer Técnico',   ico:'bot',              grp:3},
-      {id:'historico',     label:'Histórico',         ico:'history',          grp:3},
       {id:'obsimp',        label:'Obs. Impressas',    ico:'printer',          grp:4},
       {id:'obsnaoimp',     label:'Obs. Não Impressas',ico:'eye-off',          grp:4},
       {id:'operadora',     label:'Parecer Operadora', ico:'file-check-2',     grp:5},
@@ -4748,6 +4746,44 @@
       '<div class="resumo-mini-tbl"><table><thead>'+thead+'</thead><tbody>'+linhas+'</tbody></table></div></div></div>';
   }
 
+  // Seção Histórico (migrada para o Resumo) — textarea editável com auto-save, no padrão .resumo-mini
+  function renderHistoricoSecao(g){
+    var _histKey='regula_hist_'+g.numero;
+    var _histSaved=localStorage.getItem(_histKey);
+    var _histDefault='Beneficiário possui '+(2+(g.beneficiario.idade%4))+' atendimentos anteriores nos últimos 24 meses. Última internação: 2025-11-20. Sem reincidências críticas identificadas.';
+    var _histVal=_histSaved||g.historico||_histDefault;
+    var box=el('div',{class:'resumo-mini'});
+    box.innerHTML=
+      '<div class="panel" style="padding:0">'+
+        '<div class="resumo-mini-hd">'+ico('history',13)+' HISTÓRICO E TRATAMENTOS ANTERIORES'+
+          '<span style="margin-left:auto;font-size:10px;font-weight:600;color:var(--muted);letter-spacing:0;text-transform:none">editável · salvo automaticamente</span>'+
+        '</div>'+
+        '<div style="padding:10px 12px"></div>'+
+      '</div>';
+    var _ta=el('textarea',{style:'width:100%;min-height:110px;resize:vertical;padding:10px;border:1px solid var(--line);border-radius:7px;font-size:13px;font-family:inherit;line-height:1.5'},null);
+    _ta.value=_histVal;
+    _ta.oninput=function(){ g.historico=this.value; localStorage.setItem(_histKey,this.value); };
+    box.querySelector('.panel>div[style*="padding"]').appendChild(_ta);
+    return box;
+  }
+
+  // Seção Críticas (migrada para o Resumo) — lista de alertas da IA, no padrão .resumo-mini
+  function renderCriticasSecao(g, ia){
+    var n=(ia.alertas||[]).length;
+    var box=el('div',{class:'resumo-mini'});
+    var itens = n
+      ? '<ul class="ai-list" style="margin:0;padding:10px 12px">'+ia.alertas.map(function(a){return '<li>'+ico('triangle-alert')+' '+esc(a)+'</li>';}).join('')+'</ul>'
+      : '<div class="resumo-mini-empty">Nenhuma crítica relevante identificada.</div>';
+    box.innerHTML=
+      '<div class="panel" style="padding:0">'+
+        '<div class="resumo-mini-hd">'+ico('triangle-alert',13)+' CRÍTICAS'+
+          '<span class="resumo-mini-cnt">'+n+'</span>'+
+        '</div>'+
+        itens+
+      '</div>';
+    return box;
+  }
+
   function renderGuiaTab(g, ia, t){
     var d=el('div');
     if(t==='resumo'){
@@ -4823,10 +4859,16 @@
           resumoMiniTabela('Diárias/Taxas','calendar-days',g.diariasTaxas,{tipo:'diarias'})+
         '</div>'+
         '<div class="resumo-anexos-slot" style="margin-top:14px"></div>'+
+        '<div class="resumo-hist-slot" style="margin-top:14px"></div>'+
+        '<div class="resumo-crit-slot" style="margin-top:14px"></div>'+
         '<div class="ai-warn" style="margin-top:14px">'+ia.avisoLegal+'</div>';
-      // Anexos (migrado para o Resumo): renderiza a gestão de anexos no slot
+      // Anexos, Histórico e Críticas migrados para o Resumo
       var _anxSlot=d.querySelector('.resumo-anexos-slot');
       if(_anxSlot) _anxSlot.appendChild(renderAnexos(g));
+      var _histSlot=d.querySelector('.resumo-hist-slot');
+      if(_histSlot) _histSlot.appendChild(renderHistoricoSecao(g));
+      var _critSlot=d.querySelector('.resumo-crit-slot');
+      if(_critSlot) _critSlot.appendChild(renderCriticasSecao(g,ia));
       // Cards de risco clicáveis → abre o detalhamento dos fatores
       d.querySelectorAll('.risk-click[data-risk4]').forEach(function(card){
         card.onclick=function(){ showRisco4Detalhe(g, RISKS[+card.getAttribute('data-risk4')]); };
@@ -4847,23 +4889,6 @@
       var opmes=g.matmed.filter(function(m){return m.opme});
       if(!opmes.length) d.innerHTML='<div class="empty"><div class="ico">'+icoLg('activity')+'</div>Sem OPME nesta guia.</div>';
       else d.appendChild(renderOpmeDetalhado(opmes)); // campos próprios de OPME (ANVISA, fornecedor, solic/autoriz)
-    } else if(t==='historico'){
-      var _histKey='regula_hist_'+g.numero;
-      var _histSaved=localStorage.getItem(_histKey);
-      var _histDefault='Beneficiário possui '+(2+(g.beneficiario.idade%4))+' atendimentos anteriores nos últimos 24 meses. Última internação: 2025-11-20. Sem reincidências críticas identificadas.';
-      var _histVal=_histSaved||g.historico||_histDefault;
-      var _panel=el('div',{class:'panel'});
-      _panel.innerHTML='<div class="field-lbl-row" style="margin-bottom:8px"><h3 style="margin:0">Histórico e tratamentos anteriores</h3><span style="font-size:11px;color:var(--muted)">Editável · salvo automaticamente</span></div>';
-      var _ta=el('textarea',{id:'histTA',style:'width:100%;min-height:120px;resize:vertical;padding:10px;border:1px solid var(--line);border-radius:7px;font-size:13px;font-family:inherit;line-height:1.5'},null);
-      _ta.value=_histVal;
-      _ta.oninput=function(){ g.historico=this.value; localStorage.setItem(_histKey,this.value); };
-      _panel.appendChild(_ta);
-      d.appendChild(_panel);
-    } else if(t==='criticas'){
-      var u=el('ul',{class:'ai-list'});
-      if(!ia.alertas.length) u.innerHTML='<li>Nenhuma crítica relevante.</li>';
-      else ia.alertas.forEach(function(a){ u.appendChild(el('li',{},ico('triangle-alert')+' '+esc(a))) });
-      d.appendChild(u);
     } else if(t==='ia'){
       d.appendChild(renderParecerIA(ia,g));
     } else if(t==='operadora'){
@@ -5920,10 +5945,8 @@
           {id:'etapas',       label:'Etapas'},
           {id:'matmed',       label:'Mat/Med'},
           {id:'opme',         label:'OPME'},
-          {id:'criticas',     label:'Críticas'},
           {id:'parecer_tec',  label:'Parecer Técnico'},
           {id:'parecer_op',   label:'Parecer Operadora'},
-          {id:'historico',    label:'Histórico'},
           {id:'logs_guia',    label:'Logs'},
         ];
         var dtab=State.manualDetalheTab;
@@ -6024,13 +6047,6 @@
               ['Peso','Pontuação no cálculo de risco'],
               ['Status','Ativo / Inativo'],
             ]),
-          criticas:
-            '<p>Inconsistências e alertas identificados automaticamente pela IA e pelas regras de negócio. Cada crítica contém:</p>'+
-            manualTable(['Campo','Descrição'],[
-              ['Severidade','Crítica, Alta, Média ou Baixa'],
-              ['Descrição','O que foi identificado como inconsistente ou suspeito'],
-              ['Origem','Se a crítica foi gerada pela IA ou por regra de negócio'],
-            ]),
           parecer_tec:
             '<p>Análise técnica gerada pela IA com base nas regras DUT e nos parâmetros configurados:</p>'+
             manualTable(['Elemento','Descrição'],[
@@ -6061,15 +6077,6 @@
               ['Obs. Internas','Observações internas da operadora (não visíveis ao prestador)'],
             ])+
             '<p style="margin-top:10px">Ao salvar, o <b>status da guia é atualizado automaticamente</b> e a ação é registrada nos logs.</p>',
-          historico:
-            '<p>Histórico cronológico de todas as movimentações da guia:</p>'+
-            '<ul>'+
-            '<li>Mudanças de status</li>'+
-            '<li>Emissão de pareceres</li>'+
-            '<li>Alterações de etapa</li>'+
-            '<li>Ações realizadas por usuários</li>'+
-            '</ul>'+
-            '<p>Cada registro exibe: data/hora, usuário responsável, perfil e descrição da ação.</p>',
           logs_guia:
             '<p>Logs de rastreabilidade <b>específicos desta guia</b> — diferente da tela geral de Logs que exibe todos os registros do sistema.</p>'+
             '<p>Inclui tanto ações de usuários quanto eventos do sistema e da IA relacionados exclusivamente a esta guia:</p>'+
@@ -6175,14 +6182,8 @@
               ['Anotar','Adiciona anotações textuais ao documento'],
             ]))+
 
-          manualBox('Aba: Críticas',
-            '<p>Exibe as inconsistências e alertas identificados automaticamente pela IA e pelas regras de negócio na análise da guia.</p>'+
-            '<p>Cada crítica contém:</p>'+
-            '<ul>'+
-            '<li><b>Severidade</b> — Crítica, Alta, Média ou Baixa</li>'+
-            '<li><b>Descrição</b> — o que foi identificado como inconsistente ou suspeito</li>'+
-            '<li><b>Origem</b> — se a crítica foi gerada pela IA ou por regra de negócio</li>'+
-            '</ul>')+
+          manualBox('Críticas (no Resumo)',
+            '<p>As críticas foram incorporadas ao <b>Resumo</b> da guia: uma seção lista as inconsistências e alertas identificados automaticamente pela IA e pelas regras de negócio, com o contador no cabeçalho.</p>')+
 
           manualBox('Aba: Parecer Técnico',
             '<p>Exibe a análise técnica gerada pela IA com base nas regras DUT e nos parâmetros configurados:</p>'+
@@ -6206,15 +6207,8 @@
             ])+
             '<p>Ao salvar, o status da guia é atualizado automaticamente conforme a decisão e a ação é registrada nos logs.</p>')+
 
-          manualBox('Aba: Histórico',
-            '<p>Exibe o histórico cronológico de todas as movimentações da guia:</p>'+
-            '<ul>'+
-            '<li>Mudanças de status</li>'+
-            '<li>Emissão de pareceres</li>'+
-            '<li>Alterações de etapa</li>'+
-            '<li>Ações realizadas por usuários</li>'+
-            '</ul>'+
-            '<p>Cada registro exibe: data/hora, usuário responsável, perfil e descrição da ação.</p>')+
+          manualBox('Histórico (no Resumo)',
+            '<p>Incorporado ao <b>Resumo</b> da guia: um campo editável com o <b>histórico clínico e tratamentos anteriores</b> do beneficiário. O texto é salvo automaticamente conforme se digita.</p>')+
 
           manualBox('Aba: Logs',
             '<p>Exibe os logs de rastreabilidade <b>específicos desta guia</b> — diferente da tela geral de Logs que mostra todos os registros do sistema.</p>'+
