@@ -5127,37 +5127,50 @@
 
   function renderAnexos(g){
     var wrap=el('div');
-    // Botão de anexar (sempre disponível, mesmo sem anexos)
+    // Botão de anexar (sempre disponível, mesmo sem anexos) — compacto p/ caber no cabeçalho
     function botaoAnexar(){
-      var b=el('button',{class:'btn'},ico('upload')+' Anexar documento');
+      var b=el('button',{class:'btn sm',style:'letter-spacing:0;text-transform:none'},ico('upload',13)+' Anexar documento');
       b.onclick=function(){ openAnexoUpload(g, function(){ var novo=renderAnexos(g); wrap.replaceWith(novo); }); };
       return b;
     }
 
     if(!g.anexosLista.length){
-      var empty=el('div',{class:'empty',style:'padding:28px'});
-      empty.innerHTML='<div class="ico">'+icoLg('paperclip')+'</div><div>Sem anexos ainda.</div><div style="font-size:12px;color:var(--muted);margin-top:4px">Anexe documentos recebidos (exames, laudos, etc.) e classifique-os.</div>';
-      var wrapBtn=el('div',{style:'display:flex;justify-content:center;margin-top:14px'}); wrapBtn.appendChild(botaoAnexar());
-      empty.appendChild(wrapBtn);
-      wrap.appendChild(empty); lcIcons(); return wrap;
+      // Cabeçalho no mesmo padrão das mini-tabelas, com estado vazio compacto
+      var emptyCard=el('div',{class:'resumo-mini',style:'margin-bottom:10px'});
+      emptyCard.innerHTML=
+        '<div class="panel" style="padding:0">'+
+          '<div class="resumo-mini-hd">'+ico('paperclip',13)+' GESTÃO DE ANEXOS'+
+            '<span id="anxAddSlot0" style="margin-left:auto;display:inline-flex"></span>'+
+            '<span class="resumo-mini-cnt">0</span>'+
+          '</div>'+
+          '<div class="resumo-mini-empty">Sem anexos ainda — anexe documentos recebidos (exames, laudos) e classifique-os.</div>'+
+        '</div>';
+      emptyCard.querySelector('#anxAddSlot0').appendChild(botaoAnexar());
+      wrap.appendChild(emptyCard); lcIcons(); return wrap;
     }
 
     // Resumo por categoria
     var resumo={}; g.anexosLista.forEach(function(a){ resumo[a.categoria]=(resumo[a.categoria]||0)+1; });
     var totalAnot=0; g.anexosLista.forEach(function(a){ totalAnot+=(a.anotacoes||[]).length; });
     var chips=Object.keys(resumo).map(function(k){return '<span class="badge '+catColor(k)+'">'+esc(k)+' · '+resumo[k]+'</span>'}).join('');
-    var head=el('div',{class:'panel',style:'margin-bottom:10px'});
+    // Cabeçalho no MESMO padrão das mini-tabelas do Resumo (faixa verde-clara, ícone, título, contador)
+    var head=el('div',{class:'resumo-mini'});
     head.innerHTML=
-      '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">'+
-        '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'+
-          '<h3 style="margin:0">Gestão de Anexos</h3>'+
-          '<span class="badge muted">'+g.anexosLista.length+' arquivo'+(g.anexosLista.length===1?'':'s')+'</span>'+
-          '<span class="badge info">'+totalAnot+' anotaç'+(totalAnot===1?'ão':'ões')+'</span>'+
+      '<div class="panel" style="padding:0">'+
+        '<div class="resumo-mini-hd">'+ico('paperclip',13)+' GESTÃO DE ANEXOS'+
+          '<span id="anxAddSlot" style="margin-left:auto;display:inline-flex"></span>'+
+          '<span class="resumo-mini-cnt">'+g.anexosLista.length+'</span>'+
         '</div>'+
-        '<span id="anxAddSlot"></span>'+
-      '</div>'+
-      '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px">'+chips+'</div>'+
-      '<div style="margin-top:8px;font-size:12px;color:var(--muted)">Anexe, visualize, categorize e anote cada documento. Todas as ações ficam registradas nos logs da guia.</div>';
+        '<div style="padding:10px 12px">'+
+          '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">'+
+            '<span class="badge muted">'+g.anexosLista.length+' arquivo'+(g.anexosLista.length===1?'':'s')+'</span>'+
+            '<span class="badge info">'+totalAnot+' anotaç'+(totalAnot===1?'ão':'ões')+'</span>'+
+            chips+
+          '</div>'+
+          '<div style="margin-top:8px;font-size:12px;color:var(--muted)">Anexe, visualize, categorize e anote cada documento. Todas as ações ficam registradas nos logs da guia.</div>'+
+        '</div>'+
+      '</div>';
+    head.style.marginBottom='10px';
     head.querySelector('#anxAddSlot').appendChild(botaoAnexar());
     wrap.appendChild(head);
 
