@@ -789,6 +789,14 @@ body.sidebar-collapsed .modal-backdrop{left:66px}
 .guia-risk-ico{color:var(--muted);flex-shrink:0;opacity:.75}
 .guia-risk-body{display:flex;flex-direction:column;gap:4px}
 .guia-risk-name{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--g-600)}
+/* cards de risco clicáveis (abrem o detalhamento dos fatores) */
+.guia-risk-card.risk-click{cursor:pointer;position:relative;transition:box-shadow .14s,transform .1s,border-color .14s}
+.guia-risk-card.risk-click:hover{box-shadow:0 3px 10px rgba(0,0,0,.08);transform:translateY(-1px)}
+.guia-risk-info{position:absolute;top:7px;right:8px;color:var(--muted);opacity:.5;transition:opacity .14s}
+.guia-risk-card.risk-click:hover .guia-risk-info{opacity:.9}
+/* linhas do modal de detalhe de risco */
+.r4-off td{color:var(--muted)}
+.r4-on td:first-child{font-weight:600;color:var(--ink-1)}
 
 /* Resumo — mini-tabelas de Procedimentos / Pacotes (empilhadas, largura cheia) */
 .resumo-mini-stack{display:flex;flex-direction:column;gap:12px;margin-top:14px}

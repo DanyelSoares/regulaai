@@ -430,6 +430,81 @@
   }
   function calcRiscoScore(g){ return calcRiscoDetalhe(g).score; }
 
+  // Calcula as 4 dimensões de risco da guia (Regulatório, Assistencial, Documental, Contratual).
+  // Cada dimensão soma pontos de fatores reais e cai numa faixa. Retorna {val, itens} por dimensão.
+  function calc4Riscos(g){
+    function faixa(sc){ return sc>=7?'critico':(sc>=5?'alto':(sc>=3?'medio':'baixo')); }
+    function dim(fatores){
+      var sc=0, itens=[];
+      fatores.forEach(function(f){ if(f.aplica) sc+=f.pts; itens.push(f); });
+      return {val:faixa(sc), score:sc, itens:itens};
+    }
+    var temDUT=(g.procedimentos||[]).some(function(p){return p.dut;});
+    var temOPME=(g.matmed||[]).some(function(m){return m.opme;});
+    var isOnco = g.tipo==='Quimioterapia' || (g.matmed||[]).some(function(m){return /imunobiol|oncolog|quimio/i.test(m.desc||'');});
+    var altaComplex = g.tipo==='Cirurgia neuro' || g.tipo==='Cirurgia ortopédica';
+    var custoAlto = (g.diariasTaxas||[]).length>1 || temOPME;
+
+    // REGULATÓRIO — usa o motor de risco já parametrizável (Configurações → Classificação de Risco)
+    var regulat = { val:g.risco||'baixo', itens:[
+      {label:'Risco calculado pelo motor (fatores parametrizáveis)', aplica:true, pts:0, obs:'Configurações → Classificação de Risco'}
+    ]};
+
+    // ASSISTENCIAL — complexidade do quadro clínico / da assistência
+    var assist = dim([
+      {label:'Internação em UTI', aplica:!!g.uti, pts:3},
+      {label:'OPME presente', aplica:temOPME, pts:2},
+      {label:'Oncologia / imunobiológico', aplica:isOnco, pts:3},
+      {label:'Alta complexidade (neuro/ortopédica)', aplica:altaComplex, pts:2},
+      {label:'Regime de urgência', aplica:g.regime==='Urgência', pts:1}
+    ]);
+
+    // DOCUMENTAL — completude e conformidade documental
+    var docum = dim([
+      {label:'Sem documentação anexada', aplica:!g.anexos, pts:4},
+      {label:'DUT exigida e não comprovada', aplica:temDUT && !g.dut, pts:3},
+      {label:'Prazo de auditoria vencido', aplica:!!g.prazoVencido, pts:2}
+    ]);
+
+    // CONTRATUAL — exposição de cobertura/custo do contrato
+    var contrat = dim([
+      {label:'Internação (maior exposição contratual)', aplica:g.natureza==='Internação', pts:2},
+      {label:'OPME / alto custo', aplica:custoAlto, pts:2},
+      {label:'Procedimento sujeito a DUT (cobertura condicionada)', aplica:temDUT, pts:1},
+      {label:'Regime de urgência (garantia de atendimento)', aplica:g.regime==='Urgência', pts:1}
+    ]);
+
+    return { regulatorio:regulat, assistencial:assist, documental:docum, contratual:contrat };
+  }
+
+  // Modal que explica como uma das 4 dimensões de risco foi calculada
+  function showRisco4Detalhe(g, r){
+    var lblFaixa={baixo:'Baixo',medio:'Médio',alto:'Alto',critico:'Crítico'};
+    var isRegulat = r.label==='Regulatório';
+    var linhas = (r.itens||[]).map(function(it){
+      if(isRegulat){
+        return '<tr><td>'+esc(it.label)+'</td><td style="text-align:right;color:var(--muted)">'+esc(it.obs||'')+'</td></tr>';
+      }
+      return '<tr class="'+(it.aplica?'r4-on':'r4-off')+'">'+
+        '<td>'+(it.aplica?ico('check-circle-2',13):ico('circle',13))+' '+esc(it.label)+'</td>'+
+        '<td style="text-align:right;white-space:nowrap">'+(it.aplica?'+'+it.pts+' pts':'<span style="color:var(--muted)">—</span>')+'</td>'+
+      '</tr>';
+    }).join('');
+    var totalPts=(r.itens||[]).reduce(function(s,it){return s+(it.aplica?(it.pts||0):0);},0);
+    var explica = isRegulat
+      ? '<p style="font-size:12.5px;color:var(--muted);line-height:1.55">O risco <b>Regulatório</b> vem do <b>motor de classificação de risco</b> do sistema, parametrizável em <b>Configurações → Classificação de Risco</b> (fatores, pesos e limiares). É a mesma classificação exibida na relação de guias.</p>'
+      : '<p style="font-size:12.5px;color:var(--muted);line-height:1.55">Cada fator presente na guia soma pontos. A soma cai numa faixa: <b>0–2 Baixo · 3–4 Médio · 5–6 Alto · 7+ Crítico</b>. Total desta guia: <b>'+totalPts+' pts</b>.</p>';
+    var body=
+      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">'+
+        '<span class="guia-risk-ico">'+ico(r.ico,20)+'</span>'+
+        '<div><div style="font-weight:700;font-size:15px">Risco '+esc(r.label)+'</div>'+riskPill(r.val)+' <span style="font-size:12px;color:var(--muted)">'+ (lblFaixa[r.val]||r.val) +'</span></div>'+
+      '</div>'+
+      explica+
+      '<table class="cfg-table" style="margin-top:10px"><thead><tr><th>'+(isRegulat?'Origem':'Fator avaliado')+'</th><th style="text-align:right">'+(isRegulat?'':'Pontos')+'</th></tr></thead><tbody>'+linhas+'</tbody></table>';
+    var m=modal('Como o risco '+esc(r.label)+' é calculado', 'Guia '+esc(g.numero), body, '<button class="btn ghost" id="r4Fechar">Fechar</button>');
+    m.querySelector('#r4Fechar').onclick=function(){ m.parentNode.remove(); };
+  }
+
   function calcRisco(g){
     var score=calcRiscoScore(g), lim=State.riscoConfig.limiares;
     if(score<=+lim.baixo) return 'baixo';
@@ -4678,11 +4753,12 @@
     if(t==='resumo'){
       var adp=ia.aderencia;
       var adCls=adp>=90?'alta':(adp>=70?'mod':(adp>=50?'baixa':'crit'));
+      var _r4=calc4Riscos(g);
       var RISKS=[
-        {label:'Regulatório',  val:g.risco,                ico:'shield-alert'},
-        {label:'Assistencial', val:g.uti?'alto':'medio',   ico:'heart-pulse'},
-        {label:'Documental',   val:g.anexos?'baixo':'alto',ico:'file-warning'},
-        {label:'Contratual',   val:'baixo',                ico:'file-check'},
+        {label:'Regulatório',  val:_r4.regulatorio.val,  ico:'shield-alert', itens:_r4.regulatorio.itens},
+        {label:'Assistencial', val:_r4.assistencial.val, ico:'heart-pulse',  itens:_r4.assistencial.itens},
+        {label:'Documental',   val:_r4.documental.val,   ico:'file-warning', itens:_r4.documental.itens},
+        {label:'Contratual',   val:_r4.contratual.val,   ico:'file-check',   itens:_r4.contratual.itens},
       ];
       d.innerHTML=
         '<div class="guia-metrics">'+
@@ -4729,13 +4805,14 @@
           '</dl>'+
         '</div>'+
         '<div class="guia-risk-grid guia-risk-grid--row" style="margin-top:14px">'+
-          RISKS.map(function(r){
-            return '<div class="guia-risk-card risk-'+r.val+'">'+
+          RISKS.map(function(r,ri){
+            return '<div class="guia-risk-card risk-'+r.val+' risk-click" data-risk4="'+ri+'" title="Ver como o risco '+esc(r.label)+' é calculado">'+
               '<span class="guia-risk-ico">'+ico(r.ico,15)+'</span>'+
               '<div class="guia-risk-body">'+
                 '<div class="guia-risk-name">'+r.label+'</div>'+
                 riskPill(r.val)+
               '</div>'+
+              '<span class="guia-risk-info">'+ico('info',12)+'</span>'+
             '</div>';
           }).join('')+
         '</div>'+
@@ -4749,6 +4826,10 @@
       // Anexos (migrado para o Resumo): renderiza a gestão de anexos no slot
       var _anxSlot=d.querySelector('.resumo-anexos-slot');
       if(_anxSlot) _anxSlot.appendChild(renderAnexos(g));
+      // Cards de risco clicáveis → abre o detalhamento dos fatores
+      d.querySelectorAll('.risk-click[data-risk4]').forEach(function(card){
+        card.onclick=function(){ showRisco4Detalhe(g, RISKS[+card.getAttribute('data-risk4')]); };
+      });
     } else if(t==='etapas'){
       var tl=el('div',{class:'timeline'});
       g.etapas.forEach(function(e){
