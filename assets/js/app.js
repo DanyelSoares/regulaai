@@ -101,8 +101,15 @@
 
   // Recupera estado de anexos (categoria + anotações)
   var savedAnx = JSON.parse(localStorage.getItem('regula_anexos')||'{}');
+  // Recupera anexos NOVOS adicionados pelo usuário (por número de guia)
+  var savedAnxNovos = JSON.parse(localStorage.getItem('regula_anexos_novos')||'{}');
   for(var ai=0;ai<State.guias.length;ai++){
     var gg=State.guias[ai];
+    // reinsere anexos novos salvos desta guia (uma vez), no início da lista
+    var novos=savedAnxNovos[gg.numero];
+    if(novos && novos.length){
+      gg.anexosLista = novos.slice().concat(gg.anexosLista.filter(function(x){ return !novos.some(function(n){return n.id===x.id;}); }));
+    }
     for(var aj=0;aj<gg.anexosLista.length;aj++){
       var ax=gg.anexosLista[aj]; var st=savedAnx[ax.id];
       if(st){ if(st.categoria) ax.categoria=st.categoria; if(st.anotacoes) ax.anotacoes=st.anotacoes; }
@@ -112,6 +119,16 @@
     var sv=JSON.parse(localStorage.getItem('regula_anexos')||'{}');
     sv[ax.id]={categoria:ax.categoria,anotacoes:ax.anotacoes};
     localStorage.setItem('regula_anexos',JSON.stringify(sv));
+  }
+  // Persiste um anexo NOVO (adicionado pelo usuário) na guia
+  function persistAnexoNovo(numeroGuia, ax){
+    var sv=JSON.parse(localStorage.getItem('regula_anexos_novos')||'{}');
+    var arr=sv[numeroGuia]||[];
+    // evita duplicar; guarda dados essenciais + conteúdo (dataURL) para visualização
+    if(!arr.some(function(x){return x.id===ax.id;})) arr.push(ax);
+    sv[numeroGuia]=arr;
+    try{ localStorage.setItem('regula_anexos_novos',JSON.stringify(sv)); }
+    catch(e){ toast('Arquivo grande demais para armazenar localmente (limite do navegador).','warn'); }
   }
 
   // Cadastro de enfermeiras — cada uma atende a um subconjunto de fluxos
@@ -4931,16 +4948,34 @@
 
   function renderAnexos(g){
     var wrap=el('div');
-    if(!g.anexosLista.length){ wrap.innerHTML='<div class="empty"><div class="ico">'+icoLg('paperclip')+'</div>Sem anexos enviados pelo prestador.</div>'; return wrap; }
+    // Botão de anexar (sempre disponível, mesmo sem anexos)
+    function botaoAnexar(){
+      var b=el('button',{class:'btn'},ico('upload')+' Anexar documento');
+      b.onclick=function(){ openAnexoUpload(g, function(){ var novo=renderAnexos(g); wrap.replaceWith(novo); }); };
+      return b;
+    }
+
+    if(!g.anexosLista.length){
+      var empty=el('div',{class:'empty',style:'padding:28px'});
+      empty.innerHTML='<div class="ico">'+icoLg('paperclip')+'</div><div>Sem anexos ainda.</div><div style="font-size:12px;color:var(--muted);margin-top:4px">Anexe documentos recebidos (exames, laudos, etc.) e classifique-os.</div>';
+      var wrapBtn=el('div',{style:'display:flex;justify-content:center;margin-top:14px'}); wrapBtn.appendChild(botaoAnexar());
+      empty.appendChild(wrapBtn);
+      wrap.appendChild(empty); lcIcons(); return wrap;
+    }
 
     // Resumo por categoria
     var resumo={}; g.anexosLista.forEach(function(a){ resumo[a.categoria]=(resumo[a.categoria]||0)+1; });
     var totalAnot=0; g.anexosLista.forEach(function(a){ totalAnot+=(a.anotacoes||[]).length; });
     var chips=Object.keys(resumo).map(function(k){return '<span class="badge '+catColor(k)+'" style="margin:2px">'+esc(k)+' · '+resumo[k]+'</span>'}).join('');
-    var head=el('div',{class:'panel',style:'margin-bottom:10px'},
-      '<h3>Gestão de Anexos <span class="badge muted">'+g.anexosLista.length+' arquivos</span> <span class="badge info">'+totalAnot+' anotações</span></h3>'+
+    var head=el('div',{class:'panel',style:'margin-bottom:10px'});
+    head.innerHTML=
+      '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">'+
+        '<h3 style="margin:0">Gestão de Anexos <span class="badge muted">'+g.anexosLista.length+' arquivos</span> <span class="badge info">'+totalAnot+' anotações</span></h3>'+
+        '<span id="anxAddSlot"></span>'+
+      '</div>'+
       '<div style="margin-top:6px">'+chips+'</div>'+
-      '<div style="margin-top:8px;font-size:12px;color:var(--muted)">Visualize, categorize e anote cada documento. Todas as ações ficam registradas nos logs da guia.</div>');
+      '<div style="margin-top:8px;font-size:12px;color:var(--muted)">Anexe, visualize, categorize e anote cada documento. Todas as ações ficam registradas nos logs da guia.</div>';
+    head.querySelector('#anxAddSlot').appendChild(botaoAnexar());
     wrap.appendChild(head);
 
     // Filtro
@@ -4998,10 +5033,76 @@
     return wrap;
   }
 
+  // Modal de UPLOAD: anexa um novo documento à guia, já classificado por categoria
+  function openAnexoUpload(g, refresh){
+    var optsCat=MOCK.CATEGORIAS_ANEXO.map(function(c){return '<option'+(c==='Exame complementar'?' selected':'')+'>'+esc(c)+'</option>';}).join('');
+    var body=
+      '<div class="field"><label>Arquivo</label>'+
+        '<input type="file" id="anxFile" accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.doc,.docx" style="width:100%;padding:9px;border:1px dashed var(--line);border-radius:8px;background:#fafdfb;cursor:pointer"/>'+
+        '<div id="anxFileInfo" style="font-size:12px;color:var(--muted);margin-top:6px">PDF, imagem ou documento. Máx. ~3 MB (armazenamento local de demonstração).</div>'+
+      '</div>'+
+      '<div class="field"><label>Categoria (classificação)</label><select id="anxUpCat">'+optsCat+'</select></div>'+
+      '<div class="field"><label>Descrição / nome (opcional)</label><input type="text" id="anxUpDesc" placeholder="Ex.: Resultado de hemograma — 12/07"/></div>';
+    var foot='<button class="btn ghost" id="auCancel">Cancelar</button><button class="btn" id="auSave">'+ico('upload')+' Anexar</button>';
+    var m=modal('Anexar documento à guia', 'Guia '+esc(g.numero)+' · '+esc(g.beneficiario.nome), body, foot);
+    var fileEl=m.querySelector('#anxFile'), infoEl=m.querySelector('#anxFileInfo'), descEl=m.querySelector('#anxUpDesc');
+    var arquivo=null;
+    fileEl.onchange=function(){
+      arquivo=fileEl.files&&fileEl.files[0]||null;
+      if(!arquivo){ infoEl.textContent='Nenhum arquivo selecionado.'; return; }
+      var mb=(arquivo.size/1048576);
+      infoEl.innerHTML=esc(arquivo.name)+' · '+mb.toFixed(2)+' MB'+(mb>3?' <span style="color:var(--danger)">(acima do limite ~3 MB)</span>':'');
+      if(!descEl.value) descEl.value=arquivo.name.replace(/\.[^.]+$/,'');
+    };
+    m.querySelector('#auCancel').onclick=function(){ m.parentNode.remove(); };
+    m.querySelector('#auSave').onclick=function(){
+      if(!arquivo){ toast('Selecione um arquivo.','warn'); return; }
+      if(arquivo.size/1048576 > 3){ toast('Arquivo acima de ~3 MB — reduza o tamanho.','warn'); return; }
+      var cat=m.querySelector('#anxUpCat').value;
+      var nome=(descEl.value.trim()||arquivo.name);
+      var ext=(arquivo.name.split('.').pop()||'').toLowerCase();
+      var tipo = /(jpg|jpeg|png|gif|webp)/.test(ext)?'img':(ext==='pdf'?'pdf':'doc');
+      var reader=new FileReader();
+      reader.onload=function(){
+        var ax={
+          id:g.numero+'-U'+Date.now(),
+          nome: nome + (/\.[^.]+$/.test(nome)?'':('.'+ext)),
+          tipo:tipo, categoria:cat,
+          tamanho:(arquivo.size/1024>=1024?(arquivo.size/1048576).toFixed(2)+' MB':Math.round(arquivo.size/1024)+' KB'),
+          enviadoEm:new Date().toISOString().slice(0,16).replace('T',' '),
+          enviadoPor:perfilDef[State.perfil].nome,
+          paginas:1, anotacoes:[],
+          dataURL:reader.result,        // conteúdo para visualização
+          adicionado:true               // marca anexo criado pelo usuário
+        };
+        g.anexosLista.unshift(ax);
+        persistAnexoNovo(g.numero, ax);
+        logAcao('Anexo adicionado ('+cat+')', g.numero+' · '+ax.nome);
+        toast('Documento anexado e classificado como "'+cat+'".','ok');
+        m.parentNode.remove();
+        if(refresh) refresh();
+      };
+      reader.onerror=function(){ toast('Falha ao ler o arquivo.','err'); };
+      reader.readAsDataURL(arquivo);
+    };
+  }
+
   function openAnexoViewer(g, a){
-    var preview = a.tipo==='img'
-      ? '<div style="background:#f1f5f4;border:1px dashed var(--line);border-radius:10px;height:340px;display:flex;align-items:center;justify-content:center;color:var(--muted)"><div style="text-align:center"><div style="font-size:48px;line-height:1">'+ico('image',48)+'</div><div style="margin-top:12px">Pré-visualização simulada da imagem</div><div style="font-size:12px">'+esc(a.nome)+'</div></div></div>'
-      : '<div style="background:#fff;border:1px solid var(--line);border-radius:10px;padding:16px;height:340px;overflow:auto;font-family:Georgia,serif;font-size:13px;line-height:1.5"><div style="text-align:center;font-weight:700;margin-bottom:8px">'+esc(a.nome)+'</div><hr/><p><b>Beneficiário:</b> '+esc(g.beneficiario.nome)+'</p><p><b>Procedimento:</b> '+esc(g.tipo)+'</p><p><b>Conteúdo simulado — '+a.paginas+' páginas.</b> Este visualizador exibe uma representação do documento enviado. Em produção, o arquivo será carregado via endpoint <code>GET /api/solus/anexo.php?id='+esc(a.id)+'</code>.</p><p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p></div>';
+    var preview;
+    if(a.dataURL){
+      // anexo REAL enviado pelo usuário: exibe o conteúdo de fato
+      if(a.tipo==='img'){
+        preview='<div style="background:#f1f5f4;border:1px solid var(--line);border-radius:10px;height:340px;display:flex;align-items:center;justify-content:center;overflow:hidden"><img src="'+esc(a.dataURL)+'" alt="'+esc(a.nome)+'" style="max-width:100%;max-height:100%;object-fit:contain"/></div>';
+      } else if(a.tipo==='pdf'){
+        preview='<iframe src="'+esc(a.dataURL)+'" style="width:100%;height:340px;border:1px solid var(--line);border-radius:10px;background:#fff"></iframe>';
+      } else {
+        preview='<div style="background:#fff;border:1px solid var(--line);border-radius:10px;padding:16px;height:340px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:var(--muted)"><div style="font-size:44px">'+ico('file-text',44)+'</div><div style="margin-top:10px;font-weight:600;color:var(--ink-1)">'+esc(a.nome)+'</div><a href="'+esc(a.dataURL)+'" download="'+esc(a.nome)+'" class="btn sm" style="margin-top:12px;text-decoration:none">'+ico('download')+' Baixar documento</a></div>';
+      }
+    } else if(a.tipo==='img'){
+      preview='<div style="background:#f1f5f4;border:1px dashed var(--line);border-radius:10px;height:340px;display:flex;align-items:center;justify-content:center;color:var(--muted)"><div style="text-align:center"><div style="font-size:48px;line-height:1">'+ico('image',48)+'</div><div style="margin-top:12px">Pré-visualização simulada da imagem</div><div style="font-size:12px">'+esc(a.nome)+'</div></div></div>';
+    } else {
+      preview='<div style="background:#fff;border:1px solid var(--line);border-radius:10px;padding:16px;height:340px;overflow:auto;font-family:Georgia,serif;font-size:13px;line-height:1.5"><div style="text-align:center;font-weight:700;margin-bottom:8px">'+esc(a.nome)+'</div><hr/><p><b>Beneficiário:</b> '+esc(g.beneficiario.nome)+'</p><p><b>Procedimento:</b> '+esc(g.tipo)+'</p><p><b>Conteúdo simulado — '+a.paginas+' páginas.</b> Este visualizador exibe uma representação do documento enviado. Em produção, o arquivo será carregado via endpoint <code>GET /api/solus/anexo.php?id='+esc(a.id)+'</code>.</p><p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p></div>';
+    }
     var anotHTML = (a.anotacoes||[]).length
       ? '<div style="max-height:220px;overflow:auto">'+a.anotacoes.map(function(n){return '<div style="padding:8px;border:1px solid var(--line);border-radius:8px;margin-bottom:6px;background:#fafdfb"><div style="font-size:12px;color:var(--muted)"><b>'+esc(n.user)+'</b> · '+esc(n.ts)+' · <span class="badge muted">'+esc(n.tag||'comentário')+'</span></div><div style="margin-top:4px">'+esc(n.texto)+'</div></div>'}).join('')+'</div>'
       : '<div class="empty" style="padding:14px"><div class="ico">'+icoLg('message-circle')+'</div>Sem anotações.</div>';
@@ -5898,7 +5999,8 @@
             ]))+
 
           manualBox('Aba: Anexos',
-            '<p>Documentos e arquivos enviados junto à guia. Cada anexo exibe:</p>'+
+            '<p>Documentos e arquivos vinculados à guia. Use o botão <b>"Anexar documento"</b> (topo da aba) para enviar um novo arquivo recebido após a solicitação (ex.: um exame) e <b>classificá-lo</b> por categoria (Exame complementar, Laudo médico, DUT/Evidência, etc.). O arquivo fica disponível para visualização e a ação é registrada nos logs.</p>'+
+            '<p>Cada anexo exibe:</p>'+
             '<ul>'+
             '<li><b>Ícone do tipo de arquivo</b> (PDF, imagem, etc.)</li>'+
             '<li><b>Nome</b>, tamanho, número de páginas e data de envio</li>'+
