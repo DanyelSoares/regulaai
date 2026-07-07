@@ -4472,7 +4472,6 @@
     var ia=g._cache;
     var TABS_DEF=[
       {id:'resumo',        label:'Resumo',           ico:'layout-dashboard', grp:0},
-      {id:'anexos',        label:'Anexos',            ico:'paperclip',        grp:1},
       {id:'matmed',        label:'Mat/Med',           ico:'pill',             grp:1},
       {id:'opme',          label:'OPME',              ico:'wrench',           grp:1},
       {id:'criticas',      label:'Críticas',          ico:'triangle-alert',   grp:2},
@@ -4651,7 +4650,11 @@
           resumoMiniTabela('Pacotes','package',g.pacotes)+
           resumoMiniTabela('Diárias/Taxas','calendar-days',g.diariasTaxas,{tipo:'diarias'})+
         '</div>'+
+        '<div class="resumo-anexos-slot" style="margin-top:14px"></div>'+
         '<div class="ai-warn" style="margin-top:14px">'+ia.avisoLegal+'</div>';
+      // Anexos (migrado para o Resumo): renderiza a gestão de anexos no slot
+      var _anxSlot=d.querySelector('.resumo-anexos-slot');
+      if(_anxSlot) _anxSlot.appendChild(renderAnexos(g));
     } else if(t==='etapas'){
       var tl=el('div',{class:'timeline'});
       g.etapas.forEach(function(e){
@@ -4668,8 +4671,6 @@
       var opmes=g.matmed.filter(function(m){return m.opme});
       if(!opmes.length) d.innerHTML='<div class="empty"><div class="ico">'+icoLg('activity')+'</div>Sem OPME nesta guia.</div>';
       else d.appendChild(renderOpmeDetalhado(opmes)); // campos próprios de OPME (ANVISA, fornecedor, solic/autoriz)
-    } else if(t==='anexos'){
-      d.appendChild(renderAnexos(g));
     } else if(t==='historico'){
       var _histKey='regula_hist_'+g.numero;
       var _histSaved=localStorage.getItem(_histKey);
@@ -4968,14 +4969,18 @@
     // Resumo por categoria
     var resumo={}; g.anexosLista.forEach(function(a){ resumo[a.categoria]=(resumo[a.categoria]||0)+1; });
     var totalAnot=0; g.anexosLista.forEach(function(a){ totalAnot+=(a.anotacoes||[]).length; });
-    var chips=Object.keys(resumo).map(function(k){return '<span class="badge '+catColor(k)+'" style="margin:2px">'+esc(k)+' · '+resumo[k]+'</span>'}).join('');
+    var chips=Object.keys(resumo).map(function(k){return '<span class="badge '+catColor(k)+'">'+esc(k)+' · '+resumo[k]+'</span>'}).join('');
     var head=el('div',{class:'panel',style:'margin-bottom:10px'});
     head.innerHTML=
       '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">'+
-        '<h3 style="margin:0">Gestão de Anexos <span class="badge muted">'+g.anexosLista.length+' arquivos</span> <span class="badge info">'+totalAnot+' anotações</span></h3>'+
+        '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'+
+          '<h3 style="margin:0">Gestão de Anexos</h3>'+
+          '<span class="badge muted">'+g.anexosLista.length+' arquivo'+(g.anexosLista.length===1?'':'s')+'</span>'+
+          '<span class="badge info">'+totalAnot+' anotaç'+(totalAnot===1?'ão':'ões')+'</span>'+
+        '</div>'+
         '<span id="anxAddSlot"></span>'+
       '</div>'+
-      '<div style="margin-top:6px">'+chips+'</div>'+
+      '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px">'+chips+'</div>'+
       '<div style="margin-top:8px;font-size:12px;color:var(--muted)">Anexe, visualize, categorize e anote cada documento. Todas as ações ficam registradas nos logs da guia.</div>';
     head.querySelector('#anxAddSlot').appendChild(botaoAnexar());
     wrap.appendChild(head);
@@ -5726,7 +5731,6 @@
           {id:'etapas',       label:'Etapas'},
           {id:'matmed',       label:'Mat/Med'},
           {id:'opme',         label:'OPME'},
-          {id:'anexos',       label:'Anexos'},
           {id:'criticas',     label:'Críticas'},
           {id:'parecer_tec',  label:'Parecer Técnico'},
           {id:'parecer_op',   label:'Parecer Operadora'},
@@ -5829,19 +5833,6 @@
               ['Cotação','Status da cotação (Em cotação, Cotado, Aprovado)'],
               ['Peso','Pontuação no cálculo de risco'],
               ['Status','Ativo / Inativo'],
-            ]),
-          anexos:
-            '<p>Documentos enviados junto à guia. Cada anexo exibe:</p>'+
-            '<ul>'+
-            '<li><b>Ícone</b> do tipo de arquivo (PDF, imagem etc.)</li>'+
-            '<li><b>Nome</b>, tamanho, páginas e data de envio</li>'+
-            '<li><b>Badge de categoria</b> (Ex.: Laudo médico, Receita, Exame)</li>'+
-            '<li><b>Contador de anotações</b> do auditor</li>'+
-            '</ul>'+
-            manualTable(['Ação','Descrição'],[
-              ['Visualizar','Abre o documento para leitura'],
-              ['Categorizar','Define ou altera a categoria do documento'],
-              ['Anotar','Adiciona anotações textuais ao documento'],
             ]),
           criticas:
             '<p>Inconsistências e alertas identificados automaticamente pela IA e pelas regras de negócio. Cada crítica contém:</p>'+
@@ -5978,8 +5969,8 @@
               ['Status','Ativo / Inativo'],
             ]))+
 
-          manualBox('Aba: Anexos',
-            '<p>Documentos e arquivos vinculados à guia. Use o botão <b>"Anexar documento"</b> (topo da aba) para enviar um novo arquivo recebido após a solicitação (ex.: um exame) e <b>classificá-lo</b> por categoria (Exame complementar, Laudo médico, DUT/Evidência, etc.). O arquivo fica disponível para visualização e a ação é registrada nos logs.</p>'+
+          manualBox('Anexos (dentro do Resumo)',
+            '<p>A gestão de anexos foi incorporada ao <b>Resumo</b> da guia. Use o botão <b>"Anexar documento"</b> para enviar um novo arquivo recebido após a solicitação (ex.: um exame) e <b>classificá-lo</b> por categoria (Exame complementar, Laudo médico, DUT/Evidência, etc.). O arquivo fica disponível para visualização e a ação é registrada nos logs.</p>'+
             '<p>Cada anexo exibe:</p>'+
             '<ul>'+
             '<li><b>Ícone do tipo de arquivo</b> (PDF, imagem, etc.)</li>'+
