@@ -4473,7 +4473,6 @@
     var TABS_DEF=[
       {id:'resumo',        label:'Resumo',           ico:'layout-dashboard', grp:0},
       {id:'anexos',        label:'Anexos',            ico:'paperclip',        grp:1},
-      {id:'diariastaxas',  label:'Diárias/Taxas',     ico:'calendar-days',    grp:1},
       {id:'matmed',        label:'Mat/Med',           ico:'pill',             grp:1},
       {id:'opme',          label:'OPME',              ico:'wrench',           grp:1},
       {id:'criticas',      label:'Críticas',          ico:'triangle-alert',   grp:2},
@@ -4553,18 +4552,32 @@
   }
 
   // Mini-tabela compacta para o Resumo (Procedimentos / Pacotes)
-  function resumoMiniTabela(titulo, icone, arr){
-    arr = arr || [];
+  // Quantidade simulada de uma diária/taxa (determinística por código)
+  function _qtdDiaria(cod){ var h=0,s=''+cod; for(var i=0;i<s.length;i++){h=(h*31+s.charCodeAt(i))|0;} return 1+(Math.abs(h)%7); }
+
+  // Mini-tabela do Resumo. opts.tipo: 'padrao' (Código/Descrição/Peso/Flags) ou 'diarias' (Código/Descrição/Qtd/Peso)
+  function resumoMiniTabela(titulo, icone, arr, opts){
+    opts=opts||{}; arr = arr || [];
     var head='<div class="resumo-mini-hd">'+ico(icone,13)+' '+esc(titulo)+' <span class="resumo-mini-cnt">'+arr.length+'</span></div>';
     if(!arr.length){
       return '<div class="resumo-mini"><div class="panel" style="padding:0">'+head+'<div class="resumo-mini-empty">Sem itens vinculados</div></div></div>';
     }
-    var linhas = arr.map(function(p){
-      var fl=''; if(p.dut) fl+='<span class="badge warn">DUT</span> '; if(p.opme) fl+='<span class="badge warn">OPME</span> '; if(p.obrig) fl+='<span class="badge">Obrig.</span>';
-      return '<tr><td class="rm-cod">'+esc(p.cod)+'</td><td>'+esc(p.desc)+'</td><td class="rm-peso">'+(p.peso!=null?p.peso:'—')+'</td><td class="rm-fl">'+fl+'</td></tr>';
-    }).join('');
+    var thead, linhas;
+    if(opts.tipo==='diarias'){
+      thead='<tr><th>Código</th><th>Descrição</th><th>Qtd</th><th>Peso</th></tr>';
+      linhas = arr.map(function(p){
+        var q=(p.qtd!=null?p.qtd:_qtdDiaria(p.cod));
+        return '<tr><td class="rm-cod">'+esc(p.cod)+'</td><td>'+esc(p.desc)+'</td><td class="rm-qtd">'+q+'</td><td class="rm-peso">'+(p.peso!=null?p.peso:'—')+'</td></tr>';
+      }).join('');
+    } else {
+      thead='<tr><th>Código</th><th>Descrição</th><th>Peso</th><th>Flags</th></tr>';
+      linhas = arr.map(function(p){
+        var fl=''; if(p.dut) fl+='<span class="badge warn">DUT</span> '; if(p.opme) fl+='<span class="badge warn">OPME</span> '; if(p.obrig) fl+='<span class="badge">Obrig.</span>';
+        return '<tr><td class="rm-cod">'+esc(p.cod)+'</td><td>'+esc(p.desc)+'</td><td class="rm-peso">'+(p.peso!=null?p.peso:'—')+'</td><td class="rm-fl">'+fl+'</td></tr>';
+      }).join('');
+    }
     return '<div class="resumo-mini"><div class="panel" style="padding:0">'+head+
-      '<div class="resumo-mini-tbl"><table><thead><tr><th>Código</th><th>Descrição</th><th>Peso</th><th>Flags</th></tr></thead><tbody>'+linhas+'</tbody></table></div></div></div>';
+      '<div class="resumo-mini-tbl"><table><thead>'+thead+'</thead><tbody>'+linhas+'</tbody></table></div></div></div>';
   }
 
   function renderGuiaTab(g, ia, t){
@@ -4636,6 +4649,7 @@
         '<div class="resumo-mini-stack">'+
           resumoMiniTabela('Procedimentos','stethoscope',g.procedimentos)+
           resumoMiniTabela('Pacotes','package',g.pacotes)+
+          resumoMiniTabela('Diárias/Taxas','calendar-days',g.diariasTaxas,{tipo:'diarias'})+
         '</div>'+
         '<div class="ai-warn" style="margin-top:14px">'+ia.avisoLegal+'</div>';
     } else if(t==='etapas'){
@@ -4650,18 +4664,6 @@
       var _mm=(g.matmed||[]).filter(function(m){return !m.opme;});
       if(!_mm.length) d.innerHTML='<div class="empty"><div class="ico">'+icoLg('folder-open')+'</div>Sem medicamentos/materiais nesta guia.<br><span style="font-size:12px">Itens OPME aparecem na aba OPME.</span></div>';
       else d.appendChild(renderMatMedDetalhado(_mm));
-    } else if(t==='diariastaxas'){
-      var arr = g.diariasTaxas;
-      if(!arr.length) d.innerHTML='<div class="empty"><div class="ico">'+icoLg('folder-open')+'</div>Sem itens vinculados. <br><span style="font-size:12px">Sem parametrização cadastrada.</span></div>';
-      else {
-        var tt=el('table'); tt.innerHTML='<thead><tr><th>Código</th><th>Descrição</th><th>Peso</th><th>Flags</th></tr></thead>';
-        var tb=el('tbody');
-        arr.forEach(function(p){
-          var fl=''; if(p.dut) fl+='<span class="badge warn">DUT</span> '; if(p.opme) fl+='<span class="badge warn">OPME</span> '; if(p.obrig) fl+='<span class="badge">Obrigatório</span>';
-          tb.appendChild(el('tr',{},'<td>'+esc(p.cod)+'</td><td>'+esc(p.desc)+'</td><td>'+p.peso+'</td><td>'+fl+'</td>'));
-        });
-        tt.appendChild(tb); d.appendChild(tt);
-      }
     } else if(t==='opme'){
       var opmes=g.matmed.filter(function(m){return m.opme});
       if(!opmes.length) d.innerHTML='<div class="empty"><div class="ico">'+icoLg('activity')+'</div>Sem OPME nesta guia.</div>';
@@ -5723,7 +5725,6 @@
           {id:'resumo',       label:'Resumo'},
           {id:'etapas',       label:'Etapas'},
           {id:'matmed',       label:'Mat/Med'},
-          {id:'diarias',      label:'Diárias/Taxas'},
           {id:'opme',         label:'OPME'},
           {id:'anexos',       label:'Anexos'},
           {id:'criticas',     label:'Críticas'},
@@ -5786,7 +5787,7 @@
               ['Indicação clínica / Hipótese diagnóstica','Descrição do diagnóstico correspondente ao CID informado'],
               ['Origem','Canal de origem da solicitação (badge colorido)'],
             ])+
-            '<p style="margin-top:12px"><b>Procedimentos e Pacotes (mini-tabelas):</b> abaixo dos cards de risco, duas tabelas resumidas empilhadas (uma abaixo da outra, em largura cheia) importam os itens das antigas abas <b>Procedimentos</b> e <b>Pacotes</b> — código, descrição, peso e flags (DUT, OPME, Obrigatório) — para consulta rápida sem sair do Resumo.</p>',
+            '<p style="margin-top:12px"><b>Procedimentos, Pacotes e Diárias/Taxas (mini-tabelas):</b> abaixo dos cards de risco, tabelas resumidas empilhadas (em largura cheia) importam os itens das antigas abas <b>Procedimentos</b>, <b>Pacotes</b> e <b>Diárias/Taxas</b> — para consulta rápida sem sair do Resumo. Procedimentos/Pacotes mostram código, descrição, peso e flags; <b>Diárias/Taxas</b> mostra código, descrição, <b>quantidade</b> e peso.</p>',
           prestador:
             '<p>Dois painéis lado a lado com os prestadores envolvidos na guia:</p>'+
             manualTable(['Painel','Descrição'],[
@@ -5818,16 +5819,6 @@
               ['Peso','Pontuação no cálculo de risco (0–10)'],
               ['Obrig.','Se o item é obrigatório'],
               ['IA','Instrução específica para a IA'],
-              ['Status','Ativo / Inativo'],
-            ]),
-          diarias:
-            '<p>Diárias hospitalares e taxas vinculadas à guia:</p>'+
-            manualTable(['Coluna','Descrição'],[
-              ['Código','Código da diária ou taxa'],
-              ['Descrição','Nome (Ex.: UTI Adulto, Taxa de Sala Cirúrgica)'],
-              ['Peso','Pontuação no cálculo de risco (0–10)'],
-              ['Obrig.','Se o item é obrigatório no fluxo'],
-              ['IA','Instrução para a IA avaliar este item'],
               ['Status','Ativo / Inativo'],
             ]),
           opme:
@@ -5957,7 +5948,7 @@
             '<p>Cada etapa exibe: número de ordem, nome, responsável (Auditor / Enfermeiro), prazo em horas e datas de execução.</p>')+
 
           manualBox('Procedimentos e Pacotes (no Resumo)',
-            '<p>As antigas abas <b>Procedimentos</b> e <b>Pacotes</b> foram incorporadas ao <b>Resumo</b>, exibidas em duas mini-tabelas lado a lado abaixo dos cards de risco:</p>'+
+            '<p>As antigas abas <b>Procedimentos</b>, <b>Pacotes</b> e <b>Diárias/Taxas</b> foram incorporadas ao <b>Resumo</b>, exibidas em mini-tabelas empilhadas abaixo dos cards de risco (Diárias/Taxas inclui a coluna <b>Quantidade</b>):</p>'+
             manualTable(['Coluna','Descrição'],[
               ['Código','Código TUSS ou interno do procedimento / pacote'],
               ['Descrição','Nome do procedimento ou pacote'],
@@ -5973,17 +5964,6 @@
               ['Peso','Pontuação no cálculo de risco (0–10)'],
               ['Obrig.','Se o item é obrigatório'],
               ['IA','Instrução específica para a IA'],
-              ['Status','Ativo / Inativo'],
-            ]))+
-
-          manualBox('Aba: Diárias/Taxas',
-            '<p>Diárias hospitalares e taxas vinculadas à guia.</p>'+
-            manualTable(['Coluna','Descrição'],[
-              ['Código','Código da diária ou taxa'],
-              ['Descrição','Nome da diária/taxa (Ex.: UTI Adulto, Taxa de Sala Cirúrgica)'],
-              ['Peso','Pontuação no cálculo de risco (0–10)'],
-              ['Obrig.','Se o item é obrigatório no fluxo'],
-              ['IA','Instrução para a IA avaliar este item'],
               ['Status','Ativo / Inativo'],
             ]))+
 
