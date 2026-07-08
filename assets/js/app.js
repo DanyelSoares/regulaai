@@ -4670,6 +4670,16 @@
     $$('.tab',m).forEach(function(b){ b.onclick=function(){setTab(b.getAttribute('data-tab'))} });
     setTab(tab||'resumo');
 
+    // Atalho F10 → abre o modal de Carências do beneficiário (enquanto a guia estiver aberta)
+    function _guiaKeyHandler(ev){
+      if(!m.isConnected){ document.removeEventListener('keydown',_guiaKeyHandler); return; } // guia fechada: limpa handler
+      if(ev.key==='F10'){
+        ev.preventDefault();
+        showCarencias(g);
+      }
+    }
+    document.addEventListener('keydown',_guiaKeyHandler);
+
     m.querySelector('#reIA').onclick=function(){
       // coleta feedback persistido (itens desmarcados)
       var fbKey='regula_ia_fb_'+(g?g.numero:'x');
@@ -4713,6 +4723,57 @@
       },80);
     };
     var pb=m.querySelector('#abrirPar'); if(pb) pb.onclick=function(){ openParecer(g) };
+  }
+
+  // Modal de Carências do beneficiário (atalho F10 dentro da guia)
+  function showCarencias(g){
+    var c = MOCK.carenciasGuia ? MOCK.carenciasGuia(g) : null;
+    if(!c){ toast('Dados de carência indisponíveis.','erro'); return; }
+    var ben = g.beneficiario||{};
+
+    // Faixa de alerta CPT (quando houver)
+    var cptHtml = c.cpt && c.cpt.ativo
+      ? '<div class="carencia-cpt">'+
+          '<div class="carencia-cpt-tit">'+ico('alert-triangle',14)+' '+esc(c.cpt.texto)+' — Vencimento: '+esc(c.cpt.vencimento)+'</div>'+
+          '<div class="carencia-cpt-cid">'+esc(c.cpt.cid)+'</div>'+
+        '</div>'
+      : '<div class="carencia-ok">'+ico('check-circle',14)+' Beneficiário sem CPT pendente.</div>';
+
+    // Cabeçalho com inclusão e permanência
+    var infoHtml =
+      '<div class="carencia-info">'+
+        '<div><span class="carencia-info-lb">Inclusão</span><b>'+esc(c.inclusao)+'</b></div>'+
+        '<div><span class="carencia-info-lb">Permanência</span><b>'+c.permanencia.toLocaleString('pt-BR')+' <span style="font-weight:400;color:var(--muted)">dias ativos</span></b></div>'+
+      '</div>';
+
+    // Tabela de carências
+    var linhas = c.itens.map(function(it){
+      return '<tr>'+
+        '<td class="carencia-nome">'+esc(it.nome)+'</td>'+
+        '<td class="cc">'+esc(it.vencimento)+'</td>'+
+        '<td class="cc">'+it.numeroDias+'</td>'+
+        '<td class="cc">'+it.cumpridos+'</td>'+
+        '<td class="cc">'+it.restantes+'</td>'+
+        '<td class="cc">'+(it.cumprida
+            ? '<span class="badge ok" style="font-size:10px">Cumprida</span>'
+            : '<span class="badge warn" style="font-size:10px">A cumprir</span>')+'</td>'+
+      '</tr>';
+    }).join('');
+    var tblHtml =
+      '<div class="carencia-tbl-wrap"><table class="carencia-tbl">'+
+        '<thead><tr>'+
+          '<th>Carência</th><th class="cc">Vencimento</th><th class="cc">Número de dias</th>'+
+          '<th class="cc">Cumpridos</th><th class="cc">Restantes</th><th class="cc">Situação</th>'+
+        '</tr></thead>'+
+        '<tbody>'+linhas+'</tbody>'+
+      '</table></div>';
+
+    var body = cptHtml + infoHtml + tblHtml;
+    var m = modal('Carências — '+esc(ben.nome||''), 'Guia '+esc(g.numero)+' · '+esc(ben.plano||'')+(ben.contrato?' · '+esc(ben.contrato):''), body, null);
+    // Fecha com ESC (reforço; o backdrop também fecha ao clicar fora)
+    var _esc=function(ev){ if(ev.key==='Escape'){ var bd=m.closest('.modal-backdrop'); if(bd) bd.remove(); document.removeEventListener('keydown',_esc); if(!document.querySelector('.modal-backdrop')){ document.body.style.overflow=''; document.body.classList.remove('modal-aberto'); } } };
+    document.addEventListener('keydown',_esc);
+    lcIcons();
   }
 
   // Mini-tabela compacta para o Resumo (Procedimentos / Pacotes)
@@ -4968,6 +5029,7 @@
             '<dt>Plano / Contrato</dt><dd>'+esc(g.beneficiario.plano)+' · '+esc(g.beneficiario.contrato)+'</dd>'+
             '<dt>Acomodação</dt><dd>'+esc(g.beneficiario.acomodacao||'—')+'</dd>'+
             '<dt>Data de inclusão</dt><dd>'+esc(g.beneficiario.dataInclusao||'—')+(MOCK.anosContrato(g.beneficiario.dataInclusao)!=null?' <span style="color:var(--muted)">('+MOCK.anosContrato(g.beneficiario.dataInclusao)+' '+(MOCK.anosContrato(g.beneficiario.dataInclusao)===1?'ano':'anos')+' de contrato)</span>':'')+'</dd>'+
+            '<dt>Carências</dt><dd><button class="btn sm ghost" id="btnCarencias" style="letter-spacing:0;text-transform:none;padding:3px 10px">'+ico('calendar-clock',12)+' Ver carências <kbd class="kbd-hint">F10</kbd></button></dd>'+
           '</dl>'+
           '<dl class="kv">'+
             '<dt>Solicitante</dt><dd>'+esc(g.solicitante)+'</dd>'+
@@ -5020,6 +5082,9 @@
       d.querySelectorAll('.risk-click[data-risk4]').forEach(function(card){
         card.onclick=function(){ showRisco4Detalhe(g, RISKS[+card.getAttribute('data-risk4')]); };
       });
+      // Botão Carências (também acessível via atalho F10)
+      var _btnCar=d.querySelector('#btnCarencias');
+      if(_btnCar) _btnCar.onclick=function(){ showCarencias(g); };
     } else if(t==='etapas'){
       var tl=el('div',{class:'timeline'});
       g.etapas.forEach(function(e){

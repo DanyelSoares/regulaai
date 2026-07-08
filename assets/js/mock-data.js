@@ -508,6 +508,53 @@
   // tempo de contrato (anos completos desde a data de inclusão no plano)
   function anosContrato(dataInc){ return _anosDecorridos(dataInc); }
 
+  // ── Carências do beneficiário (determinístico por guia) ──
+  // Tabela de carências no padrão ANS: cada item tem prazo (dias) a partir da data de inclusão.
+  var CARENCIAS_DEF = [
+    {nome:'URGÊNCIA & EMERGÊNCIA', dias:24},
+    {nome:'CONSULTAS MÉDICAS ELETIVAS', dias:30},
+    {nome:'EXAMES DE LABORATÓRIO, RAIO X S/C, ECG E OFTÁLMICOS SIMPLES', dias:30},
+    {nome:'EXAMES OBSTETRICOS SIMPLES', dias:30},
+    {nome:'PROCEDIMENTOS DE APOIO/DIAGNÓSTICO SIMPLES', dias:60},
+    {nome:'DEMAIS PROCEDIMENTOS DE APOIO/DIAGNÓSTICO E ESPECIAIS E PAC', dias:180},
+    {nome:'EXAMES OBSTETRICOS DE ALTA COMPLEXIDADE', dias:180},
+    {nome:'INTERNAÇÕES', dias:180},
+    {nome:'CIRURGIAS OBSTETRICAS', dias:300}
+  ];
+  function _addDias(dt, dias){ var d=new Date(dt.getTime()); d.setDate(d.getDate()+dias); return d; }
+  function _fmtData(d){ var dd=('0'+d.getDate()).slice(-2), mm=('0'+(d.getMonth()+1)).slice(-2), yy=(''+d.getFullYear()).slice(-2); return dd+'/'+mm+'/'+yy; }
+  // Retorna { inclusao, permanencia(dias ativos), itens:[{nome,vencimento,numeroDias,cumpridos,restantes,cumprida}], cpt:{ativo,texto,vencimento,cid} }
+  function carenciasGuia(g){
+    var ben = g.beneficiario||{};
+    var pInc = _parseData(ben.dataInclusao);
+    var dtInc = pInc ? new Date(pInc.y, pInc.m-1, pInc.d) : new Date(2021,5,30);
+    var hoje = new Date();
+    var permanencia = Math.max(0, Math.round((hoje - dtInc)/86400000)); // dias ativos
+    var itens = CARENCIAS_DEF.map(function(c){
+      var venc = _addDias(dtInc, c.dias);
+      var cumprida = hoje >= venc;
+      // dias já decorridos (limitado ao prazo) e restantes até o vencimento
+      var decorridos = Math.min(c.dias, Math.max(0, Math.round((hoje - dtInc)/86400000)));
+      var restantes = Math.max(0, c.dias - decorridos);
+      return {
+        nome:c.nome, vencimento:_fmtData(venc),
+        numeroDias:c.dias, cumpridos:cumprida?c.dias:decorridos, restantes:cumprida?0:restantes,
+        cumprida:cumprida
+      };
+    });
+    // CPT (Cobertura Parcial Temporária) — determinística por número da guia
+    var s=0, st=''+g.numero; for(var i=0;i<st.length;i++){ s=(s*31+st.charCodeAt(i))|0; } s=Math.abs(s);
+    var temCPT = (s%3===0); // ~1/3 das guias com CPT a cumprir
+    var cptVenc = _addDias(dtInc, 730); // CPT: até 24 meses
+    var cpt = temCPT ? {
+      ativo:true,
+      cid:'F84 - Transt globais do desenvolv',
+      vencimento:_fmtData(cptVenc),
+      texto:'Beneficiário com CPT a cumprir'
+    } : {ativo:false};
+    return { inclusao:ben.dataInclusao||'—', permanencia:permanencia, itens:itens, cpt:cpt };
+  }
+
   global.MOCK = {
     FLUXOS:FLUXOS, IA_POR_ETAPA:IA_POR_ETAPA, ESPEC_MAP:ESPEC_MAP, especialidadeDaGuia:especialidadeDaGuia,
     PROCEDIMENTOS:PROCEDIMENTOS, PACOTES:PACOTES, MATMED:MATMED, DIARIAS_TAXAS:DIARIAS_TAXAS,
@@ -516,7 +563,7 @@
     STATUS:STATUS, ORIGENS:ORIGENS, CATEGORIAS_ANEXO:CATEGORIAS_ANEXO,
     MOTIVOS_COMP:MOTIVOS_COMP, MOTIVOS_REPR:MOTIVOS_REPR, MOTIVOS_RESS:MOTIVOS_RESS,
     LOGS:LOGS, buildGuias: hydrate, matmedDetalhe: matmedDetalhe, opmeDetalhe: opmeDetalhe, procDetalhe: procDetalhe, observacoesGuia: observacoesGuia,
-    calcIdade: calcIdade, anosContrato: anosContrato, cidGuia: cidGuia,
+    calcIdade: calcIdade, anosContrato: anosContrato, cidGuia: cidGuia, carenciasGuia: carenciasGuia,
     naturezaDaGuia: naturezaDaGuia, naturezaDetalhada: naturezaDetalhada, SUB_INTERNACAO: SUB_INTERNACAO,
     naturezaSelectHTML: naturezaSelectHTML
   };
