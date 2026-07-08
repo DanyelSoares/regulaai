@@ -5224,12 +5224,39 @@
           '<div class="hist-sub-lb">'+ico('stethoscope',12)+' Hipótese diagnóstica <span class="badge muted" style="font-size:9px">somente leitura</span></div>'+
           '<div class="hist-sub-body">'+(a.hipotese?esc(a.hipotese):'<span class="mut">Não informada.</span>')+'</div></div>';
       }
-      // aud / msg — placeholder aguardando definição
-      var ph = sub==='aud'
-        ? {ico:'clipboard-check', tit:'Auditoria médica'}
-        : {ico:'message-square',  tit:'Mensagens para o prestador Web'};
-      return '<div class="hist-sub-ph"><div class="ico">'+icoLg(ph.ico)+'</div>'+
-        '<b>'+ph.tit+'</b><div class="mut" style="margin-top:6px">Conteúdo em definição — será implementado conforme o layout a ser enviado.</div></div>';
+      // Auditoria médica — estrutura fiel ao ERP (somente leitura, sem registros)
+      if(sub==='aud'){
+        return '<div class="hist-erp">'+
+          '<div class="hist-erp-fields">'+
+            '<label class="hist-erp-fld"><span>Motivo do Status</span>'+
+              '<select disabled><option></option></select></label>'+
+            '<label class="hist-erp-fld hist-erp-fld--sm"><span>Precisa de auditoria pós</span>'+
+              '<select disabled><option></option></select></label>'+
+          '</div>'+
+          '<div class="hist-erp-toolbar">'+
+            ['Incluir','Gravar','Excluir','Editar','Cancelar'].map(function(x){return '<span class="hist-erp-act disabled">'+esc(x)+'</span>';}).join('')+
+          '</div>'+
+          '<div class="hist-sub-tbl"><table><thead><tr><th>Data</th><th>Operador</th></tr></thead>'+
+            '<tbody><tr class="hist-erp-empty"><td colspan="2">Sem registros de auditoria médica para esta guia.</td></tr></tbody></table></div>'+
+          '<div class="hist-erp-checks">'+
+            '<label class="hist-erp-chk"><input type="checkbox" disabled checked> Notificar através de alerta o(a) auditor(a)</label>'+
+            '<label class="hist-erp-chk"><input type="checkbox" disabled checked> Mostrar no demonstrativo de contas da web</label>'+
+          '</div>'+
+          '<div class="hist-erp-ro">'+ico('lock',11)+' Somente leitura</div>'+
+        '</div>';
+      }
+      // Mensagens para o prestador Web — estrutura fiel ao ERP (somente leitura, sem registros)
+      if(sub==='msg'){
+        return '<div class="hist-erp">'+
+          '<div class="hist-erp-toolbar">'+
+            ['Incluir','Gravar','Editar','Cancelar','Excluir','Resposta'].map(function(x){return '<span class="hist-erp-act disabled">'+esc(x)+'</span>';}).join('')+
+          '</div>'+
+          '<div class="hist-sub-tbl"><table><thead><tr><th>Data</th><th>Operador</th><th>Visualizado</th></tr></thead>'+
+            '<tbody><tr class="hist-erp-empty"><td colspan="3">Sem mensagens para o prestador nesta guia.</td></tr></tbody></table></div>'+
+          '<div class="hist-erp-ro">'+ico('lock',11)+' Somente leitura</div>'+
+        '</div>';
+      }
+      return '';
     }
     function paint(){
       var a=hist[selIdx];

@@ -881,6 +881,21 @@ body.sidebar-collapsed .modal-backdrop{left:66px}
 .hist-sub-ph{text-align:center;padding:26px 12px;color:var(--muted)}
 .hist-sub-ph .ico{opacity:.5;margin-bottom:8px}
 .hist-sub-ph b{color:var(--g-700);font-size:14px}
+/* Auditoria médica / Mensagens (estrutura ERP, somente leitura) */
+.hist-erp{display:flex;flex-direction:column;gap:10px}
+.hist-erp-fields{display:flex;gap:16px;flex-wrap:wrap}
+.hist-erp-fld{display:flex;flex-direction:column;gap:3px;flex:1;min-width:220px}
+.hist-erp-fld--sm{flex:0 0 auto;min-width:200px}
+.hist-erp-fld>span{font-size:10px;text-transform:uppercase;letter-spacing:.3px;color:var(--muted);font-weight:700}
+.hist-erp-fld>select{padding:7px 9px;border:1px solid var(--line);border-radius:7px;font-size:13px;background:var(--g-50);color:var(--ink-1)}
+.hist-erp-toolbar{display:flex;gap:2px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:6px}
+.hist-erp-act{font-size:12px;font-weight:600;color:var(--muted);padding:4px 12px;border-radius:6px}
+.hist-erp-act.disabled{opacity:.55;cursor:not-allowed}
+.hist-erp-empty td{text-align:center;color:var(--muted);padding:14px 12px !important;font-size:12.5px}
+.hist-erp-checks{display:flex;gap:22px;flex-wrap:wrap;padding-top:2px}
+.hist-erp-chk{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-1)}
+.hist-erp-chk input{accent-color:var(--g-500)}
+.hist-erp-ro{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);font-weight:600}
 .resumo-mini-tbl .rm-fl{white-space:nowrap}
 
 /* Simulador ao vivo de Pesos IA */
