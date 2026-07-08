@@ -234,7 +234,7 @@
         numero:g.numero, beneficiario:ben, prestadorSol:ps, prestadorExe:pe, fluxo:fluxo,
         tipo:g.tipo, natureza:g.natureza, subInternacao:g.subInternacao||'', regime:g.regime, status:g.status, origem:g.origem, congenere:ben.cidade||'—', solicitante:g.solicitante||'—',
         uti:g.uti, opme:g.opme, dut:g.dut, anexos:g.anexos, prio:g.prio,
-        risco:g.risco, dataEmissao:'2026-06-0'+((i%9)+1), internacao:g.internacao||'', alta:'',
+        risco:g.risco, dataEmissao:'2026-06-0'+((i%9)+1), horaEmissao:String(8+(i%10)).padStart(2,'0')+':'+String((i*7+13)%60).padStart(2,'0'), internacao:g.internacao||'', alta:'',
         diasAuditoria:diasEm, prazoVencido: diasEm>5,
         procedimentos: PROCEDIMENTOS.filter(function(p){return g.procs.indexOf(p.cod)>=0}),
         pacotes: PACOTES.filter(function(p){return g.pacs.indexOf(p.cod)>=0}),

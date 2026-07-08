@@ -307,6 +307,9 @@
     return wrap;
   }
   function esc(s){ if(s==null) return ''; return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]}); }
+  // Formata ISO (yyyy-mm-dd) para dd/mm/aaaa; se houver hora, acrescenta ' HH:MM'
+  function isoParaBR(iso){ if(!iso) return ''; var p=String(iso).split('-'); return p.length===3?(p[2]+'/'+p[1]+'/'+p[0]):String(iso); }
+  function fmtDataEmissao(g){ var d=isoParaBR(g.dataEmissao); return g.horaEmissao ? d+' '+g.horaEmissao : d; }
   function mask(v){ if(ehGestor()) return v; if(!v) return ''; return v.replace(/\d(?=\d{2})/g,'•'); }
   function toast(msg,kind){ var t=el('div',{class:'toast '+(kind||'')},esc(msg)); $('#toastRoot').appendChild(t); setTimeout(function(){t.style.opacity=0; setTimeout(function(){t.remove()},300)},2800); }
   function ico(name,size){ size=size||14; return '<i data-lucide="'+name+'" width="'+size+'" height="'+size+'" style="vertical-align:middle"></i>'; }
@@ -4930,9 +4933,8 @@
   // Retorna [{codigo, procedimento, critica}]
   function criticasDaGuia(g, ia){
     var procs = (g.procedimentos||[]);
-    // código do "lote/guia" no estilo ERP (determinístico)
+    // seed determinístico por guia (define quantas e quais críticas)
     var seed=0, st=''+g.numero; for(var i=0;i<st.length;i++){ seed=(seed*31+st.charCodeAt(i))|0; } seed=Math.abs(seed);
-    var codLote = '' + (20140000 + (seed%9000));
     var out=[];
     if(procs.length){
       // associa 2 a 4 críticas ao(s) procedimento(s) da guia
@@ -4940,12 +4942,12 @@
       for(var k=0;k<nCrit;k++){
         var proc = procs[k % procs.length];
         var critica = _CRITICAS_CATALOGO[(seed + k*3) % _CRITICAS_CATALOGO.length];
-        out.push({ codigo:codLote, procedimento:(proc.cod+' — '+proc.desc), critica:critica });
+        out.push({ codigo:proc.cod, procedimento:proc.desc, critica:critica });
       }
     }
     // acrescenta os alertas da IA (sem procedimento específico) como críticas gerais
     (ia && ia.alertas ? ia.alertas : []).forEach(function(a){
-      out.push({ codigo:codLote, procedimento:'—', critica:a });
+      out.push({ codigo:'—', procedimento:'—', critica:a });
     });
     return out;
   }
@@ -5082,7 +5084,7 @@
         '<div class="g2" style="gap:12px;margin-top:14px">'+
           '<dl class="kv">'+
             '<dt>Guia</dt><dd>'+esc(g.numero)+'</dd>'+
-            '<dt>Data emissão</dt><dd>'+esc(g.dataEmissao)+'</dd>'+
+            '<dt>Data emissão</dt><dd>'+esc(fmtDataEmissao(g))+'</dd>'+
             '<dt>Beneficiário</dt><dd>'+esc(g.beneficiario.nome)+'</dd>'+
             '<dt>Data de nascimento</dt><dd>'+esc(g.beneficiario.dataNascimento||'—')+(MOCK.calcIdade(g.beneficiario.dataNascimento)!=null?' <span style="color:var(--muted)">('+MOCK.calcIdade(g.beneficiario.dataNascimento)+' anos)</span>':'')+'</dd>'+
             '<dt>Carteirinha</dt><dd>'+esc(g.beneficiario.carteirinha||'—')+'</dd>'+
