@@ -812,6 +812,11 @@ body.sidebar-collapsed .modal-backdrop{left:66px}
 .resumo-mini-tbl .rm-cod{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;color:var(--ink-1);white-space:nowrap}
 .resumo-mini-tbl .rm-peso{text-align:left;font-weight:700;color:var(--g-600);white-space:nowrap}
 .resumo-mini-tbl .rm-qtd{text-align:left;font-weight:700;color:var(--ink-1);white-space:nowrap}
+.resumo-mini-tbl th.rm-c,.resumo-mini-tbl td.rm-c{text-align:center;white-space:nowrap}
+.resumo-mini-tbl td.rm-c{font-weight:700;color:var(--g-700)}
+/* detalhe expandido (Mat/Med / OPME) dentro do card resumido */
+.resumo-exp-slot{padding:12px;border-top:1px dashed var(--g-100);background:var(--g-50)}
+.resumo-exp-btn{font-size:11px}
 /* selo de origem do Histórico (gerado pela IA / editado) */
 .hist-origem{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;color:var(--g-600);letter-spacing:0;text-transform:none;background:var(--g-100);border-radius:20px;padding:2px 9px}
 .hist-origem svg{opacity:.85}

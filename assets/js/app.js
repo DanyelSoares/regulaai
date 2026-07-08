@@ -4641,8 +4641,6 @@
     var ia=g._cache;
     var TABS_DEF=[
       {id:'resumo',        label:'Resumo',           ico:'layout-dashboard', grp:0},
-      {id:'matmed',        label:'Mat/Med',           ico:'pill',             grp:1},
-      {id:'opme',          label:'OPME',              ico:'wrench',           grp:1},
       {id:'ia',            label:'Parecer Técnico',   ico:'bot',              grp:3},
       {id:'obsimp',        label:'Obs. Impressas',    ico:'printer',          grp:4},
       {id:'obsnaoimp',     label:'Obs. Não Impressas',ico:'eye-off',          grp:4},
@@ -4836,6 +4834,63 @@
     return box;
   }
 
+  // Seção resumida + expansível (Mat/Med ou OPME) para o Resumo.
+  // tipo: 'matmed' | 'opme'. Mostra tabela resumida; botão "Detalhes" expande a visão completa.
+  function renderResumoExpandivel(g, tipo){
+    var box=el('div',{class:'resumo-mini'});
+    var itens = (g.matmed||[]).filter(function(m){ return tipo==='opme' ? m.opme : !m.opme; });
+    var conf = tipo==='opme'
+      ? {titulo:'OPME', icone:'wrench', vazio:'Sem OPME nesta guia.'}
+      : {titulo:'MAT/MED', icone:'pill', vazio:'Sem medicamentos/materiais nesta guia.'};
+
+    if(!itens.length){
+      box.innerHTML='<div class="panel" style="padding:0">'+
+        '<div class="resumo-mini-hd">'+ico(conf.icone,13)+' '+conf.titulo+'<span class="resumo-mini-cnt">0</span></div>'+
+        '<div class="resumo-mini-empty">'+esc(conf.vazio)+'</div></div>';
+      return box;
+    }
+
+    // Tabela RESUMIDA
+    var thead, linhas;
+    if(tipo==='matmed'){
+      thead='<tr><th>Descrição específica</th><th>Unidade</th><th>Via</th><th class="rm-c">Qtde Solic.</th><th class="rm-c">Qtde</th></tr>';
+      linhas=itens.map(function(m){ var x=MOCK.matmedDetalhe?MOCK.matmedDetalhe(m):{};
+        return '<tr><td>'+esc(x.descEspecifica||m.desc)+'</td><td>'+esc(x.unidade||'—')+'</td><td>'+esc(x.via||'—')+'</td><td class="rm-c">'+(x.qtdeSolic!=null?x.qtdeSolic:'—')+'</td><td class="rm-c">'+(x.qtde!=null?x.qtde:'—')+'</td></tr>';
+      }).join('');
+    } else {
+      thead='<tr><th>Código solicitado</th><th>Produto solicitado</th><th class="rm-c">Qtde Solic.</th><th class="rm-c">Qtde</th></tr>';
+      linhas=itens.map(function(m){ var x=MOCK.opmeDetalhe?MOCK.opmeDetalhe(m):{};
+        return '<tr><td class="rm-cod">'+esc(x.codSolic||m.cod)+'</td><td>'+esc(x.produtoSolic||m.desc)+'</td><td class="rm-c">'+(x.qtde!=null?x.qtde:'—')+'</td><td class="rm-c">'+(x.qtdeAuto!=null?x.qtdeAuto:(x.qtde!=null?x.qtde:'—'))+'</td></tr>';
+      }).join('');
+    }
+
+    box.innerHTML=
+      '<div class="panel" style="padding:0">'+
+        '<div class="resumo-mini-hd">'+ico(conf.icone,13)+' '+conf.titulo+
+          '<button class="btn sm ghost resumo-exp-btn" style="margin-left:auto;letter-spacing:0;text-transform:none">'+ico('chevron-down',12)+' Detalhes</button>'+
+          '<span class="resumo-mini-cnt">'+itens.length+'</span>'+
+        '</div>'+
+        '<div class="resumo-mini-tbl"><table><thead>'+thead+'</thead><tbody>'+linhas+'</tbody></table></div>'+
+        '<div class="resumo-exp-slot" style="display:none"></div>'+
+      '</div>';
+
+    // Botão Detalhes: expande a visão COMPLETA (reusa os renderizadores detalhados)
+    var slot=box.querySelector('.resumo-exp-slot');
+    var btn=box.querySelector('.resumo-exp-btn');
+    var carregado=false, aberto=false;
+    btn.onclick=function(){
+      aberto=!aberto;
+      if(aberto && !carregado){
+        slot.appendChild(tipo==='opme'?renderOpmeDetalhado(itens):renderMatMedDetalhado(itens));
+        carregado=true; lcIcons();
+      }
+      slot.style.display=aberto?'block':'none';
+      btn.innerHTML=(aberto?ico('chevron-up',12)+' Ocultar detalhes':ico('chevron-down',12)+' Detalhes');
+      lcIcons();
+    };
+    return box;
+  }
+
   function renderGuiaTab(g, ia, t){
     var d=el('div');
     if(t==='resumo'){
@@ -4909,11 +4964,18 @@
           resumoMiniTabela('Procedimentos','stethoscope',g.procedimentos)+
           resumoMiniTabela('Pacotes','package',g.pacotes)+
           resumoMiniTabela('Diárias/Taxas','calendar-days',g.diariasTaxas,{tipo:'diarias'})+
+          '<div class="resumo-matmed-slot"></div>'+
+          '<div class="resumo-opme-slot"></div>'+
         '</div>'+
         '<div class="resumo-anexos-slot" style="margin-top:14px"></div>'+
         '<div class="resumo-hist-slot" style="margin-top:14px"></div>'+
         '<div class="resumo-crit-slot" style="margin-top:14px"></div>'+
         '<div class="ai-warn" style="margin-top:14px">'+ia.avisoLegal+'</div>';
+      // Mat/Med e OPME (resumidos + expansíveis) migrados para o Resumo
+      var _mmSlot=d.querySelector('.resumo-matmed-slot');
+      if(_mmSlot) _mmSlot.replaceWith(renderResumoExpandivel(g,'matmed'));
+      var _opSlot=d.querySelector('.resumo-opme-slot');
+      if(_opSlot) _opSlot.replaceWith(renderResumoExpandivel(g,'opme'));
       // Anexos, Histórico e Críticas migrados para o Resumo
       var _anxSlot=d.querySelector('.resumo-anexos-slot');
       if(_anxSlot) _anxSlot.appendChild(renderAnexos(g));
@@ -4932,15 +4994,6 @@
         tl.appendChild(el('div',{class:'tl-item '+cls},'<h4>'+e.ordem+'. '+esc(e.nome)+'</h4><div class="meta">Responsável: '+esc(e.responsavel)+' · Prazo: '+e.prazoHoras+'h · Status: <b>'+esc(e.status)+'</b>'+(e.inicio?' · Início: '+esc(e.inicio):'')+(e.fim?' · Fim: '+esc(e.fim):'')+'</div>'));
       });
       d.appendChild(tl);
-    } else if(t==='matmed'){
-      // Aba Mat/Med: apenas medicamentos/materiais (OPME tem aba própria)
-      var _mm=(g.matmed||[]).filter(function(m){return !m.opme;});
-      if(!_mm.length) d.innerHTML='<div class="empty"><div class="ico">'+icoLg('folder-open')+'</div>Sem medicamentos/materiais nesta guia.<br><span style="font-size:12px">Itens OPME aparecem na aba OPME.</span></div>';
-      else d.appendChild(renderMatMedDetalhado(_mm));
-    } else if(t==='opme'){
-      var opmes=g.matmed.filter(function(m){return m.opme});
-      if(!opmes.length) d.innerHTML='<div class="empty"><div class="ico">'+icoLg('activity')+'</div>Sem OPME nesta guia.</div>';
-      else d.appendChild(renderOpmeDetalhado(opmes)); // campos próprios de OPME (ANVISA, fornecedor, solic/autoriz)
     } else if(t==='ia'){
       d.appendChild(renderParecerIA(ia,g));
     } else if(t==='operadora'){
@@ -6096,8 +6149,6 @@
           {id:'cabecalho',    label:'Cabeçalho'},
           {id:'resumo',       label:'Resumo'},
           {id:'etapas',       label:'Etapas'},
-          {id:'matmed',       label:'Mat/Med'},
-          {id:'opme',         label:'OPME'},
           {id:'parecer_tec',  label:'Parecer Técnico'},
           {id:'parecer_op',   label:'Parecer Operadora'},
           {id:'logs_guia',    label:'Logs'},
@@ -6181,25 +6232,6 @@
               ['Pendente (cinza)','Etapa ainda não iniciada'],
             ])+
             '<p style="margin-top:10px">Cada etapa exibe: número de ordem, nome, responsável (Auditor / Enfermeiro), prazo em horas e datas de execução.</p>',
-          matmed:
-            '<p>Materiais e medicamentos vinculados à guia:</p>'+
-            manualTable(['Coluna','Descrição'],[
-              ['Código','Código TUSS do material ou medicamento'],
-              ['Descrição','Nome do item'],
-              ['Peso','Pontuação no cálculo de risco (0–10)'],
-              ['Obrig.','Se o item é obrigatório'],
-              ['IA','Instrução específica para a IA'],
-              ['Status','Ativo / Inativo'],
-            ]),
-          opme:
-            '<p>Órteses, Próteses e Materiais Especiais vinculados à guia:</p>'+
-            manualTable(['Coluna','Descrição'],[
-              ['Código','Código do item OPME'],
-              ['Descrição','Nome do item'],
-              ['Cotação','Status da cotação (Em cotação, Cotado, Aprovado)'],
-              ['Peso','Pontuação no cálculo de risco'],
-              ['Status','Ativo / Inativo'],
-            ]),
           parecer_tec:
             '<p>Análise técnica gerada pela IA com base nas regras DUT e nos parâmetros configurados:</p>'+
             manualTable(['Elemento','Descrição'],[
@@ -6297,27 +6329,8 @@
               ['Flags','Marcadores do item: DUT, OPME e/ou Obrigatório'],
             ]))+
 
-          manualBox('Aba: Mat/Med',
-            '<p>Materiais e medicamentos vinculados à guia. Estrutura idêntica à aba Procedimentos, sem a coluna OPME.</p>'+
-            manualTable(['Coluna','Descrição'],[
-              ['Código','Código TUSS do material ou medicamento'],
-              ['Descrição','Nome do item'],
-              ['Peso','Pontuação no cálculo de risco (0–10)'],
-              ['Obrig.','Se o item é obrigatório'],
-              ['IA','Instrução específica para a IA'],
-              ['Status','Ativo / Inativo'],
-            ]))+
-
-          manualBox('Aba: OPME',
-            '<p>Itens classificados como OPME (Órteses, Próteses e Materiais Especiais) vinculados à guia.</p>'+
-            '<p>Inclui colunas adicionais para controle de cotação:</p>'+
-            manualTable(['Coluna','Descrição'],[
-              ['Código','Código do item OPME'],
-              ['Descrição','Nome do item'],
-              ['Cotação','Status da cotação (Em cotação, Cotado, Aprovado)'],
-              ['Peso','Pontuação no cálculo de risco'],
-              ['Status','Ativo / Inativo'],
-            ]))+
+          manualBox('Mat/Med e OPME (no Resumo)',
+            '<p>Incorporados ao <b>Resumo</b> da guia, em cartões <b>resumidos</b> para não estender a tela. Cada um mostra uma tabela enxuta (Mat/Med: descrição, unidade, via, qtde solicitada e qtde; OPME: código solicitado, produto solicitado, qtde solicitada e qtde) e um botão <b>"Detalhes"</b> que expande a visão completa (campos regulatórios, valores solicitado × autorizado, fornecedores, etc.).</p>')+
 
           manualBox('Anexos (dentro do Resumo)',
             '<p>A gestão de anexos foi incorporada ao <b>Resumo</b> da guia. Use o botão <b>"Anexar documento"</b> para enviar um novo arquivo recebido após a solicitação (ex.: um exame) e <b>classificá-lo</b> por categoria (Exame complementar, Laudo médico, DUT/Evidência, etc.). O arquivo fica disponível para visualização e a ação é registrada nos logs.</p>'+
