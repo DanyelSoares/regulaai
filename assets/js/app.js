@@ -4890,7 +4890,7 @@
       }).join('');
     } else {
       cols='<colgroup><col style="width:100px"><col>'+COL_NUM+COL_NUM+COL_NUM+COL_PESO+'</colgroup>';
-      thead='<tr><th>Código solicitado</th><th>Produto solicitado</th><th class="rm-c">Qtde Solic.</th><th class="rm-c">Qtde</th><th class="rm-c">Tabela</th><th class="rm-c">Peso</th></tr>';
+      thead='<tr><th>Código</th><th>Produto solicitado</th><th class="rm-c">Qtde Solic.</th><th class="rm-c">Qtde</th><th class="rm-c">Tabela</th><th class="rm-c">Peso</th></tr>';
       linhas=itens.map(function(m){ var x=MOCK.opmeDetalhe?MOCK.opmeDetalhe(m):{};
         var tabelaFmt = x.vlrUnTabela!=null ? 'R$ '+x.vlrUnTabela.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—';
         return '<tr><td class="rm-cod">'+esc(x.codSolic||m.cod)+'</td><td>'+esc(x.produtoSolic||m.desc)+'</td><td class="rm-c">'+(x.qtde!=null?x.qtde:'—')+'</td><td class="rm-c">'+(x.qtdeAuto!=null?x.qtdeAuto:(x.qtde!=null?x.qtde:'—'))+'</td><td class="rm-c">'+tabelaFmt+'</td><td class="rm-c">&nbsp;</td></tr>';
