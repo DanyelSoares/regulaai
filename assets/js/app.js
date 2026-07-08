@@ -5437,38 +5437,75 @@
   }
 
 
-  // Gera o parecer de indicação/não-indicação de cada serviço solicitado na guia.
-  // Determinístico por (guia + código). Considera anexos, DUT, risco e natureza.
+  // Correlação clínica por padrão de descrição de serviço → {patologia, achados esperados no laudo, justificativa}
+  function _correlacaoClinica(desc){
+    var d=(desc||'').toLowerCase();
+    var mapa=[
+      {re:/artroplastia|prótese.*joelho|prótese.*quadril/, pat:'osteoartrose avançada / degeneração articular', laudo:'RX/RM evidenciando redução do espaço articular, osteófitos e deformidade', ind:'falha do tratamento conservador (fisioterapia, analgesia) por período mínimo e limitação funcional documentada'},
+      {re:/tomografia|tc de|ressonância|rm de|ressonancia/, pat:'investigação diagnóstica de sintomatologia', laudo:'solicitação com hipótese diagnóstica e sintomatologia compatível', ind:'esclarecimento diagnóstico não obtido por métodos menos complexos'},
+      {re:/quimioterap|imunobiológico|oncolog/, pat:'neoplasia com protocolo oncológico', laudo:'laudo do oncologista com estadiamento e protocolo conforme diretriz', ind:'protocolo antineoplásico compatível com o estadiamento e a linha de tratamento'},
+      {re:/gastroplastia|bariátrica|bariatrica/, pat:'obesidade mórbida', laudo:'IMC ≥ 35 com comorbidade ou ≥ 40, e acompanhamento multiprofissional', ind:'critérios da DUT de cirurgia bariátrica com falha de tratamento clínico por ≥ 2 anos'},
+      {re:/coluna|artrodese/, pat:'patologia degenerativa/instabilidade da coluna', laudo:'RM com compressão neural ou instabilidade e sintomatologia refratária', ind:'falha do tratamento conservador e correlação clínico-radiológica'},
+      {re:/catarata|facect/, pat:'catarata com baixa da acuidade visual', laudo:'exame oftalmológico com acuidade reduzida e opacificação do cristalino', ind:'comprometimento funcional da visão documentado'},
+      {re:/angioplastia|stent|cateterismo|hemodinâmic/, pat:'doença arterial coronariana', laudo:'cateterismo/angio evidenciando lesão obstrutiva significativa', ind:'lesão com repercussão isquêmica e indicação de revascularização'},
+      {re:/diária.*uti|uti/, pat:'necessidade de suporte intensivo', laudo:'instabilidade clínica / necessidade de monitorização contínua', ind:'gravidade do quadro que exige leito de terapia intensiva'},
+      {re:/diária.*enfermaria|enfermaria/, pat:'internação em enfermaria', laudo:'necessidade de internação sem critérios de terapia intensiva', ind:'acomodação compatível com o contrato e com o quadro'},
+      {re:/taxa.*sala.*cirúrg|taxa de sala/, pat:'suporte de sala cirúrgica', laudo:'procedimento cirúrgico vinculado autorizado', ind:'taxa acessória a procedimento cirúrgico indicado'},
+      {re:/hemograma|glicemia|exame|laboratóri/, pat:'avaliação laboratorial', laudo:'solicitação com finalidade diagnóstica/pré-operatória', ind:'exame de rotina/pré-operatório pertinente'},
+      {re:/prótese|opme|placa|parafuso|material/, pat:'necessidade de material implantável', laudo:'planejamento cirúrgico especificando o material', ind:'OPME compatível com o procedimento e com equivalência técnica cotada'}
+    ];
+    for(var i=0;i<mapa.length;i++){ if(mapa[i].re.test(d)) return mapa[i]; }
+    return {pat:'quadro clínico da guia', laudo:'documentação clínica compatível com a solicitação', ind:'indicação técnica alinhada ao serviço solicitado'};
+  }
+
+  // Gera o parecer TÉCNICO de cada serviço, cruzando: serviço × indicação clínica/CID × laudo ×
+  // patologia × orientações da IA parametrizadas no item (State.vincConfig[vk|cod].instr).
   function justificarServicos(g){
     function h(s){ var x=0,st=''+s; for(var i=0;i<st.length;i++){x=(x*31+st.charCodeAt(i))|0;} return Math.abs(x); }
-    var espec=MOCK.especialidadeDaGuia?MOCK.especialidadeDaGuia(g):'';
+    var cid = MOCK.cidGuia ? MOCK.cidGuia(g) : {codigo:'', descricao:''};
+    var espec = MOCK.especialidadeDaGuia ? MOCK.especialidadeDaGuia(g) : '';
+    var idade = g.beneficiario && g.beneficiario.idade;
+    var vcfg = (typeof State!=='undefined' && State.vincConfig) || {};
     var out=[];
-    function push(tipo,cod,desc,extra){
+
+    function push(tipo, vk, cod, desc, extra){
       var seed=h(g.numero+'|'+cod);
-      // Regra de indicação: nega quando falta suporte documental/DUT; senão indica
+      var corr=_correlacaoClinica(desc);
+      var instr=((vcfg[vk+'|'+cod]||{}).instr||'').trim();  // orientação da IA parametrizada para o item
       var faltaDoc=!g.anexos;
       var dutPend = extra&&extra.dut && !g.dut;
-      var indicado = !dutPend && !(faltaDoc && seed%3===0);
-      var motivo;
+      var indicado = !dutPend && !(faltaDoc && (seed%3===0));
+
+      var partes=[];
       if(indicado){
-        var razoes=[
-          'compatível com o quadro clínico ('+(espec||'especialidade da guia')+') e com a natureza '+(g.natureza||'')+' da solicitação',
-          'coerente com o protocolo assistencial do fluxo "'+(g.fluxo&&g.fluxo.nome||'')+'"',
-          'justificado pela indicação registrada e pela documentação apresentada',
-          'pertinente ao regime '+(g.regime||'')+' e ao histórico do beneficiário'
-        ];
-        motivo='INDICADO — '+razoes[seed%razoes.length]+'.';
-        if(g.regime==='Urgência') motivo+=' Regime de urgência reforça a tempestividade do atendimento.';
+        partes.push('Recomendado tecnicamente.');
+        partes.push('A indicação clínica registrada ('+(cid.codigo?cid.codigo+' — '+cid.descricao:(espec||'quadro da guia'))+') é compatível com '+corr.pat+'.');
+        partes.push('O laudo/documentação apresentada '+(faltaDoc?'ainda é limitada, mas':'')+' sustenta '+corr.laudo+', o que fundamenta a solicitação de '+tipo.toLowerCase()+' "'+desc+'".');
+        partes.push('Para esta patologia, o serviço é indicado quando há '+corr.ind+'.');
+        if(idade!=null && (idade>=60 || tipo==='Diária/Taxa')) partes.push('Considerando a idade do paciente ('+idade+' anos) e o risco de intercorrências, a acomodação/tipo de diária solicitado é pertinente ao cuidado.');
+        if(g.regime==='Urgência') partes.push('O regime de urgência reforça a tempestividade e a necessidade do atendimento.');
+        if(extra&&extra.opme) partes.push('Recomenda-se validar a cotação de 3 fornecedores e a equivalência técnica do OPME antes da liberação.');
       } else {
-        if(dutPend) motivo='NÃO INDICADO (pendente) — sujeito à DUT da ANS ainda não comprovada. Requer evidências objetivas (relatórios/exames/tempo de tratamento) antes da autorização.';
-        else motivo='NÃO INDICADO (pendente) — documentação de suporte ausente; a indicação não pode ser confirmada sem laudo/exames que fundamentem a solicitação.';
+        partes.push('Não recomendado tecnicamente neste momento.');
+        if(dutPend){
+          partes.push('O item está sujeito à DUT da ANS, e a indicação clínica apresentada ('+(cid.codigo||espec||'—')+') ainda não está comprovada pelas evidências exigidas: '+corr.ind+'.');
+          partes.push('O laudo atual não demonstra objetivamente '+corr.laudo+'.');
+          partes.push('Necessário relatório médico e exames que justifiquem a solicitação e atendam aos critérios da DUT antes da autorização.');
+        } else {
+          partes.push('A indicação clínica registrada não está adequadamente sustentada pela documentação: falta o laudo/exame que comprove '+corr.laudo+'.');
+          partes.push('Sem essa correlação clínico-documental, não é possível confirmar que "'+desc+'" é o serviço indicado para '+corr.pat+'.');
+          partes.push('Necessário relatório médico justificando o motivo da solicitação e anexação dos exames pertinentes.');
+        }
       }
-      out.push({tipo:tipo, cod:cod, desc:desc, indicado:indicado, motivo:motivo, extra:extra});
+      if(instr) partes.push('Orientação parametrizada para este item considerada na análise: "'+(instr.length>180?instr.slice(0,180)+'…':instr)+'".');
+
+      out.push({tipo:tipo, cod:cod, desc:desc, indicado:indicado, motivo:partes.join(' '), temInstr:!!instr});
     }
-    (g.procedimentos||[]).forEach(function(p){ push('Procedimento',p.cod,p.desc,{dut:!!p.dut}); });
-    (g.pacotes||[]).forEach(function(p){ push('Pacote',p.cod,p.desc,{}); });
-    (g.diariasTaxas||[]).forEach(function(d){ push('Diária/Taxa',d.cod,d.desc,{}); });
-    (g.matmed||[]).forEach(function(m){ if(m.opme) push('OPME',m.cod,m.desc,{opme:true}); });
+
+    (g.procedimentos||[]).forEach(function(p){ push('Procedimento','proc',p.cod,p.desc,{dut:!!p.dut}); });
+    (g.pacotes||[]).forEach(function(p){ push('Pacote','pac',p.cod,p.desc,{}); });
+    (g.diariasTaxas||[]).forEach(function(d){ push('Diária/Taxa','dt',d.cod,d.desc,{}); });
+    (g.matmed||[]).forEach(function(m){ if(m.opme) push('OPME','matmed',m.cod,m.desc,{opme:true}); });
     return out;
   }
 
@@ -5527,6 +5564,7 @@
             '<span class="parecer-serv-tipo">'+esc(s.tipo)+'</span>'+
             '<span class="parecer-serv-cod">'+esc(s.cod)+'</span>'+
             '<span class="parecer-serv-desc">'+esc(s.desc)+'</span>'+
+            (s.temInstr?'<span class="parecer-serv-instr" title="Há orientação parametrizada para a IA neste item — considerada na análise">'+ico('sparkles',11)+' prompt</span>':'')+
             '<span class="parecer-serv-badge '+(s.indicado?'ok':'no')+'">'+(s.indicado?ico('check-circle-2',12)+' Indicado':ico('alert-circle',12)+' Não indicado')+'</span>'+
           '</div>'+
           '<div class="parecer-serv-just">'+esc(s.motivo)+'</div>'+
