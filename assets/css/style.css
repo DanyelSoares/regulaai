@@ -814,6 +814,7 @@ body.sidebar-collapsed .modal-backdrop{left:66px}
 .resumo-mini-tbl .rm-qtd{text-align:left;font-weight:700;color:var(--ink-1);white-space:nowrap}
 .resumo-mini-tbl th.rm-c,.resumo-mini-tbl td.rm-c{text-align:center;white-space:nowrap}
 .resumo-mini-tbl td.rm-c{font-weight:700;color:var(--g-700)}
+.resumo-mini-tbl td.rm-nowrap{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* Larguras das colunas numéricas (Qtde Solic./Qtde/Tabela/Peso) vêm do <colgroup> fixo
    montado em resumoMiniTabela()/renderResumoExpandivel() — garante alinhamento entre os cartões */
 /* detalhe expandido (Mat/Med / OPME) dentro do card resumido */

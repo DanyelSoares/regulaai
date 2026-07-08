@@ -4880,11 +4880,11 @@
     var COL_NUM='<col style="width:100px">';
     var thead, linhas, cols;
     if(tipo==='matmed'){
-      cols='<colgroup><col><col style="width:100px"><col style="width:90px">'+COL_NUM+COL_NUM+COL_NUM+COL_NUM+'</colgroup>';
+      cols='<colgroup><col style="width:260px"><col style="width:100px"><col style="width:90px">'+COL_NUM+COL_NUM+COL_NUM+COL_NUM+'</colgroup>';
       thead='<tr><th>Descrição específica</th><th>Unidade</th><th>Via</th><th class="rm-c">Qtde Solic.</th><th class="rm-c">Qtde</th><th class="rm-c">Tabela</th><th class="rm-c">Peso</th></tr>';
       linhas=itens.map(function(m){ var x=MOCK.matmedDetalhe?MOCK.matmedDetalhe(m):{};
         var tabelaFmt = x.vlrTabela!=null ? 'R$ '+x.vlrTabela.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—';
-        return '<tr><td>'+esc(x.descEspecifica||m.desc)+'</td><td>'+esc(x.unidade||'—')+'</td><td>'+esc(x.via||'—')+'</td><td class="rm-c">'+(x.qtdeSolic!=null?x.qtdeSolic:'—')+'</td><td class="rm-c">'+(x.qtde!=null?x.qtde:'—')+'</td><td class="rm-c">'+tabelaFmt+'</td><td class="rm-c">&nbsp;</td></tr>';
+        return '<tr><td class="rm-nowrap">'+esc(x.descEspecifica||m.desc)+'</td><td class="rm-nowrap">'+esc(x.unidade||'—')+'</td><td class="rm-nowrap">'+esc(x.via||'—')+'</td><td class="rm-c">'+(x.qtdeSolic!=null?x.qtdeSolic:'—')+'</td><td class="rm-c">'+(x.qtde!=null?x.qtde:'—')+'</td><td class="rm-c">'+tabelaFmt+'</td><td class="rm-c">&nbsp;</td></tr>';
       }).join('');
     } else {
       cols='<colgroup><col style="width:100px"><col>'+COL_NUM+COL_NUM+COL_NUM+COL_NUM+'</colgroup>';
