@@ -5214,14 +5214,16 @@
         ? histView.map(function(a,i){ return linhaHtml(a,i,i===0); }).join('')
         : '<tr><td colspan="14" class="hist-erp-empty" style="text-align:center;color:var(--muted);padding:16px">Nenhum atendimento no período/critério informado.</td></tr>';
       _cnt.textContent=histView.length;
+      var n=histView.length;
+      var qtdeTxt='<b>'+n+'</b> atendimento'+(n===1?'':'s');
       var periodoTxt;
       if(_periodoDe){
         var deBr=_periodoDe.split('-').reverse().join('/'), ateBr=(_periodoAte||'').split('-').reverse().join('/');
-        periodoTxt='<b>'+deBr+'</b> a <b>'+ateBr+'</b>';
+        periodoTxt=qtdeTxt+' no período ('+deBr+' a '+ateBr+')';
       } else {
-        periodoTxt='<b>todos os períodos</b>';
+        periodoTxt=qtdeTxt+' (todos os períodos)';
       }
-      _info.innerHTML=ico('calendar',11)+' Período: '+periodoTxt+' · <b>'+histView.length+'</b> de '+hist.length+' atendimento'+(hist.length===1?'':'s');
+      _info.innerHTML=ico('calendar',11)+' '+periodoTxt;
       // religar cliques de seleção
       _tbody.querySelectorAll('tr[data-hist]').forEach(function(tr){
         tr.onclick=function(){
