@@ -5155,8 +5155,6 @@
             '<dt>Plano / Contrato</dt><dd>'+esc(g.beneficiario.plano)+' · '+esc(g.beneficiario.contrato)+'</dd>'+
             '<dt>Acomodação</dt><dd>'+esc(g.beneficiario.acomodacao||'—')+'</dd>'+
             '<dt>Data de inclusão</dt><dd>'+esc(g.beneficiario.dataInclusao||'—')+(MOCK.anosContrato(g.beneficiario.dataInclusao)!=null?' <span style="color:var(--muted)">('+MOCK.anosContrato(g.beneficiario.dataInclusao)+' '+(MOCK.anosContrato(g.beneficiario.dataInclusao)===1?'ano':'anos')+' de contrato)</span>':'')+'</dd>'+
-            '<dt>Carências</dt><dd><button class="btn sm ghost" id="btnCarencias" style="letter-spacing:0;text-transform:none;padding:3px 10px">'+ico('calendar-clock',12)+' Ver carências <kbd class="kbd-hint">F10</kbd></button></dd>'+
-            '<dt>Hist. atendimento</dt><dd><button class="btn sm ghost" id="btnHistAtend" style="letter-spacing:0;text-transform:none;padding:3px 10px">'+ico('history',12)+' Ver histórico <kbd class="kbd-hint">F9</kbd></button></dd>'+
           '</dl>'+
           '<dl class="kv">'+
             '<dt>Solicitante</dt><dd>'+esc(g.solicitante)+'</dd>'+
@@ -5209,12 +5207,6 @@
       d.querySelectorAll('.risk-click[data-risk4]').forEach(function(card){
         card.onclick=function(){ showRisco4Detalhe(g, RISKS[+card.getAttribute('data-risk4')]); };
       });
-      // Botão Carências (também acessível via atalho F10)
-      var _btnCar=d.querySelector('#btnCarencias');
-      if(_btnCar) _btnCar.onclick=function(){ showCarencias(g); };
-      // Botão Hist. atendimento (também acessível via atalho F9)
-      var _btnHist=d.querySelector('#btnHistAtend');
-      if(_btnHist) _btnHist.onclick=function(){ showHistAtend(g); };
     } else if(t==='etapas'){
       var tl=el('div',{class:'timeline'});
       g.etapas.forEach(function(e){
