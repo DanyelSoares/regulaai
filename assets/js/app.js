@@ -5161,7 +5161,7 @@
       var fatCls = a.faturamento==='Faturada'?'fat-ok':(a.faturamento==='Em análise'?'fat-ana':'fat-nao');
       return '<tr data-hist="'+idx+'"'+(selecionado?' class="sel"':'')+'>'+
         '<td class="nw">'+esc(a.data)+'</td>'+
-        '<td class="nw"><b>'+esc(a.guia)+'</b>'+(a.atual?' <span class="badge info" style="font-size:9px">atual</span>':'')+'</td>'+
+        '<td class="nw"><b>'+esc(a.guia)+'</b></td>'+
         '<td class="cc">'+a.qtdSolic+'</td>'+
         '<td class="cc">'+a.qtdAut+'</td>'+
         '<td class="nw">'+esc(a.cod)+'</td>'+
