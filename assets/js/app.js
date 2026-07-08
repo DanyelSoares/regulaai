@@ -4881,12 +4881,12 @@
     var COL_NUM='<col style="width:150px">', COL_PESO='<col style="width:80px">';
     var thead, linhas, cols;
     if(tipo==='matmed'){
-      cols='<colgroup><col style="width:150px"><col><col style="width:110px"><col style="width:110px">'+COL_NUM+COL_NUM+COL_NUM+COL_PESO+'</colgroup>';
-      thead='<tr><th>Código</th><th>Descrição</th><th>Unidade</th><th>Via</th><th class="rm-c">Qtde Solic.</th><th class="rm-c">Qtde</th><th class="rm-c">Tabela</th><th class="rm-c">Peso</th></tr>';
+      cols='<colgroup><col style="width:150px"><col style="width:220px"><col style="width:150px"><col style="width:150px"><col>'+COL_NUM+COL_NUM+COL_NUM+COL_PESO+'</colgroup>';
+      thead='<tr><th>Código</th><th>Descrição</th><th>Unidade</th><th>Via</th><th></th><th class="rm-c">Qtde Solic.</th><th class="rm-c">Qtde</th><th class="rm-c">Tabela</th><th class="rm-c">Peso</th></tr>';
       linhas=itens.map(function(m){ var x=MOCK.matmedDetalhe?MOCK.matmedDetalhe(m):{};
         var tabelaFmt = x.vlrTabela!=null ? 'R$ '+x.vlrTabela.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—';
         var unidadeTxt=esc(x.unidade||'—'), viaTxt=esc(x.via||'—');
-        return '<tr><td class="rm-cod">'+esc(x.cod||m.cod)+'</td><td class="rm-nowrap">'+esc(x.descEspecifica||m.desc)+'</td><td class="rm-nowrap" title="'+unidadeTxt+'">'+unidadeTxt+'</td><td class="rm-nowrap" title="'+viaTxt+'">'+viaTxt+'</td><td class="rm-c">'+(x.qtdeSolic!=null?x.qtdeSolic:'—')+'</td><td class="rm-c">'+(x.qtde!=null?x.qtde:'—')+'</td><td class="rm-c">'+tabelaFmt+'</td><td class="rm-c">&nbsp;</td></tr>';
+        return '<tr><td class="rm-cod">'+esc(x.cod||m.cod)+'</td><td class="rm-nowrap">'+esc(x.descEspecifica||m.desc)+'</td><td class="rm-nowrap" title="'+unidadeTxt+'">'+unidadeTxt+'</td><td class="rm-nowrap" title="'+viaTxt+'">'+viaTxt+'</td><td></td><td class="rm-c">'+(x.qtdeSolic!=null?x.qtdeSolic:'—')+'</td><td class="rm-c">'+(x.qtde!=null?x.qtde:'—')+'</td><td class="rm-c">'+tabelaFmt+'</td><td class="rm-c">&nbsp;</td></tr>';
       }).join('');
     } else {
       cols='<colgroup><col style="width:150px"><col>'+COL_NUM+COL_NUM+COL_NUM+COL_PESO+'</colgroup>';
