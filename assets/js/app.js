@@ -4749,22 +4749,74 @@
   // Seção Histórico (migrada para o Resumo) — textarea editável com auto-save, no padrão .resumo-mini
   function renderHistoricoSecao(g){
     var _histKey='regula_hist_'+g.numero;
+    var _histEditKey='regula_hist_edit_'+g.numero; // marca se foi editado pelo usuário
     var _histSaved=localStorage.getItem(_histKey);
-    var _histDefault='Beneficiário possui '+(2+(g.beneficiario.idade%4))+' atendimentos anteriores nos últimos 24 meses. Última internação: 2025-11-20. Sem reincidências críticas identificadas.';
-    var _histVal=_histSaved||g.historico||_histDefault;
+    var _foiEditado=localStorage.getItem(_histEditKey)==='1';
+    var _histVal=_histSaved||g.historico||histGeradoIA(g);
     var box=el('div',{class:'resumo-mini'});
     box.innerHTML=
       '<div class="panel" style="padding:0">'+
         '<div class="resumo-mini-hd">'+ico('history',13)+' HISTÓRICO E TRATAMENTOS ANTERIORES'+
-          '<span style="margin-left:auto;font-size:10px;font-weight:600;color:var(--muted);letter-spacing:0;text-transform:none">editável · salvo automaticamente</span>'+
+          '<span class="hist-origem" style="margin-left:auto">'+
+            (_foiEditado
+              ? ico('pencil',11)+' editado pelo usuário'
+              : ico('sparkles',11)+' gerado pela IA')+
+          '</span>'+
+          '<button class="btn sm ghost hist-regen" style="letter-spacing:0;text-transform:none;margin-left:8px" title="Gerar novamente pela IA (descarta a edição atual)">'+ico('refresh-cw',12)+' Gerar pela IA</button>'+
         '</div>'+
         '<div style="padding:10px 12px"></div>'+
       '</div>';
+    var _corpo=box.querySelector('.panel>div[style*="padding"]');
     var _ta=el('textarea',{style:'width:100%;min-height:110px;resize:vertical;padding:10px;border:1px solid var(--line);border-radius:7px;font-size:13px;font-family:inherit;line-height:1.5'},null);
     _ta.value=_histVal;
-    _ta.oninput=function(){ g.historico=this.value; localStorage.setItem(_histKey,this.value); };
-    box.querySelector('.panel>div[style*="padding"]').appendChild(_ta);
+    _corpo.appendChild(_ta);
+    _corpo.appendChild(el('div',{style:'margin-top:6px;font-size:11px;color:var(--muted);display:flex;align-items:center;gap:5px'},
+      ico('info',11)+' Histórico do cliente <b>gerado automaticamente pela IA</b>. Você pode editar livremente — as alterações são salvas e <b>registradas nos logs da guia</b>.'));
+
+    // Salva ao digitar; registra log da edição (com debounce para não logar cada tecla)
+    var _histLogTimer=null;
+    _ta.oninput=function(){
+      var v=this.value;
+      g.historico=v; localStorage.setItem(_histKey,v);
+      localStorage.setItem(_histEditKey,'1');
+      var badge=box.querySelector('.hist-origem'); if(badge){ badge.innerHTML=ico('pencil',11)+' editado pelo usuário'; lcIcons(); }
+      clearTimeout(_histLogTimer);
+      _histLogTimer=setTimeout(function(){
+        logAcao('Histórico do cliente editado', g.numero+' — '+(v.length>70?v.slice(0,70)+'…':v));
+      }, 1200);
+    };
+    // Regenerar pela IA (descarta a edição, volta ao texto gerado)
+    box.querySelector('.hist-regen').onclick=function(){
+      var novo=histGeradoIA(g);
+      _ta.value=novo; g.historico=novo;
+      localStorage.setItem(_histKey,novo);
+      localStorage.removeItem(_histEditKey);
+      var badge=box.querySelector('.hist-origem'); if(badge){ badge.innerHTML=ico('sparkles',11)+' gerado pela IA'; }
+      logAcao('Histórico do cliente regenerado pela IA', g.numero);
+      toast('Histórico regenerado pela IA.','ok'); lcIcons();
+    };
     return box;
+  }
+
+  // Gera o histórico clínico do cliente (simulado pela IA, determinístico por guia/beneficiário)
+  function histGeradoIA(g){
+    var b=g.beneficiario||{};
+    function h(s){ var x=0,st=''+s; for(var i=0;i<st.length;i++){x=(x*31+st.charCodeAt(i))|0;} return Math.abs(x); }
+    var seed=h(g.numero+'|'+(b.id||''));
+    var nAt=2+(seed%5);                                  // 2 a 6 atendimentos
+    var meses=6+(seed%18);                               // última internação há 6-24 meses
+    var esp=MOCK.especialidadeDaGuia?MOCK.especialidadeDaGuia(g):'—';
+    var reincid=(seed%3===0);
+    var acomp=(seed%2===0)?'em acompanhamento ambulatorial regular':'sem acompanhamento contínuo registrado';
+    var partes=[];
+    partes.push('Beneficiário '+(b.nome||'')+', '+(b.idade!=null?b.idade+' anos, ':'')+'plano '+(b.plano||'—')+', acomodação '+(b.acomodacao||'—')+'.');
+    partes.push('Possui '+nAt+' atendimento(s) registrado(s) nos últimos 24 meses, '+acomp+'.');
+    partes.push('Última internação relevante há aproximadamente '+meses+' meses. Especialidade predominante das solicitações: '+esp+'.');
+    partes.push(reincid
+      ? 'Observa-se recorrência de solicitações na mesma linha de cuidado — recomenda-se atenção a possível reincidência/uso continuado.'
+      : 'Sem reincidências críticas identificadas no período analisado.');
+    if(g.uti) partes.push('Histórico com passagem por UTI — perfil de maior complexidade assistencial.');
+    return partes.join(' ');
   }
 
   // Seção Críticas (migrada para o Resumo) — lista de alertas da IA, no padrão .resumo-mini
@@ -6208,7 +6260,7 @@
             '<p>Ao salvar, o status da guia é atualizado automaticamente conforme a decisão e a ação é registrada nos logs.</p>')+
 
           manualBox('Histórico (no Resumo)',
-            '<p>Incorporado ao <b>Resumo</b> da guia: um campo editável com o <b>histórico clínico e tratamentos anteriores</b> do beneficiário. O texto é salvo automaticamente conforme se digita.</p>')+
+            '<p>Incorporado ao <b>Resumo</b> da guia. O <b>histórico clínico e tratamentos anteriores</b> do beneficiário é <b>gerado automaticamente pela IA</b> (a partir dos dados do beneficiário e das solicitações). O usuário pode <b>editar livremente</b> o conteúdo — as alterações são salvas e <b>registradas nos logs da guia</b>. Um selo indica se o texto atual é o gerado pela IA ou editado pelo usuário, e o botão <b>"Gerar pela IA"</b> refaz o histórico (descartando a edição).</p>')+
 
           manualBox('Aba: Logs',
             '<p>Exibe os logs de rastreabilidade <b>específicos desta guia</b> — diferente da tela geral de Logs que mostra todos os registros do sistema.</p>'+
