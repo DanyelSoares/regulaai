@@ -4735,8 +4735,11 @@
     if(!arr.length){
       return '<div class="resumo-mini"><div class="panel" style="padding:0">'+head+'<div class="resumo-mini-empty">Sem itens vinculados</div></div></div>';
     }
-    var thead, linhas;
+    var thead, linhas, cols;
+    // colgroup fixo: garante que colunas de mesmo nome caiam na MESMA posição horizontal entre os cartões
+    var COL_COD='<col style="width:100px">', COL_NUM='<col style="width:100px">';
     if(opts.tipo==='diarias'){
+      cols='<colgroup>'+COL_COD+'<col>'+COL_NUM+COL_NUM+COL_NUM+COL_NUM+'</colgroup>';
       thead='<tr><th>Código</th><th>Descrição</th><th class="rm-c">Qtde Solic.</th><th class="rm-c">Qtde</th><th class="rm-c">Tabela</th><th class="rm-c">Peso</th></tr>';
       linhas = arr.map(function(p){
         var x=_diariaDetalhe(p);
@@ -4744,6 +4747,7 @@
         return '<tr><td class="rm-cod">'+esc(p.cod)+'</td><td>'+esc(p.desc)+'</td><td class="rm-c">'+x.qtdeSolic+'</td><td class="rm-c">'+x.qtde+'</td><td class="rm-c">'+tabelaFmt+'</td><td class="rm-c">'+(p.peso!=null?p.peso:'—')+'</td></tr>';
       }).join('');
     } else if(opts.tipo==='procedimentos'){
+      cols='<colgroup>'+COL_COD+'<col>'+COL_NUM+COL_NUM+COL_NUM+COL_NUM+'</colgroup>';
       thead='<tr><th>Código</th><th>Descrição</th><th class="rm-c">Qtde Solic.</th><th class="rm-c">Qtde</th><th class="rm-c">Tabela</th><th class="rm-c">Peso</th></tr>';
       linhas = arr.map(function(p){
         var x=MOCK.procDetalhe?MOCK.procDetalhe(p):{};
@@ -4752,14 +4756,15 @@
         return '<tr><td class="rm-cod">'+esc(p.cod)+'</td><td>'+esc(p.desc)+fl+'</td><td class="rm-c">'+(x.qtdeSolic!=null?x.qtdeSolic:'—')+'</td><td class="rm-c">'+(x.qtde!=null?x.qtde:'—')+'</td><td class="rm-c">'+tabelaFmt+'</td><td class="rm-c">'+(p.peso!=null?p.peso:'—')+'</td></tr>';
       }).join('');
     } else {
-      thead='<tr><th>Código</th><th>Descrição</th><th>Peso</th><th>Flags</th></tr>';
+      cols='<colgroup>'+COL_COD+'<col>'+COL_NUM+'<col style="width:160px"></colgroup>';
+      thead='<tr><th>Código</th><th>Descrição</th><th class="rm-c">Peso</th><th>Flags</th></tr>';
       linhas = arr.map(function(p){
         var fl=''; if(p.dut) fl+='<span class="badge warn">DUT</span> '; if(p.opme) fl+='<span class="badge warn">OPME</span> '; if(p.obrig) fl+='<span class="badge">Obrig.</span>';
-        return '<tr><td class="rm-cod">'+esc(p.cod)+'</td><td>'+esc(p.desc)+'</td><td class="rm-peso">'+(p.peso!=null?p.peso:'—')+'</td><td class="rm-fl">'+fl+'</td></tr>';
+        return '<tr><td class="rm-cod">'+esc(p.cod)+'</td><td>'+esc(p.desc)+'</td><td class="rm-c">'+(p.peso!=null?p.peso:'—')+'</td><td class="rm-fl">'+fl+'</td></tr>';
       }).join('');
     }
     return '<div class="resumo-mini"><div class="panel" style="padding:0">'+head+
-      '<div class="resumo-mini-tbl"><table><thead>'+thead+'</thead><tbody>'+linhas+'</tbody></table></div></div></div>';
+      '<div class="resumo-mini-tbl"><table>'+cols+'<thead>'+thead+'</thead><tbody>'+linhas+'</tbody></table></div></div></div>';
   }
 
   // Seção Histórico (migrada para o Resumo) — textarea editável com auto-save, no padrão .resumo-mini
@@ -4868,15 +4873,18 @@
       return box;
     }
 
-    // Tabela RESUMIDA
-    var thead, linhas;
+    // Tabela RESUMIDA — colgroup fixo alinha Qtde Solic./Qtde/Tabela na mesma largura das demais mini-tabelas
+    var COL_NUM='<col style="width:100px">';
+    var thead, linhas, cols;
     if(tipo==='matmed'){
+      cols='<colgroup><col><col style="width:130px"><col style="width:110px">'+COL_NUM+COL_NUM+COL_NUM+'</colgroup>';
       thead='<tr><th>Descrição específica</th><th>Unidade</th><th>Via</th><th class="rm-c">Qtde Solic.</th><th class="rm-c">Qtde</th><th class="rm-c">Tabela</th></tr>';
       linhas=itens.map(function(m){ var x=MOCK.matmedDetalhe?MOCK.matmedDetalhe(m):{};
         var tabelaFmt = x.vlrTabela!=null ? 'R$ '+x.vlrTabela.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—';
         return '<tr><td>'+esc(x.descEspecifica||m.desc)+'</td><td>'+esc(x.unidade||'—')+'</td><td>'+esc(x.via||'—')+'</td><td class="rm-c">'+(x.qtdeSolic!=null?x.qtdeSolic:'—')+'</td><td class="rm-c">'+(x.qtde!=null?x.qtde:'—')+'</td><td class="rm-c">'+tabelaFmt+'</td></tr>';
       }).join('');
     } else {
+      cols='<colgroup><col style="width:100px"><col>'+COL_NUM+COL_NUM+COL_NUM+'</colgroup>';
       thead='<tr><th>Código solicitado</th><th>Produto solicitado</th><th class="rm-c">Qtde Solic.</th><th class="rm-c">Qtde</th><th class="rm-c">Tabela</th></tr>';
       linhas=itens.map(function(m){ var x=MOCK.opmeDetalhe?MOCK.opmeDetalhe(m):{};
         var tabelaFmt = x.vlrUnTabela!=null ? 'R$ '+x.vlrUnTabela.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—';
@@ -4890,7 +4898,7 @@
           '<button class="btn sm ghost resumo-exp-btn" style="margin-left:auto;letter-spacing:0;text-transform:none">'+ico('chevron-down',12)+' Detalhes</button>'+
           '<span class="resumo-mini-cnt">'+itens.length+'</span>'+
         '</div>'+
-        '<div class="resumo-mini-tbl"><table><thead>'+thead+'</thead><tbody>'+linhas+'</tbody></table></div>'+
+        '<div class="resumo-mini-tbl"><table>'+cols+'<thead>'+thead+'</thead><tbody>'+linhas+'</tbody></table></div>'+
         '<div class="resumo-exp-slot" style="display:none"></div>'+
       '</div>';
 
