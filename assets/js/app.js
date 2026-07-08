@@ -4915,19 +4915,68 @@
     return partes.join(' ');
   }
 
-  // Seção Críticas (migrada para o Resumo) — lista de alertas da IA, no padrão .resumo-mini
+  // Catálogo de críticas típicas do ERP (cada crítica é associada a um procedimento da guia)
+  var _CRITICAS_CATALOGO = [
+    'Solicitante não autorizado a solicitar procedimento',
+    'Operador enviou pra auditoria guia de prestador não autorizado a solicitar',
+    'Prestador não autorizado para executar o procedimento',
+    'Operador enviou pra auditoria guia de prestador não autorizado',
+    'Procedimento sujeito a diretriz de utilização (DUT) — verificar critérios',
+    'Quantidade solicitada acima do previsto para o procedimento',
+    'Procedimento fora do rol para a segmentação do plano',
+    'Carência não cumprida para o procedimento solicitado'
+  ];
+  // Gera as críticas da guia associadas a procedimentos (determinístico por guia).
+  // Retorna [{codigo, procedimento, critica}]
+  function criticasDaGuia(g, ia){
+    var procs = (g.procedimentos||[]);
+    // código do "lote/guia" no estilo ERP (determinístico)
+    var seed=0, st=''+g.numero; for(var i=0;i<st.length;i++){ seed=(seed*31+st.charCodeAt(i))|0; } seed=Math.abs(seed);
+    var codLote = '' + (20140000 + (seed%9000));
+    var out=[];
+    if(procs.length){
+      // associa 2 a 4 críticas ao(s) procedimento(s) da guia
+      var nCrit = 2 + (seed % 3);
+      for(var k=0;k<nCrit;k++){
+        var proc = procs[k % procs.length];
+        var critica = _CRITICAS_CATALOGO[(seed + k*3) % _CRITICAS_CATALOGO.length];
+        out.push({ codigo:codLote, procedimento:(proc.cod+' — '+proc.desc), critica:critica });
+      }
+    }
+    // acrescenta os alertas da IA (sem procedimento específico) como críticas gerais
+    (ia && ia.alertas ? ia.alertas : []).forEach(function(a){
+      out.push({ codigo:codLote, procedimento:'—', critica:a });
+    });
+    return out;
+  }
+
+  // Seção Críticas (migrada para o Resumo) — tabela Código · Procedimento · Crítica, no padrão .resumo-mini
   function renderCriticasSecao(g, ia){
-    var n=(ia.alertas||[]).length;
+    var crits = criticasDaGuia(g, ia);
+    var n = crits.length;
     var box=el('div',{class:'resumo-mini'});
-    var itens = n
-      ? '<ul class="ai-list" style="margin:0;padding:10px 12px">'+ia.alertas.map(function(a){return '<li>'+ico('triangle-alert')+' '+esc(a)+'</li>';}).join('')+'</ul>'
-      : '<div class="resumo-mini-empty">Nenhuma crítica relevante identificada.</div>';
+    var corpo;
+    if(n){
+      var linhas = crits.map(function(c){
+        return '<tr>'+
+          '<td class="rm-cod">'+esc(c.codigo)+'</td>'+
+          '<td class="crit-proc">'+esc(c.procedimento)+'</td>'+
+          '<td class="crit-txt">'+ico('triangle-alert',12)+' '+esc(c.critica)+'</td>'+
+        '</tr>';
+      }).join('');
+      corpo='<div class="resumo-mini-tbl"><table>'+
+        '<colgroup><col style="width:110px"><col style="width:280px"><col></colgroup>'+
+        '<thead><tr><th>Código</th><th>Procedimento</th><th>Crítica</th></tr></thead>'+
+        '<tbody>'+linhas+'</tbody></table></div>';
+    } else {
+      corpo='<div class="resumo-mini-empty">Nenhuma crítica relevante identificada.</div>';
+    }
     box.innerHTML=
       '<div class="panel" style="padding:0">'+
-        '<div class="resumo-mini-hd">'+ico('triangle-alert',13)+' CRÍTICAS'+
+        '<div class="resumo-mini-hd">'+ico('triangle-alert',13)+' CRÍTICAS DA GUIA'+
           '<span class="resumo-mini-cnt">'+n+'</span>'+
         '</div>'+
-        itens+
+        corpo+
       '</div>';
     return box;
   }
