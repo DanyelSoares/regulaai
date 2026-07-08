@@ -4800,7 +4800,7 @@
     $$('.tab',m).forEach(function(b){ b.onclick=function(){setTab(b.getAttribute('data-tab'))} });
     setTab(tab||'resumo');
 
-    // Atalhos da guia: F10 → Carências · F9 → Hist. atendimento (modais toggle) · F7 → aba Parecer Técnico
+    // Atalhos da guia (todos alternam abre/fecha, sem sair da aba atual): F7 → Parecer Técnico · F9 → Hist. atendimento · F10 → Carências
     function _guiaKeyHandler(ev){
       if(!m.isConnected){ document.removeEventListener('keydown',_guiaKeyHandler); return; } // guia fechada: limpa handler
       if(ev.key==='F10'){
@@ -4811,9 +4811,7 @@
         if(!fecharHistAtend()) showHistAtend(g); // se já aberto, F9 fecha; senão, abre
       } else if(ev.key==='F7'){
         ev.preventDefault();
-        // fecha eventuais modais abertos (carências/histórico) e vai para a aba Parecer Técnico
-        fecharCarencias(); fecharHistAtend();
-        setTab('ia');
+        if(!fecharParecer()) showParecer(g); // se já aberto, F7 fecha; senão, abre
       }
     }
     document.addEventListener('keydown',_guiaKeyHandler);
@@ -4946,6 +4944,29 @@
   }
   function fecharHistAtend(){
     var bd=document.querySelector('.modal-backdrop.histatend-modal-bd');
+    if(!bd) return false;
+    bd.remove();
+    if(!document.querySelector('.modal-backdrop')){ document.body.style.overflow=''; document.body.classList.remove('modal-aberto'); }
+    return true;
+  }
+
+  // Modal do Parecer Técnico (atalho F7) — reusa renderParecerIA(ia, g)
+  function showParecer(g){
+    var ben=g.beneficiario||{};
+    var ia=g._cache||(g._cache=AI.analisarGuiaComIA(g,{pesos:getFluxoPesos(g.fluxo&&g.fluxo.id)}));
+    var m=modal('Parecer Técnico — '+esc(ben.nome||''),
+      'Guia '+esc(g.numero)+' · '+esc(g.tipo)+(g.fluxo?' · Fluxo '+esc(g.fluxo.id):''),
+      '<div class="parecer-modal-slot"></div>', null);
+    var bd=m.closest('.modal-backdrop'); if(bd) bd.classList.add('parecer-modal-bd');
+    var slot=m.querySelector('.parecer-modal-slot');
+    if(slot) slot.replaceWith(renderParecerIA(ia, g));
+    var _esc=function(ev){ if(ev.key==='Escape'){ if(bd) bd.remove(); document.removeEventListener('keydown',_esc); if(!document.querySelector('.modal-backdrop')){ document.body.style.overflow=''; document.body.classList.remove('modal-aberto'); } } };
+    document.addEventListener('keydown',_esc);
+    lcIcons();
+    return m;
+  }
+  function fecharParecer(){
+    var bd=document.querySelector('.modal-backdrop.parecer-modal-bd');
     if(!bd) return false;
     bd.remove();
     if(!document.querySelector('.modal-backdrop')){ document.body.style.overflow=''; document.body.classList.remove('modal-aberto'); }
