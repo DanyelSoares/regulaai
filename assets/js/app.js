@@ -4921,16 +4921,18 @@
     var especTop=topKey(at,'espec');
     var prestTop=topKey(at,'prestador');
     var solicTop=topKey(at,'solicitante');
+    var cidTop=topKey(at,'hipotese');
     var negadas=at.filter(function(a){ return a.qtdAut===0; });
 
     var partes=[];
-    // 1) Perfil do beneficiário
-    partes.push('Beneficiário '+(b.nome||'')+(b.idade!=null?', '+b.idade+' anos':'')+', plano '+(b.plano||'—')+'.');
-    // 2) Volume e janela temporal (com citação de datas)
-    partes.push(at.length+' atendimento(s) nos últimos 24 meses ('+soData(maisAntigo.data)+' a '+soData(maisRecente.data)+').');
-    // 3) Linha de cuidado predominante (procedimento/especialidade + frequência)
+    // 1) Perfil + foco da análise (linha de cuidado correlata ao serviço da guia atual)
+    var foco = especTop.nome ? especTop.nome : (MOCK.especialidadeDaGuia?MOCK.especialidadeDaGuia(g):'');
+    partes.push('Beneficiário '+(b.nome||'')+(b.idade!=null?', '+b.idade+' anos':'')+'. Análise focada na linha de cuidado relacionada ao serviço solicitado'+(foco?' ('+foco+(cidTop.nome?', '+cidTop.nome:'')+')':'')+'.');
+    // 2) Volume e janela temporal (com citação de datas) — apenas atendimentos correlatos
+    partes.push(at.length+' atendimento(s) correlato(s) nos últimos 24 meses ('+soData(maisAntigo.data)+' a '+soData(maisRecente.data)+').');
+    // 3) Procedimento predominante da mesma linha + frequência
     if(procTop.nome){
-      partes.push('Predomínio de "'+procTop.nome+'"'+(especTop.nome?' ('+especTop.nome+')':'')+' — '+procTop.n+' ocorrência(s), indicando acompanhamento continuado.');
+      partes.push('Predomínio de "'+procTop.nome+'" — '+procTop.n+' ocorrência(s), indicando acompanhamento continuado na mesma linha de cuidado.');
     }
     // 4) Prestador e solicitante recorrentes (citação nominal)
     var ps=[];

@@ -510,21 +510,107 @@
 
   // ── Histórico de atendimentos do paciente (determinístico por beneficiário) ──
   // Gera atendimentos anteriores (sessões de terapia/consultas) no estilo do ERP, para a aba "Hist. atendimento".
-  var _HIST_PROCS = [
-    {cod:'50001084', desc:'ASSISTENTE TERAPEUTICO',                          espec:'ACOMPANHANTE TERAPEUTICO', valor:22.00},
-    {cod:'91000471', desc:'SESSAO DE PSICOPEDAGOGIA INDIVIDUAL',             espec:'PSICOPEDAGOGIA',          valor:27.50},
-    {cod:'50000470', desc:'SESSAO DE PSICOTERAPIA INDIVIDUAL POR PSICÓLOGO', espec:'PSICOLOGO EM GERAL',      valor:27.50},
-    {cod:'50001213', desc:'MUSICOTERAPIA - POR SESSÃO',                      espec:'MUSICOTERAPEUTA',         valor:35.20},
-    {cod:'50000330', desc:'SESSAO DE FONOAUDIOLOGIA INDIVIDUAL',             espec:'FONOAUDIOLOGIA',          valor:29.90},
-    {cod:'50000585', desc:'SESSAO DE TERAPIA OCUPACIONAL',                   espec:'TERAPIA OCUPACIONAL',     valor:31.40},
-    {cod:'10101012', desc:'CONSULTA MEDICA EM CONSULTORIO',                  espec:'CLINICA MEDICA',          valor:0.00}
-  ];
   var _HIST_PRESTADORES = ['ALANNA MONIQUE DE FREITAS COSTA DE JESUS','PATRICIA DE SOUZA SILVA CARNAUBA','QUITERIA MARIA TENORIO DE HOLANDA','FERNANDO SANTOS DE SOUZA','JOSEANE MARINHO DE ARAUJO'];
-  var _HIST_LOCAIS = ['MAIS SAUDE - UNIDADE DELMAN','MAIS SAUDE - UNIDADE CENTRO','CLINICA INTEGRAR REABILITAÇÃO'];
-  var _HIST_HIP = ['F84.0 - Autismo infantil','F84 - Transt globais do desenvolv','F80 - Transt esp desenvolv da fala/linguagem','F90 - Transt hipercineticos'];
-  var _HIST_OBS_IMP = ['Sessão realizada conforme plano terapêutico individual.','Atendimento dentro da periodicidade autorizada.','Evolução registrada em prontuário.'];
-  var _HIST_OBS_NI = ['Beneficiário em acompanhamento multidisciplinar contínuo.','Verificar periodicidade x autorização vigente.','Guia vinculada a plano terapêutico ativo.'];
+  var _HIST_LOCAIS = ['MAIS SAUDE - UNIDADE DELMAN','MAIS SAUDE - UNIDADE CENTRO','CLINICA INTEGRAR REABILITAÇÃO','HOSPITAL SANTA CASA','HOSPITAL DO CORAÇÃO'];
   var _HIST_FAT = ['Não faturada','Faturada','Não faturada','Em análise'];
+
+  // ── Linhas de cuidado: cada guia deriva sua linha; o histórico é gerado com procedimentos/CID CORRELATOS ──
+  // Assim, guia cardiológica → histórico cardiológico; ortopédica → ortopédico; etc.
+  var _LINHAS_CUIDADO = {
+    cardiologia: {
+      procs:[
+        {cod:'40803045', desc:'ECOCARDIOGRAMA TRANSTORACICO',            espec:'CARDIOLOGIA',        valor:180.00},
+        {cod:'40808012', desc:'HOLTER 24H',                              espec:'CARDIOLOGIA',        valor:150.00},
+        {cod:'40804025', desc:'TESTE ERGOMETRICO',                       espec:'CARDIOLOGIA',        valor:210.00},
+        {cod:'10101012', desc:'CONSULTA CARDIOLOGICA',                   espec:'CARDIOLOGIA',        valor:0.00},
+        {cod:'40803010', desc:'ELETROCARDIOGRAMA (ECG)',                 espec:'CARDIOLOGIA',        valor:45.00}
+      ],
+      cids:['I25 - Doença isquêmica crônica do coração','I20 - Angina pectoris','I10 - Hipertensão essencial','I48 - Fibrilação e flutter atrial'],
+      obsImp:['Avaliação cardiológica de rotina.','Acompanhamento de cardiopatia isquêmica.','Controle pressórico registrado em prontuário.'],
+      obsNi:['Paciente cardiopata em acompanhamento contínuo.','Verificar aderência à terapia anti-hipertensiva.','Investigação de dor torácica em andamento.']
+    },
+    ortopedia: {
+      procs:[
+        {cod:'40901114', desc:'RESSONANCIA MAGNETICA DE JOELHO',        espec:'ORTOPEDIA',          valor:520.00},
+        {cod:'30725224', desc:'INFILTRACAO ARTICULAR',                   espec:'ORTOPEDIA',          valor:160.00},
+        {cod:'20101015', desc:'SESSAO DE FISIOTERAPIA MOTORA',           espec:'FISIOTERAPIA',       valor:38.00},
+        {cod:'10101012', desc:'CONSULTA ORTOPEDICA',                     espec:'ORTOPEDIA',          valor:0.00},
+        {cod:'40901300', desc:'RX DE JOELHO/QUADRIL',                    espec:'ORTOPEDIA',          valor:70.00}
+      ],
+      cids:['M17 - Gonartrose (artrose do joelho)','M16 - Coxartrose (artrose do quadril)','M54 - Dorsalgia','M25 - Outros transtornos articulares'],
+      obsImp:['Avaliação ortopédica com queixa articular.','Tratamento conservador em curso.','Fisioterapia em andamento conforme prescrição.'],
+      obsNi:['Falha de tratamento conservador a ser documentada.','Verificar tempo de fisioterapia previamente realizado.','Correlação clínico-radiológica pendente.']
+    },
+    oncologia: {
+      procs:[
+        {cod:'30729050', desc:'SESSAO DE QUIMIOTERAPIA AMBULATORIAL',    espec:'ONCOLOGIA',          valor:1200.00},
+        {cod:'40311210', desc:'MARCADOR TUMORAL',                        espec:'ONCOLOGIA',          valor:95.00},
+        {cod:'40901327', desc:'TOMOGRAFIA PARA ESTADIAMENTO',            espec:'ONCOLOGIA',          valor:640.00},
+        {cod:'10101012', desc:'CONSULTA ONCOLOGICA',                     espec:'ONCOLOGIA',          valor:0.00}
+      ],
+      cids:['C50 - Neoplasia maligna da mama','C34 - Neoplasia maligna dos brônquios/pulmão','C18 - Neoplasia maligna do cólon','Z51 - Cuidado por quimioterapia'],
+      obsImp:['Ciclo de quimioterapia conforme protocolo.','Estadiamento registrado em prontuário.','Acompanhamento oncológico ativo.'],
+      obsNi:['Protocolo antineoplásico a validar com estadiamento.','Verificar linha de tratamento e ciclos prévios.','Laudo do oncologista anexado.']
+    },
+    gastro: {
+      procs:[
+        {cod:'41001214', desc:'ENDOSCOPIA DIGESTIVA ALTA',              espec:'GASTROENTEROLOGIA',  valor:320.00},
+        {cod:'41001230', desc:'COLONOSCOPIA',                            espec:'GASTROENTEROLOGIA',  valor:480.00},
+        {cod:'10101012', desc:'CONSULTA GASTROENTEROLOGICA',            espec:'GASTROENTEROLOGIA',  valor:0.00},
+        {cod:'40311260', desc:'PESQUISA DE H. PYLORI',                   espec:'GASTROENTEROLOGIA',  valor:60.00}
+      ],
+      cids:['K21 - Doença do refluxo gastroesofágico','K29 - Gastrite e duodenite','E66 - Obesidade','K25 - Úlcera gástrica'],
+      obsImp:['Investigação digestiva em curso.','Acompanhamento de doença péptica.','Preparo e realização de exame endoscópico.'],
+      obsNi:['Correlacionar sintomatologia digestiva.','Verificar critérios da DUT quando aplicável.','Resultado de exame prévio a anexar.']
+    },
+    neuro: {
+      procs:[
+        {cod:'40901114', desc:'RESSONANCIA MAGNETICA DE CRANIO',        espec:'NEUROLOGIA',         valor:680.00},
+        {cod:'40808020', desc:'ELETROENCEFALOGRAMA (EEG)',              espec:'NEUROLOGIA',         valor:140.00},
+        {cod:'10101012', desc:'CONSULTA NEUROLOGICA',                    espec:'NEUROLOGIA',         valor:0.00}
+      ],
+      cids:['G40 - Epilepsia','G43 - Enxaqueca','G20 - Doença de Parkinson','I63 - Infarto cerebral'],
+      obsImp:['Avaliação neurológica com sintomatologia.','Investigação de cefaleia/crise.','Acompanhamento neurológico ativo.'],
+      obsNi:['Correlação clínico-neurológica em andamento.','Verificar exames de imagem prévios.','Laudo neurológico anexado.']
+    },
+    terapias: {
+      procs:[
+        {cod:'50001084', desc:'ASSISTENTE TERAPEUTICO',                  espec:'ACOMPANHANTE TERAPEUTICO', valor:22.00},
+        {cod:'91000471', desc:'SESSAO DE PSICOPEDAGOGIA INDIVIDUAL',     espec:'PSICOPEDAGOGIA',          valor:27.50},
+        {cod:'50000470', desc:'SESSAO DE PSICOTERAPIA INDIVIDUAL',       espec:'PSICOLOGO EM GERAL',      valor:27.50},
+        {cod:'50001213', desc:'MUSICOTERAPIA - POR SESSÃO',             espec:'MUSICOTERAPEUTA',         valor:35.20},
+        {cod:'50000330', desc:'SESSAO DE FONOAUDIOLOGIA INDIVIDUAL',     espec:'FONOAUDIOLOGIA',          valor:29.90},
+        {cod:'50000585', desc:'SESSAO DE TERAPIA OCUPACIONAL',           espec:'TERAPIA OCUPACIONAL',     valor:31.40}
+      ],
+      cids:['F84.0 - Autismo infantil','F84 - Transt globais do desenvolv','F80 - Transt desenvolv da fala','F90 - Transt hipercinéticos'],
+      obsImp:['Sessão realizada conforme plano terapêutico individual.','Atendimento dentro da periodicidade autorizada.','Evolução registrada em prontuário.'],
+      obsNi:['Beneficiário em acompanhamento multidisciplinar contínuo.','Verificar periodicidade x autorização vigente.','Guia vinculada a plano terapêutico ativo.']
+    },
+    geral: {
+      procs:[
+        {cod:'10101012', desc:'CONSULTA MEDICA EM CONSULTORIO',          espec:'CLINICA MEDICA',     valor:0.00},
+        {cod:'40601161', desc:'HEMOGRAMA COMPLETO',                      espec:'CLINICA MEDICA',     valor:22.00},
+        {cod:'40601099', desc:'GLICEMIA DE JEJUM',                       espec:'CLINICA MEDICA',     valor:12.00},
+        {cod:'40901327', desc:'TOMOGRAFIA COMPUTADORIZADA',              espec:'RADIOLOGIA',         valor:600.00}
+      ],
+      cids:['Z00 - Exame médico geral','R10 - Dor abdominal','R51 - Cefaleia','E11 - Diabetes mellitus tipo 2'],
+      obsImp:['Atendimento clínico de rotina.','Exames de rotina/pré-operatórios.','Acompanhamento clínico ativo.'],
+      obsNi:['Avaliação clínica em andamento.','Verificar exames complementares.','Acompanhamento conforme protocolo.']
+    }
+  };
+  // Deriva a linha de cuidado da guia a partir dos procedimentos + especialidade + tipo.
+  function _linhaCuidadoDaGuia(g){
+    var txt=((g.procedimentos||[]).map(function(p){return p.desc;}).join(' ')+' '+
+             (g.pacotes||[]).map(function(p){return p.desc;}).join(' ')+' '+
+             (g.tipo||'')+' '+(ESPEC_MAP[g&&g.tipo]||'')).toLowerCase();
+    if(/cardio|angioplast|stent|cateter|coronari|ecocardio|hemodinâm|marcapasso/.test(txt)) return 'cardiologia';
+    if(/artroplast|ortoped|joelho|quadril|coluna|artrodese|prótese|fisioter/.test(txt))     return 'ortopedia';
+    if(/quimioter|oncolog|imunobiológico|neoplasia|tumor|pembroli|trastuz/.test(txt))       return 'oncologia';
+    if(/endoscop|colonoscop|gastro|bariátrica|gastroplastia|digest/.test(txt))               return 'gastro';
+    if(/neuro|crânio|cranio|ressonância.*crân|epilep|cerebr/.test(txt))                      return 'neuro';
+    if(/terapêutic|psicoped|psicoterap|musicoter|fonoaud|terapia ocupacional|autism|desenvolv/.test(txt)) return 'terapias';
+    return 'geral';
+  }
   // Retorna array de atendimentos { data, guia, qtdSolic, qtdAut, cod, procedimento, solicitante, prestador, local,
   //   espec, cid, diarias, valor, faturamento, itens:[...], obsImpressas, obsNaoImpressas:[...], hipotese }
   function historicoAtendimentos(g){
@@ -532,13 +618,16 @@
     var base = _mmSeed('hist'+(ben.id||g.numero));
     var qtd = 40 + (base % 41); // 40 a 80 atendimentos, espalhados por ~2 anos
     var solicitanteFixo = (g.solicitante && g.solicitante!=='—') ? g.solicitante : 'JORDANA ALYRANDRA FARIAS DE MELO';
+    // Linha de cuidado da guia atual → histórico CORRELATO (procedimentos/CID/observações da mesma linha)
+    var linha = _linhaCuidadoDaGuia(g);
+    var LC = _LINHAS_CUIDADO[linha] || _LINHAS_CUIDADO.geral;
     var out = [];
     // atendimentos partindo de hoje e recuando em passos variáveis (2 a 12 dias), cobrindo ~2 anos
     var acumDias = 0;
     var d0 = new Date();
     for(var i=0;i<qtd;i++){
       var s = _mmSeed('hist'+(ben.id||g.numero)+'#'+i);
-      var proc = _HIST_PROCS[s % _HIST_PROCS.length];
+      var proc = LC.procs[s % LC.procs.length];
       var passo = 2 + (s % 11); // dias entre atendimentos (variável)
       acumDias += (i===0 ? 0 : passo);
       var dt = new Date(d0.getTime() - acumDias*86400000 - (s%12)*3600000 - (s%50)*60000);
@@ -546,20 +635,20 @@
       var numGuia = 14649711 - i; // sequência decrescente, estilo ERP
       var prestador = _HIST_PRESTADORES[s % _HIST_PRESTADORES.length];
       var local = _HIST_LOCAIS[s % _HIST_LOCAIS.length];
-      var cid = _HIST_HIP[s % _HIST_HIP.length];
-      var cidCod = cid.split(' - ')[0].replace('.','').slice(0,4); // "F840"
+      var cid = LC.cids[s % LC.cids.length];
+      var cidCod = cid.split(' - ')[0].replace('.','').slice(0,4);
       var qSol = 1, qAut = (s%9===0)?0:1; // ocasionalmente não autorizada
       var fat = _HIST_FAT[s % _HIST_FAT.length];
       out.push({
         data:dataFmt, dataObj:dt, guia:String(numGuia), qtdSolic:qSol, qtdAut:qAut,
         cod:proc.cod, procedimento:proc.desc, solicitante:solicitanteFixo,
-        prestador:prestador, local:local, espec:proc.espec, cid:cidCod,
+        prestador:prestador, local:local, espec:proc.espec, cid:cidCod, linhaCuidado:linha,
         diarias:0, valor:proc.valor, faturamento:fat,
         itens:[{tipo:'Procedimento', cod:proc.cod, desc:proc.desc, qtdSolic:qSol, qtdAut:qAut, procJuridico:'—'}],
-        obsImpressas:_HIST_OBS_IMP[s % _HIST_OBS_IMP.length],
+        obsImpressas:LC.obsImp[s % LC.obsImp.length],
         obsNaoImpressas:[{
           data:dataFmt, operador:prestador.split(' ')[0]+' '+(prestador.split(' ')[1]||''),
-          podeInformar:(s%3===0)?'Sim':'Não', texto:_HIST_OBS_NI[s % _HIST_OBS_NI.length]
+          podeInformar:(s%3===0)?'Sim':'Não', texto:LC.obsNi[s % LC.obsNi.length]
         }],
         hipotese:cid, atual:(i===0)
       });
