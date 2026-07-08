@@ -4645,7 +4645,7 @@
     var TABS_DEF=[
       {id:'resumo',        label:'Resumo',           ico:'layout-dashboard', grp:0},
       {id:'ia',            label:'Parecer Técnico',   ico:'bot',              grp:3},
-      {id:'histatend',     label:'Hist. atendimento', ico:'history',          grp:3},
+      {id:'histatend',     label:'Hist. atendimento', ico:'history',          grp:3, tip:'Atalho: F9'},
       {id:'obsimp',        label:'Obs. Impressas',    ico:'printer',          grp:4},
       {id:'obsnaoimp',     label:'Obs. Não Impressas',ico:'eye-off',          grp:4},
       {id:'operadora',     label:'Parecer Operadora', ico:'file-check-2',     grp:5},
@@ -4658,7 +4658,7 @@
     TABS_DEF.forEach(function(t){
       if(t.grp!==lastGrp&&lastGrp!==-1) tabsHtml+='<span class="tab-sep"></span>';
       lastGrp=t.grp;
-      tabsHtml+='<button class="tab" data-tab="'+t.id+'">'+t.label+'</button>';
+      tabsHtml+='<button class="tab" data-tab="'+t.id+'"'+(t.tip?' title="'+esc(t.tip)+'"':'')+'>'+t.label+'</button>';
     });
     tabsHtml+='</div><div id="tabContent"></div>';
     var foot='<button class="btn ghost" id="reIA">'+ico('refresh-cw')+' Reprocessar</button>'+(can('parecer')?'<button class="btn-animated" id="abrirPar">'+ico('file-pen-line')+' Parecer da Operadora</button>':'');
