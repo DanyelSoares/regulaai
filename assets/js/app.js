@@ -5140,6 +5140,15 @@
     }
 
     function moneyBR(v){ return v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+    function isoToDate(iso){ if(!iso) return null; var p=iso.split('-'); return new Date(+p[0], +p[1]-1, +p[2]); }
+
+    // ── Filtro de período (padrão: últimos 180 dias) + busca ──
+    var hoje=new Date();
+    var d180=new Date(hoje.getTime()-180*86400000);
+    function _iso(d){ var mm=d.getMonth()+1, dd=d.getDate(); return d.getFullYear()+'-'+(mm<10?'0':'')+mm+'-'+(dd<10?'0':'')+dd; }
+    var _periodoDe=_iso(d180), _periodoAte=_iso(hoje); // ISO yyyy-mm-dd
+    var _busca='';
+    var histView=hist.slice();
 
     // ── Tabela superior (histórico) ──
     var thead='<tr>'+
@@ -5148,9 +5157,9 @@
       '<th>Local de atendimento</th><th>Especialidade</th><th>CID</th><th class="cc">Diárias</th>'+
       '<th class="cc">Valor (R$)</th><th>Faturamento</th>'+
     '</tr>';
-    var linhas=hist.map(function(a,idx){
+    function linhaHtml(a,idx,selecionado){
       var fatCls = a.faturamento==='Faturada'?'fat-ok':(a.faturamento==='Em análise'?'fat-ana':'fat-nao');
-      return '<tr data-hist="'+idx+'"'+(idx===0?' class="sel"':'')+'>'+
+      return '<tr data-hist="'+idx+'"'+(selecionado?' class="sel"':'')+'>'+
         '<td class="nw">'+esc(a.data)+'</td>'+
         '<td class="nw"><b>'+esc(a.guia)+'</b>'+(a.atual?' <span class="badge info" style="font-size:9px">atual</span>':'')+'</td>'+
         '<td class="cc">'+a.qtdSolic+'</td>'+
@@ -5166,13 +5175,64 @@
         '<td class="cc">'+moneyBR(a.valor)+'</td>'+
         '<td class="nw"><span class="hist-fat '+fatCls+'">'+esc(a.faturamento)+'</span></td>'+
       '</tr>';
-    }).join('');
+    }
     var tabelaTop=el('div',{class:'hist-top'});
     tabelaTop.innerHTML=
       '<div class="hist-top-hd">'+ico('history',13)+' HISTÓRICO DE ATENDIMENTOS'+
-        '<span class="resumo-mini-cnt">'+hist.length+'</span></div>'+
-      '<div class="hist-top-tbl"><table><thead>'+thead+'</thead><tbody>'+linhas+'</tbody></table></div>';
+        '<span class="resumo-mini-cnt" id="histCnt">'+hist.length+'</span></div>'+
+      '<div class="hist-filtros">'+
+        '<div class="hist-filtro-periodo" id="histPeriodoSlot"></div>'+
+        '<div class="hist-busca-wrap">'+ico('search',13)+
+          '<input type="text" id="histBusca" placeholder="Buscar por código, procedimento, solicitante, especialidade, prestador...">'+
+          '<button class="hist-busca-clear" id="histBuscaClear" title="Limpar" style="display:none">'+ico('x',12)+'</button>'+
+        '</div>'+
+        '<div class="hist-filtro-info" id="histFiltroInfo"></div>'+
+      '</div>'+
+      '<div class="hist-top-tbl"><table><thead>'+thead+'</thead><tbody id="histTbody"></tbody></table></div>';
     wrap.appendChild(tabelaTop);
+
+    var _tbody=tabelaTop.querySelector('#histTbody');
+    var _cnt=tabelaTop.querySelector('#histCnt');
+    var _info=tabelaTop.querySelector('#histFiltroInfo');
+
+    function aplicarFiltro(){
+      var de=isoToDate(_periodoDe), ate=isoToDate(_periodoAte);
+      if(ate) ate=new Date(ate.getTime()+86399000); // inclui o dia inteiro do "até"
+      var q=_busca.trim().toLowerCase();
+      histView=hist.filter(function(a){
+        if(de && a.dataObj < de) return false;
+        if(ate && a.dataObj > ate) return false;
+        if(q){
+          var alvo=(a.cod+' '+a.procedimento+' '+a.solicitante+' '+a.espec+' '+a.prestador+' '+a.local+' '+a.cid+' '+a.guia+' '+a.faturamento).toLowerCase();
+          if(alvo.indexOf(q)<0) return false;
+        }
+        return true;
+      });
+      // reset seleção para o primeiro da lista filtrada
+      selIdx = histView.length ? 0 : -1;
+      _tbody.innerHTML = histView.length
+        ? histView.map(function(a,i){ return linhaHtml(a,i,i===0); }).join('')
+        : '<tr><td colspan="14" class="hist-erp-empty" style="text-align:center;color:var(--muted);padding:16px">Nenhum atendimento no período/critério informado.</td></tr>';
+      _cnt.textContent=histView.length;
+      var periodoTxt;
+      if(_periodoDe){
+        var deBr=_periodoDe.split('-').reverse().join('/'), ateBr=(_periodoAte||'').split('-').reverse().join('/');
+        periodoTxt='<b>'+deBr+'</b> a <b>'+ateBr+'</b>';
+      } else {
+        periodoTxt='<b>todos os períodos</b>';
+      }
+      _info.innerHTML=ico('calendar',11)+' Período: '+periodoTxt+' · <b>'+histView.length+'</b> de '+hist.length+' atendimento'+(hist.length===1?'':'s');
+      // religar cliques de seleção
+      _tbody.querySelectorAll('tr[data-hist]').forEach(function(tr){
+        tr.onclick=function(){
+          _tbody.querySelectorAll('tr[data-hist]').forEach(function(x){x.classList.remove('sel')});
+          tr.classList.add('sel');
+          selIdx=+tr.getAttribute('data-hist');
+          paint();
+        };
+      });
+      paint();
+    }
 
     // ── Abas inferiores ──
     var SUBTABS=[
@@ -5259,20 +5319,12 @@
       return '';
     }
     function paint(){
-      var a=hist[selIdx];
-      subContent.innerHTML=renderSub(curSub, a);
+      var a = (selIdx>=0 && histView[selIdx]) ? histView[selIdx] : null;
+      subContent.innerHTML = a ? renderSub(curSub, a)
+        : '<div class="hist-sub-ph"><div class="ico">'+icoLg('search-x')+'</div><b>Nenhum atendimento selecionado</b><div class="mut" style="margin-top:6px">Ajuste o período ou a busca para ver os detalhes.</div></div>';
       lcIcons();
     }
 
-    // seleção de linha na tabela superior
-    tabelaTop.querySelectorAll('tr[data-hist]').forEach(function(tr){
-      tr.onclick=function(){
-        tabelaTop.querySelectorAll('tr[data-hist]').forEach(function(x){x.classList.remove('sel')});
-        tr.classList.add('sel');
-        selIdx=+tr.getAttribute('data-hist');
-        paint();
-      };
-    });
     // troca de sub-aba
     bottom.querySelectorAll('.hist-subtab').forEach(function(b){
       b.onclick=function(){
@@ -5282,7 +5334,28 @@
         paint();
       };
     });
-    paint();
+
+    // Filtro de período (date range) — reusa makeDateRangePicker; padrão últimos 180 dias
+    var _perSlot=tabelaTop.querySelector('#histPeriodoSlot');
+    makeDateRangePicker(_perSlot, _periodoDe, _periodoAte, function(de,ate){
+      // limpar o período (de/ate vazios) → mostra todo o histórico
+      _periodoDe = de || ''; _periodoAte = ate || (de ? _iso(hoje) : '');
+      aplicarFiltro();
+    }, {label:'Período', placeholder:'Todos os períodos'});
+
+    // Campo de busca (debounce leve)
+    var _inpBusca=tabelaTop.querySelector('#histBusca');
+    var _btnClear=tabelaTop.querySelector('#histBuscaClear');
+    var _buscaTimer=null;
+    _inpBusca.oninput=function(){
+      _busca=this.value;
+      _btnClear.style.display=_busca?'flex':'none';
+      clearTimeout(_buscaTimer);
+      _buscaTimer=setTimeout(aplicarFiltro, 180);
+    };
+    _btnClear.onclick=function(){ _inpBusca.value=''; _busca=''; _btnClear.style.display='none'; aplicarFiltro(); _inpBusca.focus(); };
+
+    aplicarFiltro(); // render inicial (últimos 180 dias)
     return wrap;
   }
 

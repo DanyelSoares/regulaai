@@ -530,15 +530,18 @@
   function historicoAtendimentos(g){
     var ben = g.beneficiario||{};
     var base = _mmSeed('hist'+(ben.id||g.numero));
-    var qtd = 8 + (base % 11); // 8 a 18 atendimentos
+    var qtd = 40 + (base % 41); // 40 a 80 atendimentos, espalhados por ~2 anos
     var solicitanteFixo = (g.solicitante && g.solicitante!=='—') ? g.solicitante : 'JORDANA ALYRANDRA FARIAS DE MELO';
     var out = [];
-    // data inicial ~ hoje, recuando alguns dias por atendimento
+    // atendimentos partindo de hoje e recuando em passos variáveis (2 a 12 dias), cobrindo ~2 anos
+    var acumDias = 0;
     var d0 = new Date();
     for(var i=0;i<qtd;i++){
       var s = _mmSeed('hist'+(ben.id||g.numero)+'#'+i);
       var proc = _HIST_PROCS[s % _HIST_PROCS.length];
-      var dt = new Date(d0.getTime() - i*86400000 - (s%12)*3600000);
+      var passo = 2 + (s % 11); // dias entre atendimentos (variável)
+      acumDias += (i===0 ? 0 : passo);
+      var dt = new Date(d0.getTime() - acumDias*86400000 - (s%12)*3600000 - (s%50)*60000);
       var dataFmt = _fmtDataHora(dt);
       var numGuia = 14649711 - i; // sequência decrescente, estilo ERP
       var prestador = _HIST_PRESTADORES[s % _HIST_PRESTADORES.length];
@@ -548,7 +551,7 @@
       var qSol = 1, qAut = (s%9===0)?0:1; // ocasionalmente não autorizada
       var fat = _HIST_FAT[s % _HIST_FAT.length];
       out.push({
-        data:dataFmt, guia:String(numGuia), qtdSolic:qSol, qtdAut:qAut,
+        data:dataFmt, dataObj:dt, guia:String(numGuia), qtdSolic:qSol, qtdAut:qAut,
         cod:proc.cod, procedimento:proc.desc, solicitante:solicitanteFixo,
         prestador:prestador, local:local, espec:proc.espec, cid:cidCod,
         diarias:0, valor:proc.valor, faturamento:fat,
