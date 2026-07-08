@@ -4769,7 +4769,7 @@
     var ia=g._cache;
     var TABS_DEF=[
       {id:'resumo',        label:'Resumo',           ico:'layout-dashboard', grp:0},
-      {id:'ia',            label:'Parecer Técnico',   ico:'bot',              grp:3},
+      {id:'ia',            label:'Parecer Técnico',   ico:'bot',              grp:3, tip:'Atalho: F7'},
       {id:'carencias',     label:'Carências',         ico:'calendar-clock',   grp:3, tip:'Atalho: F10'},
       {id:'histatend',     label:'Hist. atendimento', ico:'history',          grp:3, tip:'Atalho: F9'},
       {id:'obsimp',        label:'Obs. Impressas',    ico:'printer',          grp:4},
@@ -4800,7 +4800,7 @@
     $$('.tab',m).forEach(function(b){ b.onclick=function(){setTab(b.getAttribute('data-tab'))} });
     setTab(tab||'resumo');
 
-    // Atalhos da guia: F10 → Carências · F9 → Hist. atendimento (ambos alternam abre/fecha, sem sair da aba atual)
+    // Atalhos da guia: F10 → Carências · F9 → Hist. atendimento (modais toggle) · F7 → aba Parecer Técnico
     function _guiaKeyHandler(ev){
       if(!m.isConnected){ document.removeEventListener('keydown',_guiaKeyHandler); return; } // guia fechada: limpa handler
       if(ev.key==='F10'){
@@ -4809,6 +4809,11 @@
       } else if(ev.key==='F9'){
         ev.preventDefault();
         if(!fecharHistAtend()) showHistAtend(g); // se já aberto, F9 fecha; senão, abre
+      } else if(ev.key==='F7'){
+        ev.preventDefault();
+        // fecha eventuais modais abertos (carências/histórico) e vai para a aba Parecer Técnico
+        fecharCarencias(); fecharHistAtend();
+        setTab('ia');
       }
     }
     document.addEventListener('keydown',_guiaKeyHandler);
