@@ -806,8 +806,8 @@ body.sidebar-collapsed .modal-backdrop{left:66px}
 .resumo-mini-empty{padding:8px 12px;font-size:12px;color:var(--muted);text-align:center}
 .resumo-mini-tbl{max-height:220px;overflow-y:auto}
 .resumo-mini-tbl table{width:100%;border-collapse:collapse;font-size:12.5px;table-layout:fixed}
-.resumo-mini-tbl th{position:sticky;top:0;background:#fff;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.3px;color:var(--g-500);font-weight:700;padding:7px 12px;border-bottom:1px solid var(--g-100);overflow:hidden;text-overflow:ellipsis}
-.resumo-mini-tbl td{padding:7px 12px;border-bottom:1px solid var(--g-50);vertical-align:top;overflow:hidden;text-overflow:ellipsis}
+.resumo-mini-tbl th{position:sticky;top:0;background:#fff;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.3px;color:var(--g-500);font-weight:700;padding:7px 18px;border-bottom:1px solid var(--g-100);overflow:hidden;text-overflow:ellipsis}
+.resumo-mini-tbl td{padding:7px 18px;border-bottom:1px solid var(--g-50);vertical-align:top;overflow:hidden;text-overflow:ellipsis}
 .resumo-mini-tbl tr:last-child td{border-bottom:none}
 .resumo-mini-tbl .rm-cod{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;color:var(--ink-1);white-space:nowrap}
 .resumo-mini-tbl .rm-peso{text-align:left;font-weight:700;color:var(--g-600);white-space:nowrap}
