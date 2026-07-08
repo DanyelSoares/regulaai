@@ -4736,7 +4736,8 @@
       return '<div class="resumo-mini"><div class="panel" style="padding:0">'+head+'<div class="resumo-mini-empty">Sem itens vinculados</div></div></div>';
     }
     var thead, linhas, cols;
-    // colgroup fixo: garante que colunas de mesmo nome caiam na MESMA posição horizontal entre os cartões
+    // colgroup fixo: garante que colunas de mesmo nome caiam na MESMA posição horizontal entre os cartões.
+    // Bloco de texto (colunas antes de Qtde Solic.) soma sempre a mesma largura total (420px) em todas as mini-tabelas.
     var COL_COD='<col style="width:100px">', COL_NUM='<col style="width:100px">';
     if(opts.tipo==='diarias'){
       cols='<colgroup>'+COL_COD+'<col>'+COL_NUM+COL_NUM+COL_NUM+COL_NUM+'</colgroup>';
@@ -4873,22 +4874,24 @@
       return box;
     }
 
-    // Tabela RESUMIDA — colgroup fixo alinha Qtde Solic./Qtde/Tabela na mesma largura das demais mini-tabelas
+    // Tabela RESUMIDA — colgroup fixo alinha Qtde Solic./Qtde/Tabela/Peso na mesma posição das demais mini-tabelas.
+    // A soma das larguras fixas (tudo exceto a coluna de descrição, que é flexível) é igual em TODAS as
+    // mini-tabelas do Resumo (Procedimentos/Diárias/Mat-Med/OPME), garantindo alinhamento independente da ordem das colunas.
     var COL_NUM='<col style="width:100px">';
     var thead, linhas, cols;
     if(tipo==='matmed'){
-      cols='<colgroup><col><col style="width:130px"><col style="width:110px">'+COL_NUM+COL_NUM+COL_NUM+'</colgroup>';
-      thead='<tr><th>Descrição específica</th><th>Unidade</th><th>Via</th><th class="rm-c">Qtde Solic.</th><th class="rm-c">Qtde</th><th class="rm-c">Tabela</th></tr>';
+      cols='<colgroup><col><col style="width:50px"><col style="width:50px">'+COL_NUM+COL_NUM+COL_NUM+COL_NUM+'</colgroup>';
+      thead='<tr><th>Descrição específica</th><th>Unidade</th><th>Via</th><th class="rm-c">Qtde Solic.</th><th class="rm-c">Qtde</th><th class="rm-c">Tabela</th><th class="rm-c">Peso</th></tr>';
       linhas=itens.map(function(m){ var x=MOCK.matmedDetalhe?MOCK.matmedDetalhe(m):{};
         var tabelaFmt = x.vlrTabela!=null ? 'R$ '+x.vlrTabela.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—';
-        return '<tr><td>'+esc(x.descEspecifica||m.desc)+'</td><td>'+esc(x.unidade||'—')+'</td><td>'+esc(x.via||'—')+'</td><td class="rm-c">'+(x.qtdeSolic!=null?x.qtdeSolic:'—')+'</td><td class="rm-c">'+(x.qtde!=null?x.qtde:'—')+'</td><td class="rm-c">'+tabelaFmt+'</td></tr>';
+        return '<tr><td>'+esc(x.descEspecifica||m.desc)+'</td><td>'+esc(x.unidade||'—')+'</td><td>'+esc(x.via||'—')+'</td><td class="rm-c">'+(x.qtdeSolic!=null?x.qtdeSolic:'—')+'</td><td class="rm-c">'+(x.qtde!=null?x.qtde:'—')+'</td><td class="rm-c">'+tabelaFmt+'</td><td class="rm-c">&nbsp;</td></tr>';
       }).join('');
     } else {
-      cols='<colgroup><col style="width:100px"><col>'+COL_NUM+COL_NUM+COL_NUM+'</colgroup>';
-      thead='<tr><th>Código solicitado</th><th>Produto solicitado</th><th class="rm-c">Qtde Solic.</th><th class="rm-c">Qtde</th><th class="rm-c">Tabela</th></tr>';
+      cols='<colgroup><col style="width:100px"><col>'+COL_NUM+COL_NUM+COL_NUM+COL_NUM+'</colgroup>';
+      thead='<tr><th>Código solicitado</th><th>Produto solicitado</th><th class="rm-c">Qtde Solic.</th><th class="rm-c">Qtde</th><th class="rm-c">Tabela</th><th class="rm-c">Peso</th></tr>';
       linhas=itens.map(function(m){ var x=MOCK.opmeDetalhe?MOCK.opmeDetalhe(m):{};
         var tabelaFmt = x.vlrUnTabela!=null ? 'R$ '+x.vlrUnTabela.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—';
-        return '<tr><td class="rm-cod">'+esc(x.codSolic||m.cod)+'</td><td>'+esc(x.produtoSolic||m.desc)+'</td><td class="rm-c">'+(x.qtde!=null?x.qtde:'—')+'</td><td class="rm-c">'+(x.qtdeAuto!=null?x.qtdeAuto:(x.qtde!=null?x.qtde:'—'))+'</td><td class="rm-c">'+tabelaFmt+'</td></tr>';
+        return '<tr><td class="rm-cod">'+esc(x.codSolic||m.cod)+'</td><td>'+esc(x.produtoSolic||m.desc)+'</td><td class="rm-c">'+(x.qtde!=null?x.qtde:'—')+'</td><td class="rm-c">'+(x.qtdeAuto!=null?x.qtdeAuto:(x.qtde!=null?x.qtde:'—'))+'</td><td class="rm-c">'+tabelaFmt+'</td><td class="rm-c">&nbsp;</td></tr>';
       }).join('');
     }
 
