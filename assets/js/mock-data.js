@@ -334,6 +334,20 @@
     };
   }
 
+  // ── Detalhamento de item Procedimento (Qtde Solic./Qtde/Tabela), determinístico por código ──
+  function procDetalhe(p){
+    var s = _mmSeed(p.cod);
+    var qtdeSolic = 1 + s%3;
+    var glosaQtd = (s%6===0) ? 1 : 0; // às vezes autoriza menos do que solicitado
+    var qtde = Math.max(1, qtdeSolic - glosaQtd);
+    var vlrTabela = +((80 + s%920) + (s%100)/100).toFixed(2);
+    return {
+      cod:p.cod, desc:p.desc,
+      qtdeSolic:qtdeSolic, qtde:qtde,
+      vlrTabela:vlrTabela
+    };
+  }
+
   // ── Detalhamento de item OPME (campos próprios, estilo Solus) ──
   var FORNECEDORES_OPME = ['MedSupply Distribuidora','OrtoTech Brasil','CardioMed Implantes','BioImplante Ltda','Global OPME','Nordeste Materiais Médicos','Prime Health Supply'];
   var _MARCAS = ['Biomet','Zimmer','Stryker','Medtronic','Johnson & Johnson','Smith & Nephew','B.Braun'];
@@ -501,7 +515,7 @@
     PRESTADORES:PRESTADORES, BENEFICIARIOS:BENEFICIARIOS, USUARIOS:USUARIOS,
     STATUS:STATUS, ORIGENS:ORIGENS, CATEGORIAS_ANEXO:CATEGORIAS_ANEXO,
     MOTIVOS_COMP:MOTIVOS_COMP, MOTIVOS_REPR:MOTIVOS_REPR, MOTIVOS_RESS:MOTIVOS_RESS,
-    LOGS:LOGS, buildGuias: hydrate, matmedDetalhe: matmedDetalhe, opmeDetalhe: opmeDetalhe, observacoesGuia: observacoesGuia,
+    LOGS:LOGS, buildGuias: hydrate, matmedDetalhe: matmedDetalhe, opmeDetalhe: opmeDetalhe, procDetalhe: procDetalhe, observacoesGuia: observacoesGuia,
     calcIdade: calcIdade, anosContrato: anosContrato, cidGuia: cidGuia,
     naturezaDaGuia: naturezaDaGuia, naturezaDetalhada: naturezaDetalhada, SUB_INTERNACAO: SUB_INTERNACAO,
     naturezaSelectHTML: naturezaSelectHTML

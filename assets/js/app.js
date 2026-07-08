@@ -4733,6 +4733,14 @@
         var q=(p.qtd!=null?p.qtd:_qtdDiaria(p.cod));
         return '<tr><td class="rm-cod">'+esc(p.cod)+'</td><td>'+esc(p.desc)+'</td><td class="rm-qtd">'+q+'</td><td class="rm-peso">'+(p.peso!=null?p.peso:'—')+'</td></tr>';
       }).join('');
+    } else if(opts.tipo==='procedimentos'){
+      thead='<tr><th>Código</th><th>Descrição</th><th class="rm-c">Qtde Solic.</th><th class="rm-c">Qtde</th><th class="rm-c">Tabela</th><th class="rm-c">Peso</th></tr>';
+      linhas = arr.map(function(p){
+        var x=MOCK.procDetalhe?MOCK.procDetalhe(p):{};
+        var fl=''; if(p.dut) fl+=' <span class="badge warn">DUT</span>';
+        var tabelaFmt = x.vlrTabela!=null ? 'R$ '+x.vlrTabela.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—';
+        return '<tr><td class="rm-cod">'+esc(p.cod)+'</td><td>'+esc(p.desc)+fl+'</td><td class="rm-c">'+(x.qtdeSolic!=null?x.qtdeSolic:'—')+'</td><td class="rm-c">'+(x.qtde!=null?x.qtde:'—')+'</td><td class="rm-c">'+tabelaFmt+'</td><td class="rm-peso">'+(p.peso!=null?p.peso:'—')+'</td></tr>';
+      }).join('');
     } else {
       thead='<tr><th>Código</th><th>Descrição</th><th>Peso</th><th>Flags</th></tr>';
       linhas = arr.map(function(p){
@@ -4961,7 +4969,7 @@
           }).join('')+
         '</div>'+
         '<div class="resumo-mini-stack">'+
-          resumoMiniTabela('Procedimentos','stethoscope',g.procedimentos)+
+          resumoMiniTabela('Procedimentos','stethoscope',g.procedimentos,{tipo:'procedimentos'})+
           resumoMiniTabela('Pacotes','package',g.pacotes)+
           resumoMiniTabela('Diárias/Taxas','calendar-days',g.diariasTaxas,{tipo:'diarias'})+
           '<div class="resumo-matmed-slot"></div>'+
