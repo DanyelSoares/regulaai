@@ -4897,24 +4897,54 @@
     return box;
   }
 
-  // Gera o histórico clínico do cliente (simulado pela IA, determinístico por guia/beneficiário)
+  // Gera o histórico clínico do cliente analisando os DADOS REAIS do "Hist. atendimento" (últimos 24 meses).
+  // Texto conciso, com citações concretas (guias, datas, prestador, solicitante) que evitem consultar o histórico.
   function histGeradoIA(g){
     var b=g.beneficiario||{};
-    function h(s){ var x=0,st=''+s; for(var i=0;i<st.length;i++){x=(x*31+st.charCodeAt(i))|0;} return Math.abs(x); }
-    var seed=h(g.numero+'|'+(b.id||''));
-    var nAt=2+(seed%5);                                  // 2 a 6 atendimentos
-    var meses=6+(seed%18);                               // última internação há 6-24 meses
-    var esp=MOCK.especialidadeDaGuia?MOCK.especialidadeDaGuia(g):'—';
-    var reincid=(seed%3===0);
-    var acomp=(seed%2===0)?'em acompanhamento ambulatorial regular':'sem acompanhamento contínuo registrado';
+    var hist=(MOCK.historicoAtendimentos?MOCK.historicoAtendimentos(g):[]);
+    // filtra os últimos 24 meses
+    var lim=new Date(Date.now()-730*86400000);
+    var at=hist.filter(function(a){ return a.dataObj && a.dataObj>=lim; });
+    if(!at.length){
+      return 'Beneficiário '+(b.nome||'')+(b.idade!=null?', '+b.idade+' anos':'')+', plano '+(b.plano||'—')+'. '+
+        'Sem atendimentos registrados nos últimos 24 meses.';
+    }
+    // helpers de agregação
+    function topKey(arr, key){
+      var c={}; arr.forEach(function(a){ var v=a[key]; if(v) c[v]=(c[v]||0)+1; });
+      var best=null,bn=0; for(var k in c){ if(c[k]>bn){bn=c[k];best=k;} }
+      return {nome:best, n:bn};
+    }
+    function soData(dh){ return (dh||'').split(' ')[0]; } // "dd/mm/aaaa hh:mm" -> "dd/mm/aaaa"
+    var maisRecente=at[0], maisAntigo=at[at.length-1];
+    var procTop=topKey(at,'procedimento');
+    var especTop=topKey(at,'espec');
+    var prestTop=topKey(at,'prestador');
+    var solicTop=topKey(at,'solicitante');
+    var negadas=at.filter(function(a){ return a.qtdAut===0; });
+
     var partes=[];
-    partes.push('Beneficiário '+(b.nome||'')+', '+(b.idade!=null?b.idade+' anos, ':'')+'plano '+(b.plano||'—')+', acomodação '+(b.acomodacao||'—')+'.');
-    partes.push('Possui '+nAt+' atendimento(s) registrado(s) nos últimos 24 meses, '+acomp+'.');
-    partes.push('Última internação relevante há aproximadamente '+meses+' meses. Especialidade predominante das solicitações: '+esp+'.');
-    partes.push(reincid
-      ? 'Observa-se recorrência de solicitações na mesma linha de cuidado — recomenda-se atenção a possível reincidência/uso continuado.'
-      : 'Sem reincidências críticas identificadas no período analisado.');
-    if(g.uti) partes.push('Histórico com passagem por UTI — perfil de maior complexidade assistencial.');
+    // 1) Perfil do beneficiário
+    partes.push('Beneficiário '+(b.nome||'')+(b.idade!=null?', '+b.idade+' anos':'')+', plano '+(b.plano||'—')+'.');
+    // 2) Volume e janela temporal (com citação de datas)
+    partes.push(at.length+' atendimento(s) nos últimos 24 meses ('+soData(maisAntigo.data)+' a '+soData(maisRecente.data)+').');
+    // 3) Linha de cuidado predominante (procedimento/especialidade + frequência)
+    if(procTop.nome){
+      partes.push('Predomínio de "'+procTop.nome+'"'+(especTop.nome?' ('+especTop.nome+')':'')+' — '+procTop.n+' ocorrência(s), indicando acompanhamento continuado.');
+    }
+    // 4) Prestador e solicitante recorrentes (citação nominal)
+    var ps=[];
+    if(prestTop.nome) ps.push('executante recorrente '+prestTop.nome+' ('+prestTop.n+'x)');
+    if(solicTop.nome) ps.push('solicitante '+solicTop.nome);
+    if(ps.length) partes.push('Concentração em '+ps.join(' e ')+'.');
+    // 5) Negativas/glosas — cita guia e data do caso mais recente
+    if(negadas.length){
+      var ex=negadas[0];
+      partes.push(negadas.length+' atendimento(s) com quantidade não autorizada; ex.: guia '+ex.guia+' em '+soData(ex.data)+' ('+ex.procedimento+').');
+    }
+    // 6) Último atendimento (âncora recente para o auditor)
+    partes.push('Último registro: guia '+maisRecente.guia+' em '+soData(maisRecente.data)+' — '+maisRecente.procedimento+' (executante '+maisRecente.prestador+').');
+    if(g.uti) partes.push('Guia atual com passagem por UTI — maior complexidade assistencial.');
     return partes.join(' ');
   }
 
