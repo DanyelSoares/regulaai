@@ -4674,12 +4674,15 @@
     $$('.tab',m).forEach(function(b){ b.onclick=function(){setTab(b.getAttribute('data-tab'))} });
     setTab(tab||'resumo');
 
-    // Atalho F10 → alterna (abre/fecha) o modal de Carências do beneficiário (enquanto a guia estiver aberta)
+    // Atalhos da guia: F10 → Carências · F9 → Hist. atendimento (ambos alternam abre/fecha, sem sair da aba atual)
     function _guiaKeyHandler(ev){
       if(!m.isConnected){ document.removeEventListener('keydown',_guiaKeyHandler); return; } // guia fechada: limpa handler
       if(ev.key==='F10'){
         ev.preventDefault();
         if(!fecharCarencias()) showCarencias(g); // se já aberto, F10 fecha; senão, abre
+      } else if(ev.key==='F9'){
+        ev.preventDefault();
+        if(!fecharHistAtend()) showHistAtend(g); // se já aberto, F9 fecha; senão, abre
       }
     }
     document.addEventListener('keydown',_guiaKeyHandler);
@@ -4785,6 +4788,28 @@
   // Fecha o modal de Carências, se aberto. Retorna true se havia um aberto.
   function fecharCarencias(){
     var bd=document.querySelector('.modal-backdrop.carencia-modal-bd');
+    if(!bd) return false;
+    bd.remove();
+    if(!document.querySelector('.modal-backdrop')){ document.body.style.overflow=''; document.body.classList.remove('modal-aberto'); }
+    return true;
+  }
+
+  // Modal do Hist. atendimento (atalho F9) — reusa renderHistAtendimento(g)
+  function showHistAtend(g){
+    var ben=g.beneficiario||{};
+    var m=modal('Histórico de atendimentos — '+esc(ben.nome||''),
+      'Guia '+esc(g.numero)+' · '+esc(ben.plano||'')+(ben.contrato?' · '+esc(ben.contrato):''),
+      '<div class="histatend-modal-slot"></div>', null);
+    var bd=m.closest('.modal-backdrop'); if(bd) bd.classList.add('histatend-modal-bd');
+    var slot=m.querySelector('.histatend-modal-slot');
+    if(slot) slot.replaceWith(renderHistAtendimento(g));
+    var _esc=function(ev){ if(ev.key==='Escape'){ if(bd) bd.remove(); document.removeEventListener('keydown',_esc); if(!document.querySelector('.modal-backdrop')){ document.body.style.overflow=''; document.body.classList.remove('modal-aberto'); } } };
+    document.addEventListener('keydown',_esc);
+    lcIcons();
+    return m;
+  }
+  function fecharHistAtend(){
+    var bd=document.querySelector('.modal-backdrop.histatend-modal-bd');
     if(!bd) return false;
     bd.remove();
     if(!document.querySelector('.modal-backdrop')){ document.body.style.overflow=''; document.body.classList.remove('modal-aberto'); }
@@ -5125,6 +5150,7 @@
             '<dt>Acomodação</dt><dd>'+esc(g.beneficiario.acomodacao||'—')+'</dd>'+
             '<dt>Data de inclusão</dt><dd>'+esc(g.beneficiario.dataInclusao||'—')+(MOCK.anosContrato(g.beneficiario.dataInclusao)!=null?' <span style="color:var(--muted)">('+MOCK.anosContrato(g.beneficiario.dataInclusao)+' '+(MOCK.anosContrato(g.beneficiario.dataInclusao)===1?'ano':'anos')+' de contrato)</span>':'')+'</dd>'+
             '<dt>Carências</dt><dd><button class="btn sm ghost" id="btnCarencias" style="letter-spacing:0;text-transform:none;padding:3px 10px">'+ico('calendar-clock',12)+' Ver carências <kbd class="kbd-hint">F10</kbd></button></dd>'+
+            '<dt>Hist. atendimento</dt><dd><button class="btn sm ghost" id="btnHistAtend" style="letter-spacing:0;text-transform:none;padding:3px 10px">'+ico('history',12)+' Ver histórico <kbd class="kbd-hint">F9</kbd></button></dd>'+
           '</dl>'+
           '<dl class="kv">'+
             '<dt>Solicitante</dt><dd>'+esc(g.solicitante)+'</dd>'+
@@ -5180,6 +5206,9 @@
       // Botão Carências (também acessível via atalho F10)
       var _btnCar=d.querySelector('#btnCarencias');
       if(_btnCar) _btnCar.onclick=function(){ showCarencias(g); };
+      // Botão Hist. atendimento (também acessível via atalho F9)
+      var _btnHist=d.querySelector('#btnHistAtend');
+      if(_btnHist) _btnHist.onclick=function(){ showHistAtend(g); };
     } else if(t==='etapas'){
       var tl=el('div',{class:'timeline'});
       g.etapas.forEach(function(e){
