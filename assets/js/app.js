@@ -4645,6 +4645,7 @@
     var TABS_DEF=[
       {id:'resumo',        label:'Resumo',           ico:'layout-dashboard', grp:0},
       {id:'ia',            label:'Parecer Técnico',   ico:'bot',              grp:3},
+      {id:'carencias',     label:'Carências',         ico:'calendar-clock',   grp:3, tip:'Atalho: F10'},
       {id:'histatend',     label:'Hist. atendimento', ico:'history',          grp:3, tip:'Atalho: F9'},
       {id:'obsimp',        label:'Obs. Impressas',    ico:'printer',          grp:4},
       {id:'obsnaoimp',     label:'Obs. Não Impressas',ico:'eye-off',          grp:4},
@@ -4732,11 +4733,10 @@
     var pb=m.querySelector('#abrirPar'); if(pb) pb.onclick=function(){ openParecer(g) };
   }
 
-  // Modal de Carências do beneficiário (atalho F10 dentro da guia)
-  function showCarencias(g){
+  // Monta o HTML do conteúdo de Carências (reusado pelo modal F10 e pela aba "Carências")
+  function renderCarenciasBody(g){
     var c = MOCK.carenciasGuia ? MOCK.carenciasGuia(g) : null;
-    if(!c){ toast('Dados de carência indisponíveis.','erro'); return; }
-    var ben = g.beneficiario||{};
+    if(!c) return '<div class="empty"><div class="ico">'+icoLg('calendar-clock')+'</div>Dados de carência indisponíveis.</div>';
 
     // Faixa de alerta CPT (quando houver)
     var cptHtml = c.cpt && c.cpt.ativo
@@ -4775,7 +4775,13 @@
         '<tbody>'+linhas+'</tbody>'+
       '</table></div>';
 
-    var body = cptHtml + infoHtml + tblHtml;
+    return cptHtml + infoHtml + tblHtml;
+  }
+
+  // Modal de Carências do beneficiário (atalho F10 dentro da guia)
+  function showCarencias(g){
+    var ben = g.beneficiario||{};
+    var body = renderCarenciasBody(g);
     var m = modal('Carências — '+esc(ben.nome||''), 'Guia '+esc(g.numero)+' · '+esc(ben.plano||'')+(ben.contrato?' · '+esc(ben.contrato):''), body, null);
     // Marca o backdrop para permitir toggle via F10 (fechar apertando F10 de novo)
     var _bd=m.closest('.modal-backdrop'); if(_bd) _bd.classList.add('carencia-modal-bd');
@@ -5218,6 +5224,8 @@
       d.appendChild(tl);
     } else if(t==='ia'){
       d.appendChild(renderParecerIA(ia,g));
+    } else if(t==='carencias'){
+      d.innerHTML=renderCarenciasBody(g);
     } else if(t==='histatend'){
       d.appendChild(renderHistAtendimento(g));
     } else if(t==='operadora'){
