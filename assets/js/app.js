@@ -5216,14 +5216,7 @@
       _cnt.textContent=histView.length;
       var n=histView.length;
       var qtdeTxt='<b>'+n+'</b> atendimento'+(n===1?'':'s');
-      var periodoTxt;
-      if(_periodoDe){
-        var deBr=_periodoDe.split('-').reverse().join('/'), ateBr=(_periodoAte||'').split('-').reverse().join('/');
-        periodoTxt=qtdeTxt+' no período ('+deBr+' a '+ateBr+')';
-      } else {
-        periodoTxt=qtdeTxt+' (todos os períodos)';
-      }
-      _info.innerHTML=ico('calendar',11)+' '+periodoTxt;
+      _info.innerHTML=ico('calendar',11)+' '+qtdeTxt+(_periodoDe?' no período selecionado':' (todos os períodos)');
       // religar cliques de seleção
       _tbody.querySelectorAll('tr[data-hist]').forEach(function(tr){
         tr.onclick=function(){
