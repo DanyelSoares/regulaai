@@ -4900,7 +4900,7 @@
     box.innerHTML=
       '<div class="panel" style="padding:0">'+
         '<div class="resumo-mini-hd">'+ico(conf.icone,13)+' '+conf.titulo+
-          '<button class="btn sm ghost resumo-exp-btn" style="margin-left:auto;letter-spacing:0;text-transform:none">'+ico('chevron-down',12)+' Detalhes</button>'+
+          '<button class="btn sm ghost resumo-exp-btn" style="margin-left:10px;letter-spacing:0;text-transform:none">'+ico('chevron-down',12)+' Detalhes</button>'+
           '<span class="resumo-mini-cnt">'+itens.length+'</span>'+
         '</div>'+
         '<div class="resumo-mini-tbl"><table>'+cols+'<thead>'+thead+'</thead><tbody>'+linhas+'</tbody></table></div>'+
@@ -5303,7 +5303,7 @@
       emptyCard.innerHTML=
         '<div class="panel" style="padding:0">'+
           '<div class="resumo-mini-hd">'+ico('paperclip',13)+' GESTÃO DE ANEXOS'+
-            '<span id="anxAddSlot0" style="margin-left:auto;display:inline-flex"></span>'+
+            '<span id="anxAddSlot0" style="margin-left:10px;display:inline-flex"></span>'+
             '<span class="resumo-mini-cnt">0</span>'+
           '</div>'+
           '<div class="resumo-mini-empty">Sem anexos ainda — anexe documentos recebidos (exames, laudos) e classifique-os.</div>'+
@@ -5321,7 +5321,7 @@
     head.innerHTML=
       '<div class="panel" style="padding:0">'+
         '<div class="resumo-mini-hd">'+ico('paperclip',13)+' GESTÃO DE ANEXOS'+
-          '<span id="anxAddSlot" style="margin-left:auto;display:inline-flex"></span>'+
+          '<span id="anxAddSlot" style="margin-left:10px;display:inline-flex"></span>'+
           '<span class="resumo-mini-cnt">'+g.anexosLista.length+'</span>'+
         '</div>'+
         '<div style="padding:10px 12px">'+
