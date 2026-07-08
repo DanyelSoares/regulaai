@@ -4718,8 +4718,17 @@
   // Mini-tabela compacta para o Resumo (Procedimentos / Pacotes)
   // Quantidade simulada de uma diária/taxa (determinística por código)
   function _qtdDiaria(cod){ var h=0,s=''+cod; for(var i=0;i<s.length;i++){h=(h*31+s.charCodeAt(i))|0;} return 1+(Math.abs(h)%7); }
+  // Detalhe determinístico de diária/taxa: Qtde Solic. (pode ser maior que a autorizada) e valor de Tabela
+  function _diariaDetalhe(p){
+    var h=0,s=''+p.cod; for(var i=0;i<s.length;i++){h=(h*31+s.charCodeAt(i))|0;} h=Math.abs(h);
+    var qtde = (p.qtd!=null?p.qtd:_qtdDiaria(p.cod));
+    var qtdeSolic = qtde + (h%5===0 ? 1 : 0);
+    var vlrTabela = +((60 + h%540) + (h%100)/100).toFixed(2);
+    return {qtde:qtde, qtdeSolic:qtdeSolic, vlrTabela:vlrTabela};
+  }
 
-  // Mini-tabela do Resumo. opts.tipo: 'padrao' (Código/Descrição/Peso/Flags) ou 'diarias' (Código/Descrição/Qtd/Peso)
+  // Mini-tabela do Resumo. opts.tipo: 'padrao' (Código/Descrição/Peso/Flags), 'diarias' ou 'procedimentos'
+  // (colunas Qtde Solic./Qtde/Tabela/Peso alinhadas nas mesmas posições entre 'diarias' e 'procedimentos')
   function resumoMiniTabela(titulo, icone, arr, opts){
     opts=opts||{}; arr = arr || [];
     var head='<div class="resumo-mini-hd">'+ico(icone,13)+' '+esc(titulo)+' <span class="resumo-mini-cnt">'+arr.length+'</span></div>';
@@ -4728,10 +4737,11 @@
     }
     var thead, linhas;
     if(opts.tipo==='diarias'){
-      thead='<tr><th>Código</th><th>Descrição</th><th>Qtd</th><th>Peso</th></tr>';
+      thead='<tr><th>Código</th><th>Descrição</th><th class="rm-c">Qtde Solic.</th><th class="rm-c">Qtde</th><th class="rm-c">Tabela</th><th class="rm-c">Peso</th></tr>';
       linhas = arr.map(function(p){
-        var q=(p.qtd!=null?p.qtd:_qtdDiaria(p.cod));
-        return '<tr><td class="rm-cod">'+esc(p.cod)+'</td><td>'+esc(p.desc)+'</td><td class="rm-qtd">'+q+'</td><td class="rm-peso">'+(p.peso!=null?p.peso:'—')+'</td></tr>';
+        var x=_diariaDetalhe(p);
+        var tabelaFmt = 'R$ '+x.vlrTabela.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+        return '<tr><td class="rm-cod">'+esc(p.cod)+'</td><td>'+esc(p.desc)+'</td><td class="rm-c">'+x.qtdeSolic+'</td><td class="rm-c">'+x.qtde+'</td><td class="rm-c">'+tabelaFmt+'</td><td class="rm-c">'+(p.peso!=null?p.peso:'—')+'</td></tr>';
       }).join('');
     } else if(opts.tipo==='procedimentos'){
       thead='<tr><th>Código</th><th>Descrição</th><th class="rm-c">Qtde Solic.</th><th class="rm-c">Qtde</th><th class="rm-c">Tabela</th><th class="rm-c">Peso</th></tr>';
@@ -4739,7 +4749,7 @@
         var x=MOCK.procDetalhe?MOCK.procDetalhe(p):{};
         var fl=''; if(p.dut) fl+=' <span class="badge warn">DUT</span>';
         var tabelaFmt = x.vlrTabela!=null ? 'R$ '+x.vlrTabela.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—';
-        return '<tr><td class="rm-cod">'+esc(p.cod)+'</td><td>'+esc(p.desc)+fl+'</td><td class="rm-c">'+(x.qtdeSolic!=null?x.qtdeSolic:'—')+'</td><td class="rm-c">'+(x.qtde!=null?x.qtde:'—')+'</td><td class="rm-c">'+tabelaFmt+'</td><td class="rm-peso">'+(p.peso!=null?p.peso:'—')+'</td></tr>';
+        return '<tr><td class="rm-cod">'+esc(p.cod)+'</td><td>'+esc(p.desc)+fl+'</td><td class="rm-c">'+(x.qtdeSolic!=null?x.qtdeSolic:'—')+'</td><td class="rm-c">'+(x.qtde!=null?x.qtde:'—')+'</td><td class="rm-c">'+tabelaFmt+'</td><td class="rm-c">'+(p.peso!=null?p.peso:'—')+'</td></tr>';
       }).join('');
     } else {
       thead='<tr><th>Código</th><th>Descrição</th><th>Peso</th><th>Flags</th></tr>';
@@ -4861,14 +4871,16 @@
     // Tabela RESUMIDA
     var thead, linhas;
     if(tipo==='matmed'){
-      thead='<tr><th>Descrição específica</th><th>Unidade</th><th>Via</th><th class="rm-c">Qtde Solic.</th><th class="rm-c">Qtde</th></tr>';
+      thead='<tr><th>Descrição específica</th><th>Unidade</th><th>Via</th><th class="rm-c">Qtde Solic.</th><th class="rm-c">Qtde</th><th class="rm-c">Tabela</th></tr>';
       linhas=itens.map(function(m){ var x=MOCK.matmedDetalhe?MOCK.matmedDetalhe(m):{};
-        return '<tr><td>'+esc(x.descEspecifica||m.desc)+'</td><td>'+esc(x.unidade||'—')+'</td><td>'+esc(x.via||'—')+'</td><td class="rm-c">'+(x.qtdeSolic!=null?x.qtdeSolic:'—')+'</td><td class="rm-c">'+(x.qtde!=null?x.qtde:'—')+'</td></tr>';
+        var tabelaFmt = x.vlrTabela!=null ? 'R$ '+x.vlrTabela.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—';
+        return '<tr><td>'+esc(x.descEspecifica||m.desc)+'</td><td>'+esc(x.unidade||'—')+'</td><td>'+esc(x.via||'—')+'</td><td class="rm-c">'+(x.qtdeSolic!=null?x.qtdeSolic:'—')+'</td><td class="rm-c">'+(x.qtde!=null?x.qtde:'—')+'</td><td class="rm-c">'+tabelaFmt+'</td></tr>';
       }).join('');
     } else {
-      thead='<tr><th>Código solicitado</th><th>Produto solicitado</th><th class="rm-c">Qtde Solic.</th><th class="rm-c">Qtde</th></tr>';
+      thead='<tr><th>Código solicitado</th><th>Produto solicitado</th><th class="rm-c">Qtde Solic.</th><th class="rm-c">Qtde</th><th class="rm-c">Tabela</th></tr>';
       linhas=itens.map(function(m){ var x=MOCK.opmeDetalhe?MOCK.opmeDetalhe(m):{};
-        return '<tr><td class="rm-cod">'+esc(x.codSolic||m.cod)+'</td><td>'+esc(x.produtoSolic||m.desc)+'</td><td class="rm-c">'+(x.qtde!=null?x.qtde:'—')+'</td><td class="rm-c">'+(x.qtdeAuto!=null?x.qtdeAuto:(x.qtde!=null?x.qtde:'—'))+'</td></tr>';
+        var tabelaFmt = x.vlrUnTabela!=null ? 'R$ '+x.vlrUnTabela.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—';
+        return '<tr><td class="rm-cod">'+esc(x.codSolic||m.cod)+'</td><td>'+esc(x.produtoSolic||m.desc)+'</td><td class="rm-c">'+(x.qtde!=null?x.qtde:'—')+'</td><td class="rm-c">'+(x.qtdeAuto!=null?x.qtdeAuto:(x.qtde!=null?x.qtde:'—'))+'</td><td class="rm-c">'+tabelaFmt+'</td></tr>';
       }).join('');
     }
 
