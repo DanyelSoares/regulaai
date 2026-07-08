@@ -4874,13 +4874,13 @@
       return box;
     }
 
-    // Tabela RESUMIDA — colgroup fixo alinha Qtde Solic./Qtde/Tabela/Peso na mesma posição das demais mini-tabelas.
-    // A soma das larguras fixas (tudo exceto a coluna de descrição, que é flexível) é igual em TODAS as
-    // mini-tabelas do Resumo (Procedimentos/Diárias/Mat-Med/OPME), garantindo alinhamento independente da ordem das colunas.
+    // Tabela RESUMIDA — colgroup fixo. Qtde Solic./Qtde/Tabela/Peso usam a mesma largura (COL_NUM) das
+    // demais mini-tabelas do Resumo. No Mat/Med, Unidade/Via ganham largura própria maior (evita corte de texto),
+    // o que desloca ligeiramente o início das colunas numéricas em relação às outras mini-tabelas.
     var COL_NUM='<col style="width:100px">';
     var thead, linhas, cols;
     if(tipo==='matmed'){
-      cols='<colgroup><col><col style="width:50px"><col style="width:50px">'+COL_NUM+COL_NUM+COL_NUM+COL_NUM+'</colgroup>';
+      cols='<colgroup><col><col style="width:100px"><col style="width:90px">'+COL_NUM+COL_NUM+COL_NUM+COL_NUM+'</colgroup>';
       thead='<tr><th>Descrição específica</th><th>Unidade</th><th>Via</th><th class="rm-c">Qtde Solic.</th><th class="rm-c">Qtde</th><th class="rm-c">Tabela</th><th class="rm-c">Peso</th></tr>';
       linhas=itens.map(function(m){ var x=MOCK.matmedDetalhe?MOCK.matmedDetalhe(m):{};
         var tabelaFmt = x.vlrTabela!=null ? 'R$ '+x.vlrTabela.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—';
