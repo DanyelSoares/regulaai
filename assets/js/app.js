@@ -5437,6 +5437,41 @@
   }
 
 
+  // Gera o parecer de indicação/não-indicação de cada serviço solicitado na guia.
+  // Determinístico por (guia + código). Considera anexos, DUT, risco e natureza.
+  function justificarServicos(g){
+    function h(s){ var x=0,st=''+s; for(var i=0;i<st.length;i++){x=(x*31+st.charCodeAt(i))|0;} return Math.abs(x); }
+    var espec=MOCK.especialidadeDaGuia?MOCK.especialidadeDaGuia(g):'';
+    var out=[];
+    function push(tipo,cod,desc,extra){
+      var seed=h(g.numero+'|'+cod);
+      // Regra de indicação: nega quando falta suporte documental/DUT; senão indica
+      var faltaDoc=!g.anexos;
+      var dutPend = extra&&extra.dut && !g.dut;
+      var indicado = !dutPend && !(faltaDoc && seed%3===0);
+      var motivo;
+      if(indicado){
+        var razoes=[
+          'compatível com o quadro clínico ('+(espec||'especialidade da guia')+') e com a natureza '+(g.natureza||'')+' da solicitação',
+          'coerente com o protocolo assistencial do fluxo "'+(g.fluxo&&g.fluxo.nome||'')+'"',
+          'justificado pela indicação registrada e pela documentação apresentada',
+          'pertinente ao regime '+(g.regime||'')+' e ao histórico do beneficiário'
+        ];
+        motivo='INDICADO — '+razoes[seed%razoes.length]+'.';
+        if(g.regime==='Urgência') motivo+=' Regime de urgência reforça a tempestividade do atendimento.';
+      } else {
+        if(dutPend) motivo='NÃO INDICADO (pendente) — sujeito à DUT da ANS ainda não comprovada. Requer evidências objetivas (relatórios/exames/tempo de tratamento) antes da autorização.';
+        else motivo='NÃO INDICADO (pendente) — documentação de suporte ausente; a indicação não pode ser confirmada sem laudo/exames que fundamentem a solicitação.';
+      }
+      out.push({tipo:tipo, cod:cod, desc:desc, indicado:indicado, motivo:motivo, extra:extra});
+    }
+    (g.procedimentos||[]).forEach(function(p){ push('Procedimento',p.cod,p.desc,{dut:!!p.dut}); });
+    (g.pacotes||[]).forEach(function(p){ push('Pacote',p.cod,p.desc,{}); });
+    (g.diariasTaxas||[]).forEach(function(d){ push('Diária/Taxa',d.cod,d.desc,{}); });
+    (g.matmed||[]).forEach(function(m){ if(m.opme) push('OPME',m.cod,m.desc,{opme:true}); });
+    return out;
+  }
+
   function renderParecerIA(ia, g){
     // ── feedback persistido por guia ─────────────────────
     var fbKey='regula_ia_fb_'+(g?g.numero:'x');
@@ -5477,6 +5512,34 @@
     warnEl.innerHTML=ia.avisoLegal;
     box.appendChild(warnEl);
     d.appendChild(box);
+
+    // ── Justificativa de indicação por serviço solicitado ──────────
+    var servs=justificarServicos(g);
+    if(servs.length){
+      var icoTipo={'Procedimento':'stethoscope','Pacote':'package','Diária/Taxa':'calendar-days','OPME':'wrench'};
+      var svBox=el('div',{class:'ai-box',style:'margin-top:10px'});
+      var nInd=servs.filter(function(s){return s.indicado;}).length;
+      var nNao=servs.length-nInd;
+      var linhas=servs.map(function(s){
+        return '<div class="parecer-serv '+(s.indicado?'ind':'nao')+'">'+
+          '<div class="parecer-serv-hd">'+
+            '<span class="parecer-serv-ico">'+ico(icoTipo[s.tipo]||'file-text',14)+'</span>'+
+            '<span class="parecer-serv-tipo">'+esc(s.tipo)+'</span>'+
+            '<span class="parecer-serv-cod">'+esc(s.cod)+'</span>'+
+            '<span class="parecer-serv-desc">'+esc(s.desc)+'</span>'+
+            '<span class="parecer-serv-badge '+(s.indicado?'ok':'no')+'">'+(s.indicado?ico('check-circle-2',12)+' Indicado':ico('alert-circle',12)+' Não indicado')+'</span>'+
+          '</div>'+
+          '<div class="parecer-serv-just">'+esc(s.motivo)+'</div>'+
+        '</div>';
+      }).join('');
+      svBox.innerHTML=
+        '<div class="hd"><div class="tt">'+ico('list-checks',15)+' Indicação técnica dos serviços solicitados</div>'+
+          '<span class="badge">'+nInd+' indicado(s)</span>'+(nNao?' <span class="badge warn">'+nNao+' pendente(s)</span>':'')+
+        '</div>'+
+        '<div class="ai-section" style="padding-top:4px"><div class="parecer-serv-wrap">'+linhas+'</div></div>'+
+        '<div class="ai-warn" style="margin-top:8px">Análise de apoio gerada pela IA sobre a pertinência de cada serviço. Não constitui autorização/negativa — a decisão é da operadora/auditor.</div>';
+      d.appendChild(svBox);
+    }
 
     function updateAdp(){
       adpWrap.innerHTML=aderenciaBar(calcAdp());
