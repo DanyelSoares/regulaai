@@ -4642,6 +4642,7 @@
     var TABS_DEF=[
       {id:'resumo',        label:'Resumo',           ico:'layout-dashboard', grp:0},
       {id:'ia',            label:'Parecer Técnico',   ico:'bot',              grp:3},
+      {id:'histatend',     label:'Hist. atendimento', ico:'history',          grp:3},
       {id:'obsimp',        label:'Obs. Impressas',    ico:'printer',          grp:4},
       {id:'obsnaoimp',     label:'Obs. Não Impressas',ico:'eye-off',          grp:4},
       {id:'operadora',     label:'Parecer Operadora', ico:'file-check-2',     grp:5},
@@ -5105,6 +5106,8 @@
       d.appendChild(tl);
     } else if(t==='ia'){
       d.appendChild(renderParecerIA(ia,g));
+    } else if(t==='histatend'){
+      d.appendChild(renderHistAtendimento(g));
     } else if(t==='operadora'){
       if(!g.parecerOperadora) d.innerHTML='<div class="empty"><div class="ico">'+icoLg('file-pen-line')+'</div>Nenhum parecer da operadora registrado.<br><br>'+(can('parecer')?'<button class="btn" id="emPar">Emitir parecer agora</button>':'')+'</div>';
       else {
@@ -5125,6 +5128,135 @@
       d.appendChild(ul2);
     }
     return d;
+  }
+
+  // Aba "Hist. atendimento": tabela de atendimentos do paciente + abas inferiores (dados da linha selecionada)
+  function renderHistAtendimento(g){
+    var wrap=el('div',{class:'hist-atend'});
+    var hist = MOCK.historicoAtendimentos ? MOCK.historicoAtendimentos(g) : [];
+    if(!hist.length){
+      wrap.innerHTML='<div class="empty"><div class="ico">'+icoLg('history')+'</div>Sem histórico de atendimentos para este beneficiário.</div>';
+      return wrap;
+    }
+
+    function moneyBR(v){ return v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+
+    // ── Tabela superior (histórico) ──
+    var thead='<tr>'+
+      '<th>Data</th><th>Guia</th><th class="cc">Qtd. Solic.</th><th class="cc">Qtd. Aut.</th>'+
+      '<th>Código</th><th>Procedimento</th><th>Solicitante</th><th>Prestador</th>'+
+      '<th>Local de atendimento</th><th>Especialidade</th><th>CID</th><th class="cc">Diárias</th>'+
+      '<th class="cc">Valor (R$)</th><th>Faturamento</th>'+
+    '</tr>';
+    var linhas=hist.map(function(a,idx){
+      var fatCls = a.faturamento==='Faturada'?'fat-ok':(a.faturamento==='Em análise'?'fat-ana':'fat-nao');
+      return '<tr data-hist="'+idx+'"'+(idx===0?' class="sel"':'')+'>'+
+        '<td class="nw">'+esc(a.data)+'</td>'+
+        '<td class="nw"><b>'+esc(a.guia)+'</b>'+(a.atual?' <span class="badge info" style="font-size:9px">atual</span>':'')+'</td>'+
+        '<td class="cc">'+a.qtdSolic+'</td>'+
+        '<td class="cc">'+a.qtdAut+'</td>'+
+        '<td class="nw">'+esc(a.cod)+'</td>'+
+        '<td>'+esc(a.procedimento)+'</td>'+
+        '<td>'+esc(a.solicitante)+'</td>'+
+        '<td>'+esc(a.prestador)+'</td>'+
+        '<td>'+esc(a.local)+'</td>'+
+        '<td>'+esc(a.espec)+'</td>'+
+        '<td class="nw">'+esc(a.cid)+'</td>'+
+        '<td class="cc">'+a.diarias+'</td>'+
+        '<td class="cc">'+moneyBR(a.valor)+'</td>'+
+        '<td class="nw"><span class="hist-fat '+fatCls+'">'+esc(a.faturamento)+'</span></td>'+
+      '</tr>';
+    }).join('');
+    var tabelaTop=el('div',{class:'hist-top'});
+    tabelaTop.innerHTML=
+      '<div class="hist-top-hd">'+ico('history',13)+' HISTÓRICO DE ATENDIMENTOS'+
+        '<span class="resumo-mini-cnt">'+hist.length+'</span></div>'+
+      '<div class="hist-top-tbl"><table><thead>'+thead+'</thead><tbody>'+linhas+'</tbody></table></div>';
+    wrap.appendChild(tabelaTop);
+
+    // ── Abas inferiores ──
+    var SUBTABS=[
+      {id:'itens',   label:'Itens lançados na guia'},
+      {id:'obsimp',  label:'Observações da guia'},
+      {id:'obsni',   label:'Observações não impressas'},
+      {id:'hip',     label:'Hipótese diagnóstica'},
+      {id:'aud',     label:'Auditoria médica'},
+      {id:'msg',     label:'Mensagens para o prestador Web'}
+    ];
+    var bottom=el('div',{class:'hist-bottom'});
+    var subbar='<div class="hist-subtabs">'+SUBTABS.map(function(s,i){
+      return '<button class="hist-subtab'+(i===0?' active':'')+'" data-sub="'+s.id+'">'+esc(s.label)+'</button>';
+    }).join('')+'</div><div class="hist-subcontent"></div>';
+    bottom.innerHTML=subbar;
+    wrap.appendChild(bottom);
+
+    var subContent=bottom.querySelector('.hist-subcontent');
+    var selIdx=0;
+    var curSub='itens';
+
+    function moneyRow(a){ return a; }
+    function renderSub(sub, a){
+      if(sub==='itens'){
+        var rows=(a.itens||[]).map(function(it){
+          return '<tr><td>'+esc(it.tipo)+'</td><td class="nw">'+esc(it.cod)+'</td><td>'+esc(it.desc)+'</td>'+
+            '<td class="cc">'+it.qtdSolic+'</td><td class="cc">'+it.qtdAut+'</td><td>'+esc(it.procJuridico||'—')+'</td></tr>';
+        }).join('');
+        return '<div class="hist-sub-tbl"><table><thead><tr><th>Tipo de item</th><th>Código</th><th>Descrição</th>'+
+          '<th class="cc">Qtd. solicitada</th><th class="cc">Qtd. autorizada</th><th>Processo Jurídico</th></tr></thead>'+
+          '<tbody>'+rows+'</tbody></table></div>';
+      }
+      if(sub==='obsimp'){
+        return '<div class="hist-sub-txt">'+
+          '<div class="hist-sub-lb">'+ico('printer',12)+' Observações da guia (impressas) <span class="badge muted" style="font-size:9px">somente leitura</span></div>'+
+          '<div class="hist-sub-body">'+(a.obsImpressas?esc(a.obsImpressas):'<span class="mut">Sem observações impressas.</span>')+'</div></div>';
+      }
+      if(sub==='obsni'){
+        var lst=(a.obsNaoImpressas||[]).map(function(o){
+          return '<div class="hist-obsni-item"><div class="hist-obsni-meta">'+esc(o.data)+' · <b>'+esc(o.operador)+'</b> · pode informar ao prestador: '+esc(o.podeInformar)+'</div>'+
+            '<div class="hist-obsni-txt">'+esc(o.texto)+'</div></div>';
+        }).join('');
+        return '<div class="hist-sub-txt">'+
+          '<div class="hist-sub-lb">'+ico('eye-off',12)+' Observações não impressas (internas) <span class="badge muted" style="font-size:9px">somente leitura</span></div>'+
+          (lst||'<div class="hist-sub-body"><span class="mut">Sem observações internas.</span></div>')+'</div>';
+      }
+      if(sub==='hip'){
+        return '<div class="hist-sub-txt">'+
+          '<div class="hist-sub-lb">'+ico('stethoscope',12)+' Hipótese diagnóstica <span class="badge muted" style="font-size:9px">somente leitura</span></div>'+
+          '<div class="hist-sub-body">'+(a.hipotese?esc(a.hipotese):'<span class="mut">Não informada.</span>')+'</div></div>';
+      }
+      // aud / msg — placeholder aguardando definição
+      var ph = sub==='aud'
+        ? {ico:'clipboard-check', tit:'Auditoria médica'}
+        : {ico:'message-square',  tit:'Mensagens para o prestador Web'};
+      return '<div class="hist-sub-ph"><div class="ico">'+icoLg(ph.ico)+'</div>'+
+        '<b>'+ph.tit+'</b><div class="mut" style="margin-top:6px">Conteúdo em definição — será implementado conforme o layout a ser enviado.</div></div>';
+    }
+    function paint(){
+      var a=hist[selIdx];
+      subContent.innerHTML=renderSub(curSub, a);
+      lcIcons();
+    }
+
+    // seleção de linha na tabela superior
+    tabelaTop.querySelectorAll('tr[data-hist]').forEach(function(tr){
+      tr.onclick=function(){
+        tabelaTop.querySelectorAll('tr[data-hist]').forEach(function(x){x.classList.remove('sel')});
+        tr.classList.add('sel');
+        selIdx=+tr.getAttribute('data-hist');
+        paint();
+      };
+    });
+    // troca de sub-aba
+    bottom.querySelectorAll('.hist-subtab').forEach(function(b){
+      b.onclick=function(){
+        bottom.querySelectorAll('.hist-subtab').forEach(function(x){x.classList.remove('active')});
+        b.classList.add('active');
+        curSub=b.getAttribute('data-sub');
+        paint();
+      };
+    });
+    paint();
+    return wrap;
   }
 
   /* === Gestão de Anexos === */

@@ -508,6 +508,67 @@
   // tempo de contrato (anos completos desde a data de inclusão no plano)
   function anosContrato(dataInc){ return _anosDecorridos(dataInc); }
 
+  // ── Histórico de atendimentos do paciente (determinístico por beneficiário) ──
+  // Gera atendimentos anteriores (sessões de terapia/consultas) no estilo do ERP, para a aba "Hist. atendimento".
+  var _HIST_PROCS = [
+    {cod:'50001084', desc:'ASSISTENTE TERAPEUTICO',                          espec:'ACOMPANHANTE TERAPEUTICO', valor:22.00},
+    {cod:'91000471', desc:'SESSAO DE PSICOPEDAGOGIA INDIVIDUAL',             espec:'PSICOPEDAGOGIA',          valor:27.50},
+    {cod:'50000470', desc:'SESSAO DE PSICOTERAPIA INDIVIDUAL POR PSICÓLOGO', espec:'PSICOLOGO EM GERAL',      valor:27.50},
+    {cod:'50001213', desc:'MUSICOTERAPIA - POR SESSÃO',                      espec:'MUSICOTERAPEUTA',         valor:35.20},
+    {cod:'50000330', desc:'SESSAO DE FONOAUDIOLOGIA INDIVIDUAL',             espec:'FONOAUDIOLOGIA',          valor:29.90},
+    {cod:'50000585', desc:'SESSAO DE TERAPIA OCUPACIONAL',                   espec:'TERAPIA OCUPACIONAL',     valor:31.40},
+    {cod:'10101012', desc:'CONSULTA MEDICA EM CONSULTORIO',                  espec:'CLINICA MEDICA',          valor:0.00}
+  ];
+  var _HIST_PRESTADORES = ['ALANNA MONIQUE DE FREITAS COSTA DE JESUS','PATRICIA DE SOUZA SILVA CARNAUBA','QUITERIA MARIA TENORIO DE HOLANDA','FERNANDO SANTOS DE SOUZA','JOSEANE MARINHO DE ARAUJO'];
+  var _HIST_LOCAIS = ['MAIS SAUDE - UNIDADE DELMAN','MAIS SAUDE - UNIDADE CENTRO','CLINICA INTEGRAR REABILITAÇÃO'];
+  var _HIST_HIP = ['F84.0 - Autismo infantil','F84 - Transt globais do desenvolv','F80 - Transt esp desenvolv da fala/linguagem','F90 - Transt hipercineticos'];
+  var _HIST_OBS_IMP = ['Sessão realizada conforme plano terapêutico individual.','Atendimento dentro da periodicidade autorizada.','Evolução registrada em prontuário.'];
+  var _HIST_OBS_NI = ['Beneficiário em acompanhamento multidisciplinar contínuo.','Verificar periodicidade x autorização vigente.','Guia vinculada a plano terapêutico ativo.'];
+  var _HIST_FAT = ['Não faturada','Faturada','Não faturada','Em análise'];
+  // Retorna array de atendimentos { data, guia, qtdSolic, qtdAut, cod, procedimento, solicitante, prestador, local,
+  //   espec, cid, diarias, valor, faturamento, itens:[...], obsImpressas, obsNaoImpressas:[...], hipotese }
+  function historicoAtendimentos(g){
+    var ben = g.beneficiario||{};
+    var base = _mmSeed('hist'+(ben.id||g.numero));
+    var qtd = 8 + (base % 11); // 8 a 18 atendimentos
+    var solicitanteFixo = (g.solicitante && g.solicitante!=='—') ? g.solicitante : 'JORDANA ALYRANDRA FARIAS DE MELO';
+    var out = [];
+    // data inicial ~ hoje, recuando alguns dias por atendimento
+    var d0 = new Date();
+    for(var i=0;i<qtd;i++){
+      var s = _mmSeed('hist'+(ben.id||g.numero)+'#'+i);
+      var proc = _HIST_PROCS[s % _HIST_PROCS.length];
+      var dt = new Date(d0.getTime() - i*86400000 - (s%12)*3600000);
+      var dataFmt = _fmtDataHora(dt);
+      var numGuia = 14649711 - i; // sequência decrescente, estilo ERP
+      var prestador = _HIST_PRESTADORES[s % _HIST_PRESTADORES.length];
+      var local = _HIST_LOCAIS[s % _HIST_LOCAIS.length];
+      var cid = _HIST_HIP[s % _HIST_HIP.length];
+      var cidCod = cid.split(' - ')[0].replace('.','').slice(0,4); // "F840"
+      var qSol = 1, qAut = (s%9===0)?0:1; // ocasionalmente não autorizada
+      var fat = _HIST_FAT[s % _HIST_FAT.length];
+      out.push({
+        data:dataFmt, guia:String(numGuia), qtdSolic:qSol, qtdAut:qAut,
+        cod:proc.cod, procedimento:proc.desc, solicitante:solicitanteFixo,
+        prestador:prestador, local:local, espec:proc.espec, cid:cidCod,
+        diarias:0, valor:proc.valor, faturamento:fat,
+        itens:[{tipo:'Procedimento', cod:proc.cod, desc:proc.desc, qtdSolic:qSol, qtdAut:qAut, procJuridico:'—'}],
+        obsImpressas:_HIST_OBS_IMP[s % _HIST_OBS_IMP.length],
+        obsNaoImpressas:[{
+          data:dataFmt, operador:prestador.split(' ')[0]+' '+(prestador.split(' ')[1]||''),
+          podeInformar:(s%3===0)?'Sim':'Não', texto:_HIST_OBS_NI[s % _HIST_OBS_NI.length]
+        }],
+        hipotese:cid, atual:(i===0)
+      });
+    }
+    return out;
+  }
+  function _fmtDataHora(d){
+    var dd=('0'+d.getDate()).slice(-2), mm=('0'+(d.getMonth()+1)).slice(-2), yy=d.getFullYear();
+    var hh=('0'+d.getHours()).slice(-2), mi=('0'+d.getMinutes()).slice(-2);
+    return dd+'/'+mm+'/'+yy+' '+hh+':'+mi;
+  }
+
   // ── Carências do beneficiário (determinístico por guia) ──
   // Tabela de carências no padrão ANS: cada item tem prazo (dias) a partir da data de inclusão.
   var CARENCIAS_DEF = [
@@ -563,7 +624,7 @@
     STATUS:STATUS, ORIGENS:ORIGENS, CATEGORIAS_ANEXO:CATEGORIAS_ANEXO,
     MOTIVOS_COMP:MOTIVOS_COMP, MOTIVOS_REPR:MOTIVOS_REPR, MOTIVOS_RESS:MOTIVOS_RESS,
     LOGS:LOGS, buildGuias: hydrate, matmedDetalhe: matmedDetalhe, opmeDetalhe: opmeDetalhe, procDetalhe: procDetalhe, observacoesGuia: observacoesGuia,
-    calcIdade: calcIdade, anosContrato: anosContrato, cidGuia: cidGuia, carenciasGuia: carenciasGuia,
+    calcIdade: calcIdade, anosContrato: anosContrato, cidGuia: cidGuia, carenciasGuia: carenciasGuia, historicoAtendimentos: historicoAtendimentos,
     naturezaDaGuia: naturezaDaGuia, naturezaDetalhada: naturezaDetalhada, SUB_INTERNACAO: SUB_INTERNACAO,
     naturezaSelectHTML: naturezaSelectHTML
   };

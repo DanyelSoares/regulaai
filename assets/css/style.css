@@ -842,6 +842,45 @@ body.sidebar-collapsed .modal-backdrop{left:66px}
 .carencia-nome{font-weight:600;color:var(--g-700)}
 .carencia-tbl tbody tr:hover td,.carencia-tbl tbody tr:hover td{background:var(--g-50)}
 .kbd-hint{display:inline-block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:9.5px;font-weight:700;line-height:1;color:var(--g-600);background:#fff;border:1px solid var(--g-200);border-bottom-width:2px;border-radius:4px;padding:2px 5px;margin-left:4px;vertical-align:middle}
+/* Aba Hist. atendimento */
+.hist-atend{display:flex;flex-direction:column;gap:14px}
+.hist-top{border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.hist-top-hd{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--g-600);padding:10px 12px;border-bottom:1px solid var(--g-100);background:var(--g-50)}
+.hist-top-tbl{max-height:300px;overflow:auto}
+.hist-top-tbl table{width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap}
+.hist-top-tbl th{position:sticky;top:0;background:#fff;text-align:left;font-size:9.5px;text-transform:uppercase;letter-spacing:.3px;color:var(--g-500);font-weight:700;padding:8px 12px;border-bottom:1px solid var(--g-100);z-index:1}
+.hist-top-tbl td{padding:7px 12px;border-bottom:1px solid var(--g-50);vertical-align:middle}
+.hist-top-tbl th.cc,.hist-top-tbl td.cc{text-align:center}
+.hist-top-tbl td.nw{white-space:nowrap}
+.hist-top-tbl tbody tr{cursor:pointer}
+.hist-top-tbl tbody tr:hover td{background:var(--g-50)}
+.hist-top-tbl tbody tr.sel td{background:var(--g-100)}
+.hist-top-tbl tbody tr.sel td:first-child{box-shadow:inset 3px 0 0 var(--g-500)}
+.hist-fat{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:5px}
+.hist-fat.fat-nao{background:#fff6d6;color:#8a6d00;border:1px solid #f0dfa0}
+.hist-fat.fat-ok{background:var(--g-50);color:var(--g-700);border:1px solid var(--g-100)}
+.hist-fat.fat-ana{background:#e8f0fe;color:#1a56c4;border:1px solid #c5d8fb}
+.hist-bottom{border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.hist-subtabs{display:flex;flex-wrap:wrap;gap:0;background:var(--g-50);border-bottom:1px solid var(--line)}
+.hist-subtab{appearance:none;border:none;background:transparent;padding:9px 14px;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap}
+.hist-subtab:hover{color:var(--g-700)}
+.hist-subtab.active{color:var(--g-700);border-bottom-color:var(--g-500);background:#fff}
+.hist-subcontent{padding:12px}
+.hist-sub-tbl{overflow-x:auto}
+.hist-sub-tbl table{width:100%;border-collapse:collapse;font-size:12.5px}
+.hist-sub-tbl th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.3px;color:var(--g-500);font-weight:700;padding:8px 12px;border-bottom:1px solid var(--g-100);background:var(--g-50)}
+.hist-sub-tbl td{padding:8px 12px;border-bottom:1px solid var(--g-50)}
+.hist-sub-tbl th.cc,.hist-sub-tbl td.cc{text-align:center}
+.hist-sub-tbl td.nw{white-space:nowrap}
+.hist-sub-txt .hist-sub-lb{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--g-600);margin-bottom:8px}
+.hist-sub-body{font-size:13px;line-height:1.55;color:var(--ink-1);white-space:pre-wrap}
+.hist-sub-body .mut,.hist-subcontent .mut{color:var(--muted)}
+.hist-obsni-item{border:1px solid var(--line);border-radius:7px;padding:8px 10px;margin-bottom:8px;background:var(--g-50)}
+.hist-obsni-meta{font-size:11px;color:var(--muted);margin-bottom:3px}
+.hist-obsni-txt{font-size:13px;color:var(--ink-1);line-height:1.5}
+.hist-sub-ph{text-align:center;padding:26px 12px;color:var(--muted)}
+.hist-sub-ph .ico{opacity:.5;margin-bottom:8px}
+.hist-sub-ph b{color:var(--g-700);font-size:14px}
 .resumo-mini-tbl .rm-fl{white-space:nowrap}
 
 /* Simulador ao vivo de Pesos IA */
