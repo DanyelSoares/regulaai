@@ -4670,12 +4670,12 @@
     $$('.tab',m).forEach(function(b){ b.onclick=function(){setTab(b.getAttribute('data-tab'))} });
     setTab(tab||'resumo');
 
-    // Atalho F10 → abre o modal de Carências do beneficiário (enquanto a guia estiver aberta)
+    // Atalho F10 → alterna (abre/fecha) o modal de Carências do beneficiário (enquanto a guia estiver aberta)
     function _guiaKeyHandler(ev){
       if(!m.isConnected){ document.removeEventListener('keydown',_guiaKeyHandler); return; } // guia fechada: limpa handler
       if(ev.key==='F10'){
         ev.preventDefault();
-        showCarencias(g);
+        if(!fecharCarencias()) showCarencias(g); // se já aberto, F10 fecha; senão, abre
       }
     }
     document.addEventListener('keydown',_guiaKeyHandler);
@@ -4770,10 +4770,21 @@
 
     var body = cptHtml + infoHtml + tblHtml;
     var m = modal('Carências — '+esc(ben.nome||''), 'Guia '+esc(g.numero)+' · '+esc(ben.plano||'')+(ben.contrato?' · '+esc(ben.contrato):''), body, null);
+    // Marca o backdrop para permitir toggle via F10 (fechar apertando F10 de novo)
+    var _bd=m.closest('.modal-backdrop'); if(_bd) _bd.classList.add('carencia-modal-bd');
     // Fecha com ESC (reforço; o backdrop também fecha ao clicar fora)
-    var _esc=function(ev){ if(ev.key==='Escape'){ var bd=m.closest('.modal-backdrop'); if(bd) bd.remove(); document.removeEventListener('keydown',_esc); if(!document.querySelector('.modal-backdrop')){ document.body.style.overflow=''; document.body.classList.remove('modal-aberto'); } } };
+    var _esc=function(ev){ if(ev.key==='Escape'){ if(_bd) _bd.remove(); document.removeEventListener('keydown',_esc); if(!document.querySelector('.modal-backdrop')){ document.body.style.overflow=''; document.body.classList.remove('modal-aberto'); } } };
     document.addEventListener('keydown',_esc);
     lcIcons();
+    return m;
+  }
+  // Fecha o modal de Carências, se aberto. Retorna true se havia um aberto.
+  function fecharCarencias(){
+    var bd=document.querySelector('.modal-backdrop.carencia-modal-bd');
+    if(!bd) return false;
+    bd.remove();
+    if(!document.querySelector('.modal-backdrop')){ document.body.style.overflow=''; document.body.classList.remove('modal-aberto'); }
+    return true;
   }
 
   // Mini-tabela compacta para o Resumo (Procedimentos / Pacotes)
