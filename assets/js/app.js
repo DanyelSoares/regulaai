@@ -4737,10 +4737,11 @@
     }
     var thead, linhas, cols;
     // colgroup fixo: garante que colunas de mesmo nome caiam na MESMA posição horizontal entre os cartões.
-    // Bloco de texto (colunas antes de Qtde Solic.) soma sempre a mesma largura total (420px) em todas as mini-tabelas.
-    var COL_COD='<col style="width:100px">', COL_NUM='<col style="width:100px">';
+    // COL_NUM = colunas numéricas mais espaçadas (Qtde Solic./Qtde/Tabela); COL_PESO = coluna final Peso
+    // (mantida estreita e na mesma posição). A folga extra é absorvida pela coluna flexível de Descrição.
+    var COL_COD='<col style="width:100px">', COL_NUM='<col style="width:120px">', COL_PESO='<col style="width:80px">';
     if(opts.tipo==='diarias'){
-      cols='<colgroup>'+COL_COD+'<col>'+COL_NUM+COL_NUM+COL_NUM+COL_NUM+'</colgroup>';
+      cols='<colgroup>'+COL_COD+'<col>'+COL_NUM+COL_NUM+COL_NUM+COL_PESO+'</colgroup>';
       thead='<tr><th>Código</th><th>Descrição</th><th class="rm-c">Qtde Solic.</th><th class="rm-c">Qtde</th><th class="rm-c">Tabela</th><th class="rm-c">Peso</th></tr>';
       linhas = arr.map(function(p){
         var x=_diariaDetalhe(p);
@@ -4748,7 +4749,7 @@
         return '<tr><td class="rm-cod">'+esc(p.cod)+'</td><td>'+esc(p.desc)+'</td><td class="rm-c">'+x.qtdeSolic+'</td><td class="rm-c">'+x.qtde+'</td><td class="rm-c">'+tabelaFmt+'</td><td class="rm-c">'+(p.peso!=null?p.peso:'—')+'</td></tr>';
       }).join('');
     } else if(opts.tipo==='procedimentos'){
-      cols='<colgroup>'+COL_COD+'<col>'+COL_NUM+COL_NUM+COL_NUM+COL_NUM+'</colgroup>';
+      cols='<colgroup>'+COL_COD+'<col>'+COL_NUM+COL_NUM+COL_NUM+COL_PESO+'</colgroup>';
       thead='<tr><th>Código</th><th>Descrição</th><th class="rm-c">Qtde Solic.</th><th class="rm-c">Qtde</th><th class="rm-c">Tabela</th><th class="rm-c">Peso</th></tr>';
       linhas = arr.map(function(p){
         var x=MOCK.procDetalhe?MOCK.procDetalhe(p):{};
@@ -4757,7 +4758,7 @@
         return '<tr><td class="rm-cod">'+esc(p.cod)+'</td><td>'+esc(p.desc)+fl+'</td><td class="rm-c">'+(x.qtdeSolic!=null?x.qtdeSolic:'—')+'</td><td class="rm-c">'+(x.qtde!=null?x.qtde:'—')+'</td><td class="rm-c">'+tabelaFmt+'</td><td class="rm-c">'+(p.peso!=null?p.peso:'—')+'</td></tr>';
       }).join('');
     } else {
-      cols='<colgroup>'+COL_COD+'<col>'+COL_NUM+'<col style="width:160px"></colgroup>';
+      cols='<colgroup>'+COL_COD+'<col>'+COL_PESO+'<col style="width:160px"></colgroup>';
       thead='<tr><th>Código</th><th>Descrição</th><th class="rm-c">Peso</th><th>Flags</th></tr>';
       linhas = arr.map(function(p){
         var fl=''; if(p.dut) fl+='<span class="badge warn">DUT</span> '; if(p.opme) fl+='<span class="badge warn">OPME</span> '; if(p.obrig) fl+='<span class="badge">Obrig.</span>';
@@ -4877,10 +4878,10 @@
     // Tabela RESUMIDA — colgroup fixo. Qtde Solic./Qtde/Tabela/Peso usam a mesma largura (COL_NUM).
     // No Mat/Med, Unidade/Via ganham largura maior (dados numa linha só, bem distribuídos, sem colar);
     // isso desloca ligeiramente o início das colunas numéricas em relação às demais mini-tabelas.
-    var COL_NUM='<col style="width:100px">';
+    var COL_NUM='<col style="width:120px">', COL_PESO='<col style="width:80px">';
     var thead, linhas, cols;
     if(tipo==='matmed'){
-      cols='<colgroup><col><col style="width:110px"><col style="width:110px">'+COL_NUM+COL_NUM+COL_NUM+COL_NUM+'</colgroup>';
+      cols='<colgroup><col><col style="width:110px"><col style="width:110px">'+COL_NUM+COL_NUM+COL_NUM+COL_PESO+'</colgroup>';
       thead='<tr><th>Descrição específica</th><th>Unidade</th><th>Via</th><th class="rm-c">Qtde Solic.</th><th class="rm-c">Qtde</th><th class="rm-c">Tabela</th><th class="rm-c">Peso</th></tr>';
       linhas=itens.map(function(m){ var x=MOCK.matmedDetalhe?MOCK.matmedDetalhe(m):{};
         var tabelaFmt = x.vlrTabela!=null ? 'R$ '+x.vlrTabela.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—';
@@ -4888,7 +4889,7 @@
         return '<tr><td class="rm-nowrap">'+esc(x.descEspecifica||m.desc)+'</td><td class="rm-nowrap" title="'+unidadeTxt+'">'+unidadeTxt+'</td><td class="rm-nowrap" title="'+viaTxt+'">'+viaTxt+'</td><td class="rm-c">'+(x.qtdeSolic!=null?x.qtdeSolic:'—')+'</td><td class="rm-c">'+(x.qtde!=null?x.qtde:'—')+'</td><td class="rm-c">'+tabelaFmt+'</td><td class="rm-c">&nbsp;</td></tr>';
       }).join('');
     } else {
-      cols='<colgroup><col style="width:100px"><col>'+COL_NUM+COL_NUM+COL_NUM+COL_NUM+'</colgroup>';
+      cols='<colgroup><col style="width:100px"><col>'+COL_NUM+COL_NUM+COL_NUM+COL_PESO+'</colgroup>';
       thead='<tr><th>Código solicitado</th><th>Produto solicitado</th><th class="rm-c">Qtde Solic.</th><th class="rm-c">Qtde</th><th class="rm-c">Tabela</th><th class="rm-c">Peso</th></tr>';
       linhas=itens.map(function(m){ var x=MOCK.opmeDetalhe?MOCK.opmeDetalhe(m):{};
         var tabelaFmt = x.vlrUnTabela!=null ? 'R$ '+x.vlrUnTabela.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—';
