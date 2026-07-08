@@ -15,6 +15,43 @@
     limiares: { baixo: 5, medio: 11, alto: 17 }
   };
 
+  // ── Riscos Assistencial / Documental / Contratual (parametrizáveis) ──
+  // Cada dimensão tem fatores (com peso) e limiares (pontuação até o nível). Acima do Alto = Crítico.
+  var RISCO4_DIMS = {
+    assistencial: {
+      label:'Assistencial', ico:'heart-pulse',
+      fatores:[
+        {key:'uti',        label:'Internação em UTI',                    desc:'Guia com passagem por UTI'},
+        {key:'opme',       label:'OPME presente',                        desc:'Materiais implantáveis (OPME) na guia'},
+        {key:'onco',       label:'Oncologia / imunobiológico',           desc:'Quimioterapia ou imunobiológico'},
+        {key:'altaComplex',label:'Alta complexidade (neuro/ortopédica)', desc:'Cirurgia neurológica ou ortopédica'},
+        {key:'urgencia',   label:'Regime de urgência',                   desc:'Guia em regime de urgência'}
+      ]
+    },
+    documental: {
+      label:'Documental', ico:'file-warning',
+      fatores:[
+        {key:'semAnexo',   label:'Sem documentação anexada',   desc:'Guia sem anexos'},
+        {key:'dutNaoComp', label:'DUT exigida e não comprovada',desc:'Procedimento com DUT sem evidência'},
+        {key:'prazoVenc',  label:'Prazo de auditoria vencido',  desc:'Ultrapassou o prazo de análise'}
+      ]
+    },
+    contratual: {
+      label:'Contratual', ico:'file-check',
+      fatores:[
+        {key:'internacao', label:'Internação (maior exposição contratual)', desc:'Guia de internação'},
+        {key:'altoCusto',  label:'OPME / alto custo',                       desc:'OPME ou múltiplas diárias/taxas'},
+        {key:'dut',        label:'Procedimento sujeito a DUT',              desc:'Cobertura condicionada a DUT'},
+        {key:'urgencia',   label:'Regime de urgência',                      desc:'Garantia de atendimento'}
+      ]
+    }
+  };
+  var DEFAULT_RISCO4_CFG = {
+    assistencial:{ pesos:{uti:3,opme:2,onco:3,altaComplex:2,urgencia:1}, limiares:{baixo:2,medio:4,alto:6} },
+    documental:  { pesos:{semAnexo:4,dutNaoComp:3,prazoVenc:2},          limiares:{baixo:2,medio:4,alto:6} },
+    contratual:  { pesos:{internacao:2,altoCusto:2,dut:1,urgencia:1},    limiares:{baixo:2,medio:4,alto:6} }
+  };
+
   var FLUXO_SLA_DEFAULTS = {
     'F1': {prazo: 2 },
     'F2': {prazo: 7 },
@@ -39,6 +76,18 @@
         localStorage.removeItem('regula_risco_cfg'); saved=null;
       }
       return saved || DEFAULT_RISCO_CFG;
+    })(),
+    risco4Config: (function(){
+      var saved=JSON.parse(localStorage.getItem('regula_risco4_cfg')||'null')||{};
+      // merge com os defaults (garante todos os fatores/limiares presentes mesmo em configs antigas)
+      var out=JSON.parse(JSON.stringify(DEFAULT_RISCO4_CFG));
+      ['assistencial','documental','contratual'].forEach(function(dim){
+        if(saved[dim]){
+          if(saved[dim].pesos) for(var k in saved[dim].pesos){ if(out[dim].pesos[k]!=null) out[dim].pesos[k]=saved[dim].pesos[k]; }
+          if(saved[dim].limiares) ['baixo','medio','alto'].forEach(function(l){ if(saved[dim].limiares[l]!=null) out[dim].limiares[l]=saved[dim].limiares[l]; });
+        }
+      });
+      return out;
     })(),
     etapaInstrucoes: JSON.parse(localStorage.getItem('regula_etapa_instr')||'null') || {},
     vincConfig: JSON.parse(localStorage.getItem('regula_vinc_cfg')||'null') || {},
@@ -436,48 +485,44 @@
   // Calcula as 4 dimensões de risco da guia (Regulatório, Assistencial, Documental, Contratual).
   // Cada dimensão soma pontos de fatores reais e cai numa faixa. Retorna {val, itens} por dimensão.
   function calc4Riscos(g){
-    function faixa(sc){ return sc>=7?'critico':(sc>=5?'alto':(sc>=3?'medio':'baixo')); }
-    function dim(fatores){
-      var sc=0, itens=[];
-      fatores.forEach(function(f){ if(f.aplica) sc+=f.pts; itens.push(f); });
-      return {val:faixa(sc), score:sc, itens:itens};
-    }
     var temDUT=(g.procedimentos||[]).some(function(p){return p.dut;});
     var temOPME=(g.matmed||[]).some(function(m){return m.opme;});
     var isOnco = g.tipo==='Quimioterapia' || (g.matmed||[]).some(function(m){return /imunobiol|oncolog|quimio/i.test(m.desc||'');});
     var altaComplex = g.tipo==='Cirurgia neuro' || g.tipo==='Cirurgia ortopédica';
     var custoAlto = (g.diariasTaxas||[]).length>1 || temOPME;
 
-    // REGULATÓRIO — usa o motor de risco já parametrizável (Configurações → Classificação de Risco)
+    // Condições de cada fator (por key) — usadas com os pesos/limiares parametrizados em Configurações
+    var COND = {
+      assistencial:{ uti:!!g.uti, opme:temOPME, onco:isOnco, altaComplex:altaComplex, urgencia:g.regime==='Urgência' },
+      documental:  { semAnexo:!g.anexos, dutNaoComp:(temDUT && !g.dut), prazoVenc:!!g.prazoVencido },
+      contratual:  { internacao:g.natureza==='Internação', altoCusto:custoAlto, dut:temDUT, urgencia:g.regime==='Urgência' }
+    };
+    // Monta uma dimensão a partir da config (pesos + limiares) e das condições
+    function dim(dimKey){
+      var cfg=(State.risco4Config&&State.risco4Config[dimKey])||DEFAULT_RISCO4_CFG[dimKey];
+      var lim=cfg.limiares||DEFAULT_RISCO4_CFG[dimKey].limiares;
+      function faixa(sc){ return sc>lim.alto?'critico':(sc>lim.medio?'alto':(sc>lim.baixo?'medio':'baixo')); }
+      var sc=0, itens=[];
+      RISCO4_DIMS[dimKey].fatores.forEach(function(f){
+        var pts=(cfg.pesos&&cfg.pesos[f.key]!=null)?cfg.pesos[f.key]:0;
+        var aplica=!!COND[dimKey][f.key];
+        if(aplica) sc+=pts;
+        itens.push({label:f.label, aplica:aplica, pts:pts});
+      });
+      return {val:faixa(sc), score:sc, itens:itens};
+    }
+
+    // REGULATÓRIO — usa o motor de risco já parametrizável (Configurações → Classificação de Risco → Regulatório)
     var regulat = { val:g.risco||'baixo', itens:[
       {label:'Risco calculado pelo motor (fatores parametrizáveis)', aplica:true, pts:0, obs:'Configurações → Classificação de Risco'}
     ]};
 
-    // ASSISTENCIAL — complexidade do quadro clínico / da assistência
-    var assist = dim([
-      {label:'Internação em UTI', aplica:!!g.uti, pts:3},
-      {label:'OPME presente', aplica:temOPME, pts:2},
-      {label:'Oncologia / imunobiológico', aplica:isOnco, pts:3},
-      {label:'Alta complexidade (neuro/ortopédica)', aplica:altaComplex, pts:2},
-      {label:'Regime de urgência', aplica:g.regime==='Urgência', pts:1}
-    ]);
-
-    // DOCUMENTAL — completude e conformidade documental
-    var docum = dim([
-      {label:'Sem documentação anexada', aplica:!g.anexos, pts:4},
-      {label:'DUT exigida e não comprovada', aplica:temDUT && !g.dut, pts:3},
-      {label:'Prazo de auditoria vencido', aplica:!!g.prazoVencido, pts:2}
-    ]);
-
-    // CONTRATUAL — exposição de cobertura/custo do contrato
-    var contrat = dim([
-      {label:'Internação (maior exposição contratual)', aplica:g.natureza==='Internação', pts:2},
-      {label:'OPME / alto custo', aplica:custoAlto, pts:2},
-      {label:'Procedimento sujeito a DUT (cobertura condicionada)', aplica:temDUT, pts:1},
-      {label:'Regime de urgência (garantia de atendimento)', aplica:g.regime==='Urgência', pts:1}
-    ]);
-
-    return { regulatorio:regulat, assistencial:assist, documental:docum, contratual:contrat };
+    return {
+      regulatorio:regulat,
+      assistencial:dim('assistencial'),
+      documental:dim('documental'),
+      contratual:dim('contratual')
+    };
   }
 
   // Modal que explica como uma das 4 dimensões de risco foi calculada
@@ -4068,8 +4113,12 @@
       rp.appendChild(hd);
 
       // ── Sub-abas ──
-      var rstBar=el('div',{style:'display:flex;gap:0;border-bottom:1.5px solid var(--g-100);margin:10px 0 0'});
-      [['limiares',ico('sliders-horizontal',13)+' Limiares'],['previa',ico('table-2',13)+' Prévia']].forEach(function(pair){
+      var rstBar=el('div',{style:'display:flex;gap:0;flex-wrap:wrap;border-bottom:1.5px solid var(--g-100);margin:10px 0 0'});
+      [['limiares',ico('shield-alert',13)+' Regulatório'],
+       ['assistencial',ico('heart-pulse',13)+' Assistencial'],
+       ['documental',ico('file-warning',13)+' Documental'],
+       ['contratual',ico('file-check',13)+' Contratual'],
+       ['previa',ico('table-2',13)+' Prévia']].forEach(function(pair){
         var b=el('button',{'data-rst':pair[0],style:'padding:9px 18px;font-size:12.5px;font-weight:600;border:none;border-bottom:2px solid transparent;background:none;cursor:pointer;color:var(--muted);display:flex;align-items:center;gap:6px'},pair[1]);
         rstBar.appendChild(b);
       });
@@ -4089,6 +4138,78 @@
           tmpCfg.limiares[k]=inp?(+inp.value||0):(cfg.limiares[k]||0);
         });
         return tmpCfg;
+      }
+
+      // Renderiza o editor de uma dimensão de risco (Assistencial/Documental/Contratual): pesos + limiares
+      function renderRisco4Dim(dimKey){
+        var meta=RISCO4_DIMS[dimKey];
+        var dimCfg=JSON.parse(JSON.stringify((State.risco4Config&&State.risco4Config[dimKey])||DEFAULT_RISCO4_CFG[dimKey]));
+
+        var sec=el('div',{class:'risco-section'});
+        sec.innerHTML='<h4>'+ico(meta.ico,14)+' Risco '+esc(meta.label)+' — pesos dos fatores</h4>'+
+          '<p style="font-size:12px;color:var(--muted);margin:0 0 14px">Cada fator presente na guia soma seu peso. O total define o nível pelos limiares abaixo.</p>';
+
+        // Tabela de fatores + peso editável
+        var tbl=el('table',{class:'cfg-table'});
+        tbl.innerHTML='<thead><tr><th>Fator</th><th style="width:130px;text-align:center">Peso</th></tr></thead>';
+        var tb=el('tbody');
+        meta.fatores.forEach(function(f){
+          var tr=el('tr');
+          tr.innerHTML='<td><b>'+esc(f.label)+'</b><div style="font-size:11.5px;color:var(--muted)">'+esc(f.desc)+'</div></td>'+
+            '<td style="text-align:center"><input class="r4-peso" type="number" min="0" max="20" data-fk="'+f.key+'" value="'+(dimCfg.pesos[f.key]!=null?dimCfg.pesos[f.key]:0)+'" style="width:80px;text-align:center;padding:6px;border:1px solid var(--line);border-radius:7px"/></td>';
+          tb.appendChild(tr);
+        });
+        tbl.appendChild(tb);
+        var _tw=el('div',{class:'table-wrap'}); _tw.appendChild(tbl); sec.appendChild(_tw);
+
+        // Limiares
+        var somaPesos=0; meta.fatores.forEach(function(f){ somaPesos+=(dimCfg.pesos[f.key]||0); });
+        var secL=el('div',{class:'risco-section',style:'margin-top:18px'});
+        secL.innerHTML='<h4>'+ico('sliders-horizontal',13)+' Limiares por nível</h4>'+
+          '<p style="font-size:12px;color:var(--muted);margin:0 0 12px">Pontuação <b>até</b> o limiar = nível. Acima do Alto = Crítico. Soma máxima dos pesos: <b class="r4-teto">'+somaPesos+'</b> pontos.</p>';
+        var limGrid=el('div',{class:'risco-lim-grid'});
+        [{key:'baixo',label:'Baixo',cls:'baixo',icon:'circle-check'},{key:'medio',label:'Médio',cls:'medio',icon:'circle-alert'},{key:'alto',label:'Alto',cls:'alto',icon:'triangle-alert'}].forEach(function(l){
+          var card=el('div',{class:'risco-lim-card'});
+          card.innerHTML='<div class="risco-lim-ico '+l.cls+'">'+ico(l.icon,16)+'</div>'+
+            '<div class="risco-lim-body"><div class="risco-lim-name">'+l.label+'</div><div style="font-size:11px;color:var(--muted)">0 até...</div>'+
+            '<input class="r4-lim" type="number" min="0" data-lk="'+l.key+'" value="'+(dimCfg.limiares[l.key]||0)+'" /></div>';
+          limGrid.appendChild(card);
+        });
+        var cardCrit=el('div',{class:'risco-lim-card'});
+        cardCrit.innerHTML='<div class="risco-lim-ico critico">'+ico('octagon-alert',16)+'</div>'+
+          '<div class="risco-lim-body"><div class="risco-lim-name">Crítico</div><div style="font-size:11px;color:var(--muted)">Acima do limiar Alto</div><div style="font-size:16px;font-weight:800;color:var(--danger);padding:6px 0">∞</div></div>';
+        limGrid.appendChild(cardCrit);
+        secL.appendChild(limGrid);
+
+        rstContent.appendChild(sec);
+        rstContent.appendChild(secL);
+
+        var foot=el('div',{class:'risco-foot'});
+        foot.innerHTML='<button class="btn-animated" id="r4Salvar">'+ico('save',14)+' Salvar risco '+esc(meta.label)+'</button>';
+        rstContent.appendChild(foot);
+
+        // atualiza a "soma máxima" ao vivo
+        rstContent.querySelectorAll('.r4-peso').forEach(function(inp){
+          inp.oninput=function(){
+            var s=0; rstContent.querySelectorAll('.r4-peso').forEach(function(i){ s+=(+i.value||0); });
+            var t=rstContent.querySelector('.r4-teto'); if(t) t.textContent=s;
+          };
+        });
+
+        var btn=rstContent.querySelector('#r4Salvar');
+        if(btn) btn.onclick=function(){
+          var novo={pesos:{},limiares:{}};
+          rstContent.querySelectorAll('.r4-peso').forEach(function(i){ novo.pesos[i.getAttribute('data-fk')]=+i.value||0; });
+          ['baixo','medio','alto'].forEach(function(k){ novo.limiares[k]=+rstContent.querySelector('.r4-lim[data-lk="'+k+'"]').value||0; });
+          if(novo.limiares.baixo>=novo.limiares.medio||novo.limiares.medio>=novo.limiares.alto){
+            toast('Limiares devem ser crescentes: Baixo < Médio < Alto','err'); return;
+          }
+          if(!State.risco4Config) State.risco4Config=JSON.parse(JSON.stringify(DEFAULT_RISCO4_CFG));
+          State.risco4Config[dimKey]=novo;
+          localStorage.setItem('regula_risco4_cfg',JSON.stringify(State.risco4Config));
+          toast('Risco '+meta.label+' salvo e aplicado','ok');
+        };
+        lcIcons();
       }
 
       function showRst(tab){
@@ -4137,6 +4258,10 @@
               aplicarRiscos(); toast('Limiares salvos e aplicados','ok'); render();
             };
           },0);
+
+        } else if(tab==='assistencial'||tab==='documental'||tab==='contratual'){
+          // ── Riscos Assistencial / Documental / Contratual (pesos dos fatores + limiares) ──
+          renderRisco4Dim(tab);
 
         } else {
           // ── Prévia — distribuição das guias pelos níveis de risco atuais ──
