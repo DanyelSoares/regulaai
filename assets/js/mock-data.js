@@ -661,6 +661,70 @@
     return dd+'/'+mm+'/'+yy+' '+hh+':'+mi;
   }
 
+  // ── Mensalidades / Faturas do beneficiário (determinístico por guia) ──
+  // Gera faturas mensais: pagas (branco), a vencer futuras (verde) e vencida em aberto (vermelho).
+  var _LOCAIS_PGTO = ['DEBITO EM CONTA (CEF)','BOLETO BANCARIO COM REGISTRO','DEBITO EM CONTA (BB)','PIX'];
+  function mensalidadesGuia(g){
+    var ben = g.beneficiario||{};
+    var seed=_mmSeed('fatura'+(ben.id||g.numero));
+    var hoje=new Date();
+    var valorBase = 279.19;
+    var valorAntigo = 263.46; // reajuste ocorre em algum ponto do histórico
+    var out=[];
+    // 15 competências: 12 passadas + atual + 2 futuras (vencimento dia 05, exceto as 2 futuras dia 15)
+    // i=0 é a mais futura; vamos gerar de -12 (passado) a +2 (futuro) e ordenar desc por vencimento
+    for(var off=2; off>=-12; off--){
+      var s=_mmSeed('fatura'+(ben.id||g.numero)+'#'+off);
+      // vencimento: mês corrente + off, dia 05 (futuras dia 15, como no anexo)
+      var dia = off>0 ? 15 : 5;
+      var venc=new Date(hoje.getFullYear(), hoje.getMonth()+off, dia);
+      var comp=new Date(venc.getFullYear(), venc.getMonth()-1, 1); // competência = mês anterior ao vencimento
+      var valorVenc = (off<=-9) ? valorAntigo : valorBase; // faturas mais antigas com valor menor (pré-reajuste)
+      var doc = '9' + (270000 + (seed%9000) + (12-off)*783) % 900000;
+      var localPg = off>0 ? 'BOLETO BANCARIO COM REGISTRO' : _LOCAIS_PGTO[s % 3]; // futuras via boleto
+      var status, diasAtraso=0, multa=0, juros=0, valorCorrigido=valorVenc, valorPago='', dataPagamento='', dataRegistro='';
+      var diffDias = Math.round((hoje - venc)/86400000);
+      if(venc > hoje){
+        // Futura — a vencer (verde)
+        status='avencer';
+        diasAtraso=0;
+      } else {
+        // Passada: quase todas pagas (branco); a mais recentemente vencida (a atual) fica em aberto/atraso (vermelho)
+        var emAberto = (off===0); // a competência do mês corrente está vencida e em aberto
+        if(emAberto){
+          status='vencida';
+          diasAtraso = Math.max(1, diffDias);
+          multa = +(valorVenc*0.02).toFixed(2);              // 2% de multa
+          juros = +(valorVenc*0.00033*diasAtraso).toFixed(2); // ~1% a.m. pro rata
+          valorCorrigido = +(valorVenc+multa+juros).toFixed(2);
+        } else {
+          status='paga';
+          diasAtraso = s%7;               // pagou com alguns dias de atraso ocasionalmente
+          valorPago = valorVenc;
+          var dp=new Date(venc.getTime()+(diasAtraso)*86400000);
+          dataPagamento=_fmtData(dp);
+          var dr=new Date(dp.getTime()+((s%3))*86400000);
+          dataRegistro=_fmtData(dr);
+        }
+      }
+      out.push({
+        vencimento:_fmtData(venc),
+        competencia:('0'+(comp.getMonth()+1)).slice(-2)+'/'+comp.getFullYear(),
+        documento:String(doc),
+        valorVencimento:valorVenc,
+        diasAtraso:diasAtraso,
+        multa:multa, juros:juros,
+        valorCorrigido:valorCorrigido,
+        localPagamento:localPg,
+        valorPago:valorPago,
+        pagamento:dataPagamento,
+        registro:dataRegistro,
+        status:status // 'avencer' | 'vencida' | 'paga'
+      });
+    }
+    return out;
+  }
+
   // ── Carências do beneficiário (determinístico por guia) ──
   // Tabela de carências no padrão ANS: cada item tem prazo (dias) a partir da data de inclusão.
   var CARENCIAS_DEF = [
@@ -716,7 +780,7 @@
     STATUS:STATUS, ORIGENS:ORIGENS, CATEGORIAS_ANEXO:CATEGORIAS_ANEXO,
     MOTIVOS_COMP:MOTIVOS_COMP, MOTIVOS_REPR:MOTIVOS_REPR, MOTIVOS_RESS:MOTIVOS_RESS,
     LOGS:LOGS, buildGuias: hydrate, matmedDetalhe: matmedDetalhe, opmeDetalhe: opmeDetalhe, procDetalhe: procDetalhe, observacoesGuia: observacoesGuia,
-    calcIdade: calcIdade, anosContrato: anosContrato, cidGuia: cidGuia, carenciasGuia: carenciasGuia, historicoAtendimentos: historicoAtendimentos,
+    calcIdade: calcIdade, anosContrato: anosContrato, cidGuia: cidGuia, carenciasGuia: carenciasGuia, mensalidadesGuia: mensalidadesGuia, historicoAtendimentos: historicoAtendimentos,
     naturezaDaGuia: naturezaDaGuia, naturezaDetalhada: naturezaDetalhada, SUB_INTERNACAO: SUB_INTERNACAO,
     naturezaSelectHTML: naturezaSelectHTML
   };

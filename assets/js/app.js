@@ -4771,6 +4771,7 @@
       {id:'resumo',        label:'Resumo',           ico:'layout-dashboard', grp:0},
       {id:'ia',            label:'Parecer Técnico',   ico:'bot',              grp:3, tip:'Atalho: F7'},
       {id:'carencias',     label:'Carências',         ico:'calendar-clock',   grp:3, tip:'Atalho: F10'},
+      {id:'mensalidades',  label:'Mensalidades',      ico:'receipt',          grp:3, tip:'Atalho: F8'},
       {id:'histatend',     label:'Hist. atendimento', ico:'history',          grp:3, tip:'Atalho: F9'},
       {id:'obsimp',        label:'Obs. Impressas',    ico:'printer',          grp:4},
       {id:'obsnaoimp',     label:'Obs. Não Impressas',ico:'eye-off',          grp:4},
@@ -4800,7 +4801,7 @@
     $$('.tab',m).forEach(function(b){ b.onclick=function(){setTab(b.getAttribute('data-tab'))} });
     setTab(tab||'resumo');
 
-    // Atalhos da guia (todos alternam abre/fecha, sem sair da aba atual): F7 → Parecer Técnico · F9 → Hist. atendimento · F10 → Carências
+    // Atalhos da guia (todos alternam abre/fecha, sem sair da aba atual): F7 → Parecer Técnico · F8 → Mensalidades · F9 → Hist. atendimento · F10 → Carências
     function _guiaKeyHandler(ev){
       if(!m.isConnected){ document.removeEventListener('keydown',_guiaKeyHandler); return; } // guia fechada: limpa handler
       if(ev.key==='F10'){
@@ -4809,6 +4810,9 @@
       } else if(ev.key==='F9'){
         ev.preventDefault();
         if(!fecharHistAtend()) showHistAtend(g); // se já aberto, F9 fecha; senão, abre
+      } else if(ev.key==='F8'){
+        ev.preventDefault();
+        if(!fecharMensalidades()) showMensalidades(g); // se já aberto, F8 fecha; senão, abre
       } else if(ev.key==='F7'){
         ev.preventDefault();
         if(!fecharParecer()) showParecer(g); // se já aberto, F7 fecha; senão, abre
@@ -4922,6 +4926,75 @@
   // Fecha o modal de Carências, se aberto. Retorna true se havia um aberto.
   function fecharCarencias(){
     var bd=document.querySelector('.modal-backdrop.carencia-modal-bd');
+    if(!bd) return false;
+    bd.remove();
+    if(!document.querySelector('.modal-backdrop')){ document.body.style.overflow=''; document.body.classList.remove('modal-aberto'); }
+    return true;
+  }
+
+  // Monta o HTML das Mensalidades/Faturas (reusado pela aba "Mensalidades" e pelo modal F8)
+  function renderMensalidadesBody(g){
+    var faturas = MOCK.mensalidadesGuia ? MOCK.mensalidadesGuia(g) : [];
+    if(!faturas.length) return '<div class="empty"><div class="ico">'+icoLg('receipt')+'</div>Sem faturas para este beneficiário.</div>';
+    function money(v){ return (v||v===0) && v!=='' ? (+v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}) : ''; }
+    // resumo topo
+    var emAberto=faturas.filter(function(f){return f.status==='vencida';});
+    var aVencer=faturas.filter(function(f){return f.status==='avencer';});
+    var resumo=
+      '<div class="mens-info">'+
+        '<div><span class="mens-info-lb">Faturas</span><b>'+faturas.length+'</b></div>'+
+        '<div><span class="mens-info-lb">Em aberto (vencidas)</span><b class="'+(emAberto.length?'mens-red':'')+'">'+emAberto.length+'</b></div>'+
+        '<div><span class="mens-info-lb">A vencer</span><b>'+aVencer.length+'</b></div>'+
+      '</div>';
+    var linhas=faturas.map(function(f){
+      var cls = f.status==='avencer'?'mens-row-verde':(f.status==='vencida'?'mens-row-vermelho':'');
+      return '<tr class="'+cls+'">'+
+        '<td class="nw">'+esc(f.vencimento)+'</td>'+
+        '<td class="nw">'+esc(f.competencia)+'</td>'+
+        '<td class="nw">'+esc(f.documento)+'</td>'+
+        '<td class="rt">'+money(f.valorVencimento)+'</td>'+
+        '<td class="cc">'+f.diasAtraso+'</td>'+
+        '<td class="rt">'+(f.multa?money(f.multa):'')+'</td>'+
+        '<td class="rt">'+(f.juros?money(f.juros):'')+'</td>'+
+        '<td class="rt">'+money(f.valorCorrigido)+'</td>'+
+        '<td>'+esc(f.localPagamento)+'</td>'+
+        '<td class="rt">'+(f.valorPago!==''?money(f.valorPago):'')+'</td>'+
+        '<td class="nw">'+esc(f.pagamento||'')+'</td>'+
+        '<td class="nw">'+esc(f.registro||'')+'</td>'+
+      '</tr>';
+    }).join('');
+    var tbl=
+      '<div class="mens-tbl-wrap"><table class="mens-tbl">'+
+        '<thead><tr>'+
+          '<th>Vencimento</th><th>Competência</th><th>Documento</th><th class="rt">Valor no vencimento</th>'+
+          '<th class="cc">Dias em atraso</th><th class="rt">Multa (R$)</th><th class="rt">Juros (R$)</th>'+
+          '<th class="rt">Valor corrigido</th><th>Local de pagamento</th><th class="rt">Valor pago</th>'+
+          '<th>Pagamento</th><th>Registro</th>'+
+        '</tr></thead>'+
+        '<tbody>'+linhas+'</tbody>'+
+      '</table></div>';
+    var legenda=
+      '<div class="mens-legenda">'+
+        '<span><i class="mens-dot mens-dot-verde"></i> A vencer</span>'+
+        '<span><i class="mens-dot mens-dot-vermelho"></i> Vencida em aberto</span>'+
+        '<span><i class="mens-dot mens-dot-branco"></i> Paga</span>'+
+      '</div>';
+    return resumo + tbl + legenda;
+  }
+  // Modal de Mensalidades (atalho F8)
+  function showMensalidades(g){
+    var ben=g.beneficiario||{};
+    var m=modal('Mensalidades — '+esc(ben.nome||''),
+      'Guia '+esc(g.numero)+' · '+esc(ben.plano||'')+(ben.contrato?' · '+esc(ben.contrato):''),
+      renderMensalidadesBody(g), null);
+    var bd=m.closest('.modal-backdrop'); if(bd) bd.classList.add('mensalidades-modal-bd');
+    var _esc=function(ev){ if(ev.key==='Escape'){ if(bd) bd.remove(); document.removeEventListener('keydown',_esc); if(!document.querySelector('.modal-backdrop')){ document.body.style.overflow=''; document.body.classList.remove('modal-aberto'); } } };
+    document.addEventListener('keydown',_esc);
+    lcIcons();
+    return m;
+  }
+  function fecharMensalidades(){
+    var bd=document.querySelector('.modal-backdrop.mensalidades-modal-bd');
     if(!bd) return false;
     bd.remove();
     if(!document.querySelector('.modal-backdrop')){ document.body.style.overflow=''; document.body.classList.remove('modal-aberto'); }
@@ -5369,6 +5442,8 @@
       d.appendChild(renderParecerIA(ia,g));
     } else if(t==='carencias'){
       d.innerHTML=renderCarenciasBody(g);
+    } else if(t==='mensalidades'){
+      d.innerHTML=renderMensalidadesBody(g);
     } else if(t==='histatend'){
       d.appendChild(renderHistAtendimento(g));
     } else if(t==='operadora'){

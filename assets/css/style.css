@@ -844,6 +844,29 @@ body.sidebar-collapsed .modal-backdrop{left:66px}
 .carencia-tbl th.cc{text-align:center}
 .carencia-nome{font-weight:600;color:var(--g-700)}
 .carencia-tbl tbody tr:hover td,.carencia-tbl tbody tr:hover td{background:var(--g-50)}
+/* Aba/Modal Mensalidades (faturas) */
+.mens-info{display:flex;gap:28px;flex-wrap:wrap;padding:0 2px 12px;border-bottom:1px solid var(--line);margin-bottom:12px}
+.mens-info>div{display:flex;flex-direction:column;gap:2px}
+.mens-info-lb{font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);font-weight:700}
+.mens-info b{font-size:16px;color:var(--ink-1)}
+.mens-info b.mens-red{color:#b3261e}
+.mens-tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px}
+.mens-tbl{width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap}
+.mens-tbl th{position:sticky;top:0;background:var(--g-50);text-align:left;font-size:9.5px;text-transform:uppercase;letter-spacing:.3px;color:var(--g-600);font-weight:700;padding:8px 10px;border-bottom:1px solid var(--g-100)}
+.mens-tbl td{padding:7px 10px;border-bottom:1px solid var(--g-50);vertical-align:middle}
+.mens-tbl th.rt,.mens-tbl td.rt{text-align:right}
+.mens-tbl th.cc,.mens-tbl td.cc{text-align:center}
+.mens-tbl td.nw{white-space:nowrap}
+.mens-tbl tbody tr:hover td{filter:brightness(.97)}
+/* cores das linhas: verde=a vencer, vermelho=vencida em aberto, branco(sem classe)=paga */
+.mens-tbl tr.mens-row-verde td{background:#d6f5df;color:#0a5a2a}
+.mens-tbl tr.mens-row-vermelho td{background:#f8d3d3;color:#8a1f1f;font-weight:600}
+.mens-legenda{display:flex;gap:20px;flex-wrap:wrap;margin-top:12px;font-size:11.5px;color:var(--muted)}
+.mens-legenda span{display:inline-flex;align-items:center;gap:6px}
+.mens-dot{width:12px;height:12px;border-radius:3px;display:inline-block;border:1px solid rgba(0,0,0,.12)}
+.mens-dot-verde{background:#d6f5df}
+.mens-dot-vermelho{background:#f8d3d3}
+.mens-dot-branco{background:#fff}
 .kbd-hint{display:inline-block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:9.5px;font-weight:700;line-height:1;color:var(--g-600);background:#fff;border:1px solid var(--g-200);border-bottom-width:2px;border-radius:4px;padding:2px 5px;margin-left:4px;vertical-align:middle}
 /* Aba Hist. atendimento */
 .hist-atend{display:flex;flex-direction:column;gap:14px}
