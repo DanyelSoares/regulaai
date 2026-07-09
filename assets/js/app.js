@@ -4769,7 +4769,7 @@
     var ia=g._cache;
     var TABS_DEF=[
       {id:'resumo',        label:'Resumo',           ico:'layout-dashboard', grp:0},
-      {id:'ia',            label:'Parecer Técnico',   ico:'bot',              grp:3, tip:'Atalho: F7'},
+      {id:'ia',            label:'Análise Técnica IA', ico:'bot',             grp:3, tip:'Atalho: F7'},
       {id:'mensalidades',  label:'Mensalidades',      ico:'receipt',          grp:7, tip:'Atalho: F8'},
       {id:'histatend',     label:'Hist. atendimento', ico:'history',          grp:7, tip:'Atalho: F9'},
       {id:'carencias',     label:'Carências',         ico:'calendar-clock',   grp:7, tip:'Atalho: F10'},
@@ -5027,7 +5027,7 @@
   function showParecer(g){
     var ben=g.beneficiario||{};
     var ia=g._cache||(g._cache=AI.analisarGuiaComIA(g,{pesos:getFluxoPesos(g.fluxo&&g.fluxo.id)}));
-    var m=modal('Parecer Técnico — '+esc(ben.nome||''),
+    var m=modal('Análise Técnica IA — '+esc(ben.nome||''),
       'Guia '+esc(g.numero)+' · '+esc(g.tipo)+(g.fluxo?' · Fluxo '+esc(g.fluxo.id):''),
       '<div class="parecer-modal-slot"></div>', null);
     var bd=m.closest('.modal-backdrop'); if(bd) bd.classList.add('parecer-modal-bd');
@@ -6263,7 +6263,7 @@
     var box=el('div',{class:'ai-box'});
     var hd=el('div',{class:'hd'});
     var tt=el('div',{class:'tt'});
-    tt.innerHTML=ico('sparkles')+' Parecer Técnico <span class="badge muted">Confiança '+Math.round(ia.confianca)+'%</span>';
+    tt.innerHTML=ico('sparkles')+' Análise Técnica IA <span class="badge muted">Confiança '+Math.round(ia.confianca)+'%</span>';
     hd.appendChild(tt);
     var adpWrap=el('div',{class:'ia-adp-wrap'});
     adpWrap.innerHTML=aderenciaBar(calcAdp());
@@ -6823,7 +6823,7 @@
           {id:'cabecalho',    label:'Cabeçalho'},
           {id:'resumo',       label:'Resumo'},
           {id:'etapas',       label:'Etapas'},
-          {id:'parecer_tec',  label:'Parecer Técnico'},
+          {id:'parecer_tec',  label:'Análise Técnica IA'},
           {id:'parecer_op',   label:'Parecer Operadora'},
           {id:'logs_guia',    label:'Logs'},
         ];
@@ -7025,7 +7025,7 @@
           manualBox('Críticas (no Resumo)',
             '<p>As críticas foram incorporadas ao <b>Resumo</b> da guia: uma seção lista as inconsistências e alertas identificados automaticamente pela IA e pelas regras de negócio, com o contador no cabeçalho.</p>')+
 
-          manualBox('Aba: Parecer Técnico',
+          manualBox('Aba: Análise Técnica IA',
             '<p>Exibe a análise técnica gerada pela IA com base nas regras DUT e nos parâmetros configurados:</p>'+
             manualTable(['Elemento','Descrição'],[
               ['Badge de confiança','Percentual de confiança da análise (Ex.: Confiança 87%)'],
