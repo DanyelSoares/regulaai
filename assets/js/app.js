@@ -7914,8 +7914,11 @@
       }
       chatGuia=g; aguardandoGuia=false; anexosVisaoEnviados=false;
       chatInp.placeholder='Digite sua mensagem...';
-      addMsg('bot','Guia <b>'+esc(g.numero)+'</b> carregada — '+esc(g.beneficiario&&g.beneficiario.nome||'')+' · '+esc(g.tipo)+' · aderência '+ (g._cache?g._cache.aderencia:AI.analisarGuiaComIA(g,{pesos:getFluxoPesos(g.fluxo&&g.fluxo.id)}).aderencia) +'%.<br>Pode perguntar sobre a indicação técnica dos serviços, o parecer, contraindicações ou alternativas. <i>Lembre-se: sou apoio à decisão — a palavra final é da operadora.</i>',true);
+      var nAnx=anexosParaVisao(g).length;
+      addMsg('bot','Guia <b>'+esc(g.numero)+'</b> carregada — '+esc(g.beneficiario&&g.beneficiario.nome||'')+' · '+esc(g.tipo)+' · aderência '+ (g._cache?g._cache.aderencia:AI.analisarGuiaComIA(g,{pesos:getFluxoPesos(g.fluxo&&g.fluxo.id)}).aderencia) +'%.<br>Analisando a guia'+(nAnx?' e lendo '+nAnx+' anexo(s)':'')+'… <i>Sou apoio à decisão — a palavra final é da operadora.</i>',true);
       chatInp.focus();
+      // Análise técnica automática (dossiê completo + leitura dos anexos), sem esperar pergunta
+      analiseAutomaticaGuia();
     }
 
     // Carrega uma sessão pelo id
@@ -8079,32 +8082,20 @@
       return {ok:false,text:(dg.error&&dg.error.message)||'Sem resposta. Tente novamente.'};
     }
 
-    async function sendChat(){
-      var q=chatInp.value.trim();
-      if(!q) return;
-      chatInp.value='';
-      chatInp.style.height='auto';
-      addMsg('user',q);
-
-      // Modo técnico aguardando o número da guia: trata a entrada como nº da guia
-      if(aguardandoGuia){ carregarGuiaTecnica(q); return; }
-      // Sem modo escolhido ainda → pede para escolher
-      if(!chatMode){ addMsg('bot','Antes, escolha como posso ajudar:'); addModePicker(); return; }
-
+    // Executa um turno de conversa: monta a mensagem (anexando o conteúdo dos anexos na 1ª vez), chama a IA e mostra a resposta.
+    // baseText: texto da mensagem do usuário (ou instrução automática). mostrarUser: se true, ecoa a mensagem no chat.
+    async function enviarTurno(baseText, mostrarUser){
       var cfg=getIaCfg();
-      if(!cfg.key){
-        addMsg('bot',msgSemChave(),true);
-        return;
-      }
+      if(!cfg.key){ addMsg('bot',msgSemChave(),true); return; }
+      if(mostrarUser) addMsg('user',baseText);
 
       var typing=el('div',{class:'mchat-msg mchat-bot'});
       typing.innerHTML='<div class="mchat-avatar rai-msg-avatar">'+RAI_AVATAR+'</div><div class="mchat-bubble-wrap"><span class="mchat-sender">RAI</span><div class="mchat-bubble mchat-typing"><span></span><span></span><span></span></div></div>';
       chatLog.appendChild(typing);
       chatLog.scrollTop=chatLog.scrollHeight;
 
-      // Monta a mensagem do usuário; na 1ª pergunta técnica, anexa o CONTEÚDO dos anexos (imagem/PDF) p/ visão.
-      // Os três provedores (Claude, OpenAI, Gemini) leem imagem E PDF.
-      var userParts=[{text:q}];
+      // Na 1ª mensagem técnica, anexa o CONTEÚDO dos anexos (imagem/PDF) p/ visão. Os 3 provedores leem imagem E PDF.
+      var userParts=[{text:baseText}];
       var anexosEnviadosAgora=[];
       if(chatMode==='tecnica' && chatGuia && !anexosVisaoEnviados){
         var anx=anexosParaVisao(chatGuia);
@@ -8126,7 +8117,6 @@
         if(res.ok){
           chatHistory.push({role:'model',parts:[{text:res.text}]});
           addMsg('bot',res.text);
-          // Marca os anexos que foram enviados à IA como "analisados" (persistente por guia)
           if(anexosEnviadosAgora.length && chatGuia){ marcarAnexosAnalisados(chatGuia, anexosEnviadosAgora); }
         } else {
           addMsg('bot','❌ '+res.text);
@@ -8137,6 +8127,34 @@
         addMsg('bot','❌ Erro de conexão: '+err.message);
         saveCurrent();
       }
+    }
+
+    // Dispara a ANÁLISE AUTOMÁTICA da guia assim que ela é carregada (sem esperar pergunta do usuário)
+    async function analiseAutomaticaGuia(){
+      var cfg=getIaCfg();
+      if(!cfg.key){ addMsg('bot',msgSemChave(),true); return; }
+      var instrucao='Faça agora a ANÁLISE TÉCNICA INICIAL COMPLETA desta guia, de forma objetiva e estruturada, usando TODO o dossiê fornecido e LENDO os anexos enviados. Organize em tópicos curtos: '+
+        '1) Resumo do caso (beneficiário, quadro/indicação clínica, serviços solicitados); '+
+        '2) Achados dos anexos (o que consta em cada laudo/exame/documento e se sustentam a solicitação); '+
+        '3) Aderência às diretrizes/DUT e pontos de atenção regulatórios; '+
+        '4) Coerência entre indicação clínica × serviços × histórico × carências; '+
+        '5) Alertas/pendências e recomendação de apoio (sem autorizar/negar). '+
+        'Seja direto. Ao final, ofereça: "Posso detalhar algum ponto ou discutir alternativas.".';
+      await enviarTurno(instrucao, false);
+    }
+
+    async function sendChat(){
+      var q=chatInp.value.trim();
+      if(!q) return;
+      chatInp.value='';
+      chatInp.style.height='auto';
+
+      // Modo técnico aguardando o número da guia: trata a entrada como nº da guia
+      if(aguardandoGuia){ addMsg('user',q); carregarGuiaTecnica(q); return; }
+      // Sem modo escolhido ainda → pede para escolher
+      if(!chatMode){ addMsg('user',q); addMsg('bot','Antes, escolha como posso ajudar:'); addModePicker(); return; }
+
+      await enviarTurno(q, true);
     }
 
     chatSend.onclick=sendChat;
