@@ -7551,6 +7551,8 @@
       return CTX_BASE+
         'MODO: CONVERSA TÉCNICA. Você atua como apoio técnico-assistencial ao auditor sobre uma guia específica: esclarece o parecer, discute indicação técnica dos serviços solicitados, contraindicações, alternativas terapêuticas possíveis, e pontos de atenção regulatórios. '+
         'IMPORTANTE: você é apoio à decisão — NÃO autoriza nem nega procedimentos. A decisão final é exclusiva da operadora/auditor. Baseie-se nos dados fornecidos da guia e em boas práticas clínicas/regulatórias; quando faltar informação, declare a limitação. '+
+        'CONTEXTO INTEGRAL: o dossiê abaixo já reúne TODAS as abas da guia (dados, serviços, análise IA, críticas, observações impressas/internas, histórico, hist. de atendimento, carências, mensalidades, etapas e a lista de anexos). Você NÃO precisa pedir que o usuário cole textos ou envie arquivos — você já tem tudo. '+
+        'ANEXOS: quando arquivos (laudos, exames, imagens/PDF) forem enviados junto na conversa, LEIA o conteúdo deles e cite achados relevantes (ex.: valores de exame, IMC, laudo do médico assistente, evidência de DUT), cruzando com os serviços solicitados e a indicação clínica. Se um anexo estiver listado mas sem conteúdo legível, aponte que o arquivo não pôde ser lido. '+
         'DADOS DA GUIA EM ANÁLISE:\n'+resumoGuia;
     }
 
@@ -7630,6 +7632,7 @@
     var chatMode=null;        // null | 'sistema' | 'tecnica' | 'relatorios'
     var chatGuia=null;        // guia carregada no modo técnico
     var aguardandoGuia=false; // true quando esperamos o usuário digitar o nº da guia
+    var anexosVisaoEnviados=false; // controla envio único dos anexos (imagem/PDF) por guia
 
     // System context conforme o modo atual
     function systemContextAtual(){
@@ -7639,27 +7642,133 @@
     }
 
     // Monta um resumo textual da guia + análise da IA para o contexto técnico
+    // DOSSIÊ COMPLETO da guia — reúne o conteúdo de TODAS as abas automaticamente (sem ação do usuário),
+    // para que a IA tenha o contexto integral: dados, serviços, obs, críticas, carências, mensalidades,
+    // histórico de atendimento e a lista de anexos (o conteúdo binário dos anexos é enviado à parte, via visão).
     function resumoGuiaTexto(g){
       var ia=g._cache||AI.analisarGuiaComIA(g,{pesos:getFluxoPesos(g.fluxo&&g.fluxo.id)});
       g._cache=ia;
+      var b=g.beneficiario||{};
       var L=[];
-      L.push('Número: '+g.numero);
-      L.push('Beneficiário: '+(g.beneficiario&&g.beneficiario.nome||'—'));
-      L.push('Tipo/Regime/Natureza: '+g.tipo+' / '+g.regime+' / '+g.natureza);
-      L.push('Fluxo: '+(g.fluxo&&g.fluxo.nome||'—'));
-      L.push('Status: '+g.status);
-      L.push('Risco: '+(g.risco||'—'));
+      function sec(t){ L.push('\n=== '+t+' ==='); }
+
+      // ── Identificação e beneficiário ──
+      sec('IDENTIFICAÇÃO');
+      L.push('Guia: '+g.numero+' | Status: '+g.status+' | Risco (motor): '+(g.risco||'—'));
+      L.push('Tipo/Regime/Natureza: '+g.tipo+' / '+g.regime+' / '+g.natureza+(g.subInternacao?' ('+g.subInternacao+')':''));
+      L.push('Fluxo: '+(g.fluxo&&g.fluxo.nome||'—')+' | Origem: '+(g.origem||'—')+' | Acomodação: '+(b.acomodacao||'—'));
+      L.push('Beneficiário: '+(b.nome||'—')+(b.idade!=null?', '+b.idade+' anos':'')+' | Plano/Contrato: '+(b.plano||'—')+' / '+(b.contrato||'—'));
+      try{ var cid=MOCK.cidGuia?MOCK.cidGuia(g):null; if(cid) L.push('CID: '+cid.codigo+' — '+cid.descricao); }catch(e){}
+      L.push('Solicitante: '+(g.solicitante||'—')+' | Executante: '+((g.prestadorExe&&g.prestadorExe.nome)||'—')+' | Especialidade: '+(MOCK.especialidadeDaGuia?MOCK.especialidadeDaGuia(g):'—'));
+
+      // ── Serviços solicitados ──
+      sec('SERVIÇOS SOLICITADOS');
       var procs=(g.procedimentos||[]).map(function(p){return p.cod+' '+p.desc+(p.dut?' [DUT]':'');});
-      L.push('Procedimentos solicitados: '+(procs.length?procs.join('; '):'nenhum'));
+      L.push('Procedimentos: '+(procs.length?procs.join('; '):'nenhum'));
       if((g.pacotes||[]).length) L.push('Pacotes: '+g.pacotes.map(function(p){return p.cod+' '+p.desc;}).join('; '));
-      if((g.matmed||[]).length) L.push('Mat/Med: '+g.matmed.map(function(p){return p.cod+' '+p.desc+(p.opme?' [OPME]':'');}).join('; '));
+      if((g.matmed||[]).length) L.push('Mat/Med e OPME: '+g.matmed.map(function(p){return p.cod+' '+p.desc+(p.opme?' [OPME]':'');}).join('; '));
       if((g.diariasTaxas||[]).length) L.push('Diárias/Taxas: '+g.diariasTaxas.map(function(p){return p.cod+' '+p.desc;}).join('; '));
-      L.push('Aderência calculada: '+ia.aderencia+'% ('+ia.classificacao.label+')');
-      L.push('Parecer da IA (apoio): '+ia.parecerGeral);
+
+      // ── Análise técnica da IA ──
+      sec('ANÁLISE TÉCNICA IA');
+      L.push('Aderência: '+ia.aderencia+'% ('+ia.classificacao.label+') | Confiança: '+Math.round(ia.confianca)+'%');
+      L.push('Parecer geral: '+ia.parecerGeral);
       if((ia.pendencias||[]).length) L.push('Pendências: '+ia.pendencias.join('; '));
       if((ia.alertas||[]).length) L.push('Alertas: '+ia.alertas.join('; '));
       L.push('Próxima ação sugerida: '+ia.proximaAcao);
+
+      // ── Críticas da guia ──
+      try{
+        var crits=(typeof criticasDaGuia==='function')?criticasDaGuia(g,ia):[];
+        if(crits.length){ sec('CRÍTICAS'); crits.forEach(function(c){ L.push('- ['+(c.codigo||'—')+'] '+(c.procedimento&&c.procedimento!=='—'?c.procedimento+': ':'')+c.critica); }); }
+      }catch(e){}
+
+      // ── Observações ──
+      try{
+        var oi=(typeof getObsImpressas==='function')?getObsImpressas(g):'';
+        if(oi&&oi.trim()){ sec('OBSERVAÇÕES IMPRESSAS (visíveis ao prestador)'); L.push(oi.trim()); }
+        var oni=(typeof getObsNaoImpressas==='function')?getObsNaoImpressas(g):[];
+        if(oni&&oni.length){ sec('OBSERVAÇÕES NÃO IMPRESSAS (internas)'); oni.forEach(function(o){ L.push('- '+(o.data||'')+' '+(o.operador||'')+': '+(o.texto||'')); }); }
+      }catch(e){}
+
+      // ── Histórico clínico (gerado pela IA sobre os atendimentos correlatos) ──
+      try{ if(typeof histGeradoIA==='function'){ sec('HISTÓRICO E TRATAMENTOS ANTERIORES'); L.push(histGeradoIA(g)); } }catch(e){}
+
+      // ── Hist. de atendimento (últimos 24m, correlatos) — resumo ──
+      try{
+        var hist=(MOCK.historicoAtendimentos?MOCK.historicoAtendimentos(g):[]);
+        if(hist.length){
+          sec('HIST. ATENDIMENTO (resumo dos últimos registros)');
+          L.push(hist.length+' atendimentos registrados. Últimos 8:');
+          hist.slice(0,8).forEach(function(a){ L.push('- '+a.data+' | guia '+a.guia+' | '+a.cod+' '+a.procedimento+' | '+a.espec+' | CID '+a.cid+' | Solic '+a.qtdSolic+'/Aut '+a.qtdAut+' | '+a.faturamento); });
+        }
+      }catch(e){}
+
+      // ── Carências ──
+      try{
+        var car=MOCK.carenciasGuia?MOCK.carenciasGuia(g):null;
+        if(car){
+          sec('CARÊNCIAS');
+          L.push('Inclusão: '+car.inclusao+' | Permanência: '+car.permanencia+' dias.');
+          if(car.cpt&&car.cpt.ativo) L.push('CPT ATIVA: '+car.cpt.texto+' — vencimento '+car.cpt.vencimento+' ('+car.cpt.cid+').');
+          var pend=(car.itens||[]).filter(function(it){return !it.cumprida;});
+          L.push(pend.length?('Carências a cumprir: '+pend.map(function(it){return it.nome+' (vence '+it.vencimento+')';}).join('; ')):'Todas as carências cumpridas.');
+        }
+      }catch(e){}
+
+      // ── Mensalidades ──
+      try{
+        var fat=MOCK.mensalidadesGuia?MOCK.mensalidadesGuia(g):[];
+        if(fat.length){
+          sec('MENSALIDADES / FATURAS');
+          var vencidas=fat.filter(function(f){return f.status==='vencida';});
+          var aVencer=fat.filter(function(f){return f.status==='avencer';});
+          L.push(fat.length+' faturas. Em aberto/vencidas: '+vencidas.length+' | A vencer: '+aVencer.length+'.');
+          if(vencidas.length) L.push('VENCIDA EM ABERTO: '+vencidas.map(function(f){return 'venc '+f.vencimento+' comp '+f.competencia+' R$ '+f.valorCorrigido+' ('+f.diasAtraso+'d atraso)';}).join('; '));
+        }
+      }catch(e){}
+
+      // ── Etapas do fluxo ──
+      try{
+        if((g.etapas||[]).length){
+          sec('ETAPAS DO FLUXO');
+          L.push(g.etapas.map(function(e){return e.nome+' ['+(e.status||'')+']';}).join(' → '));
+        }
+      }catch(e){}
+
+      // ── Anexos (lista + indicação de conteúdo enviado via visão) ──
+      try{
+        var anx=g.anexosLista||[];
+        sec('ANEXOS');
+        if(!anx.length){ L.push('Nenhum anexo.'); }
+        else {
+          L.push(anx.length+' anexo(s):');
+          anx.forEach(function(a){
+            var temConteudo=!!a.dataURL;
+            L.push('- '+a.nome+' | categoria: '+(a.categoria||'—')+' | '+(a.enviadoEm||'')+(temConteudo?' | CONTEÚDO ANEXADO (analise a imagem/documento correspondente enviado)':' | (conteúdo do arquivo não disponível para leitura)'));
+            (a.anotacoes||[]).forEach(function(an){ L.push('   · anotação: '+(an.texto||an)); });
+          });
+          L.push('IMPORTANTE: quando houver "CONTEÚDO ANEXADO", os arquivos correspondentes foram enviados junto para você analisar visualmente. Cruze o que está escrito neles com os serviços solicitados e a indicação clínica.');
+        }
+      }catch(e){}
+
       return L.join('\n');
+    }
+
+    // Coleta os anexos COM conteúdo (dataURL) de imagem/PDF para enviar à IA com visão.
+    // Retorna [{nome, categoria, mime, dataURL, base64}]. Limita p/ não estourar o payload.
+    function anexosParaVisao(g){
+      var out=[];
+      (g.anexosLista||[]).forEach(function(a){
+        if(!a.dataURL || typeof a.dataURL!=='string') return;
+        var m=a.dataURL.match(/^data:([^;]+);base64,(.*)$/);
+        if(!m) return;
+        var mime=m[1], base64=m[2];
+        // Só formatos que os modelos de visão leem diretamente
+        if(!/^image\/(png|jpe?g|gif|webp)$/.test(mime) && mime!=='application/pdf') return;
+        out.push({nome:a.nome, categoria:a.categoria||'', mime:mime, dataURL:a.dataURL, base64:base64});
+      });
+      return out.slice(0,6); // teto de segurança
     }
 
     // Monta estrutura uma única vez
@@ -7789,7 +7898,7 @@
         addMsg('bot','Não encontrei a guia <b>'+esc(num)+'</b>. Confira o número e tente novamente.',true);
         return;
       }
-      chatGuia=g; aguardandoGuia=false;
+      chatGuia=g; aguardandoGuia=false; anexosVisaoEnviados=false;
       chatInp.placeholder='Digite sua mensagem...';
       addMsg('bot','Guia <b>'+esc(g.numero)+'</b> carregada — '+esc(g.beneficiario&&g.beneficiario.nome||'')+' · '+esc(g.tipo)+' · aderência '+ (g._cache?g._cache.aderencia:AI.analisarGuiaComIA(g,{pesos:getFluxoPesos(g.fluxo&&g.fluxo.id)}).aderencia) +'%.<br>Pode perguntar sobre a indicação técnica dos serviços, o parecer, contraindicações ou alternativas. <i>Lembre-se: sou apoio à decisão — a palavra final é da operadora.</i>',true);
       chatInp.focus();
@@ -7891,11 +8000,21 @@
     }
 
     // Chama a API do provedor selecionado; history no formato canônico Gemini
-    // ({role:'user'|'model', parts:[{text}]}). Retorna o texto da resposta.
+    // ({role:'user'|'model', parts:[{text} | {media:{mime,base64}}]}). Suporta anexos (imagem/PDF) via visão.
+    // Retorna o texto da resposta.
     async function callIA(cfg,history){
       var SYS=systemContextAtual();
       if(cfg.prov==='claude'){
-        var msgs=history.map(function(m){ return {role:m.role==='model'?'assistant':'user',content:m.parts[0].text}; });
+        var msgs=history.map(function(m){
+          var content=(m.parts||[]).map(function(p){
+            if(p.media){
+              if(p.media.mime==='application/pdf') return {type:'document',source:{type:'base64',media_type:'application/pdf',data:p.media.base64}};
+              return {type:'image',source:{type:'base64',media_type:p.media.mime,data:p.media.base64}};
+            }
+            return {type:'text',text:p.text||''};
+          });
+          return {role:m.role==='model'?'assistant':'user',content:content};
+        });
         var r=await fetch('https://api.anthropic.com/v1/messages',{
           method:'POST',
           headers:{
@@ -7904,7 +8023,7 @@
             'anthropic-version':'2023-06-01',
             'anthropic-dangerous-direct-browser-access':'true'
           },
-          body:JSON.stringify({model:cfg.model,max_tokens:1024,system:SYS,messages:msgs})
+          body:JSON.stringify({model:cfg.model,max_tokens:2048,system:SYS,messages:msgs})
         });
         var d=await r.json();
         if(d.content&&d.content[0]&&d.content[0].text) return {ok:true,text:d.content[0].text};
@@ -7912,21 +8031,33 @@
       }
       if(cfg.prov==='openai'){
         var omsgs=[{role:'system',content:SYS}].concat(history.map(function(m){
-          return {role:m.role==='model'?'assistant':'user',content:m.parts[0].text};
+          var content=(m.parts||[]).map(function(p){
+            if(p.media && /^image\//.test(p.media.mime)) return {type:'image_url',image_url:{url:'data:'+p.media.mime+';base64,'+p.media.base64}};
+            if(p.media) return {type:'text',text:'[anexo '+p.media.mime+' não suportado como imagem]'};
+            return {type:'text',text:p.text||''};
+          });
+          return {role:m.role==='model'?'assistant':'user',content:content};
         }));
         var ro=await fetch('https://api.openai.com/v1/chat/completions',{
           method:'POST',
           headers:{'Content-Type':'application/json','Authorization':'Bearer '+cfg.key},
-          body:JSON.stringify({model:cfg.model,messages:omsgs})
+          body:JSON.stringify({model:cfg.model,max_tokens:2048,messages:omsgs})
         });
         var dao=await ro.json();
         if(dao.choices&&dao.choices[0]&&dao.choices[0].message) return {ok:true,text:dao.choices[0].message.content};
         return {ok:false,text:(dao.error&&dao.error.message)||'Sem resposta do OpenAI.'};
       }
       // Gemini (padrão)
+      var gcontents=history.map(function(m){
+        var parts=(m.parts||[]).map(function(p){
+          if(p.media) return {inline_data:{mime_type:p.media.mime,data:p.media.base64}};
+          return {text:p.text||''};
+        });
+        return {role:m.role, parts:parts};
+      });
       var rg=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+cfg.model+':generateContent?key='+cfg.key,{
         method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({system_instruction:{parts:[{text:SYS}]},contents:history})
+        body:JSON.stringify({system_instruction:{parts:[{text:SYS}]},contents:gcontents})
       });
       var dg=await rg.json();
       if(dg.candidates&&dg.candidates[0]) return {ok:true,text:dg.candidates[0].content.parts[0].text};
@@ -7956,7 +8087,23 @@
       chatLog.appendChild(typing);
       chatLog.scrollTop=chatLog.scrollHeight;
 
-      chatHistory.push({role:'user',parts:[{text:q}]});
+      // Monta a mensagem do usuário; na 1ª pergunta técnica, anexa o CONTEÚDO dos anexos (imagem/PDF) p/ visão
+      var userParts=[{text:q}];
+      if(chatMode==='tecnica' && chatGuia && !anexosVisaoEnviados){
+        var provVisao=(cfg.prov==='claude'||cfg.prov==='openai'||cfg.prov==='gemini');
+        var anx=provVisao?anexosParaVisao(chatGuia):[];
+        // OpenAI só lê imagem (não PDF direto): filtra
+        if(cfg.prov==='openai') anx=anx.filter(function(a){return /^image\//.test(a.mime);});
+        if(anx.length){
+          userParts.push({text:'\n\n[Seguem '+anx.length+' anexo(s) desta guia para leitura visual — cruze o conteúdo com os serviços solicitados:]'});
+          anx.forEach(function(a){
+            userParts.push({text:'\nAnexo: '+a.nome+(a.categoria?' ('+a.categoria+')':'')+':'});
+            userParts.push({media:{mime:a.mime,base64:a.base64}});
+          });
+          anexosVisaoEnviados=true;
+        }
+      }
+      chatHistory.push({role:'user',parts:userParts});
 
       try{
         var res=await callIA(cfg,chatHistory);
