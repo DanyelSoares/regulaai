@@ -683,6 +683,8 @@ tbody tr:hover{background:#f7fbf8;cursor:pointer}
 .badge.muted{background:#eef1ef;color:#4a5a50;border-color:#dfe7e1}
 .badge.dark{background:var(--g-700);color:#fff;border-color:var(--g-700)}
 .badge.purple{background:#f3e8ff;color:#5b21b6;border-color:#d8b4fe}
+.badge.anx-ia-ok{background:#e6f7ec;color:#0a7a3a;border-color:#a6e3bf}
+.badge.anx-ia-ok svg{vertical-align:-2px;margin-right:1px}
 
 /* Aderência mini */
 .ader{display:flex;align-items:center;gap:8px;min-width:120px}

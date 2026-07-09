@@ -159,9 +159,12 @@
     if(novos && novos.length){
       gg.anexosLista = novos.slice().concat(gg.anexosLista.filter(function(x){ return !novos.some(function(n){return n.id===x.id;}); }));
     }
+    // flags de "analisado pela IA" persistidos por guia
+    var iaAnx={}; try{ iaAnx=JSON.parse(localStorage.getItem('regula_anx_ia_'+gg.numero)||'{}'); }catch(e){}
     for(var aj=0;aj<gg.anexosLista.length;aj++){
       var ax=gg.anexosLista[aj]; var st=savedAnx[ax.id];
       if(st){ if(st.categoria) ax.categoria=st.categoria; if(st.anotacoes) ax.anotacoes=st.anotacoes; }
+      if(iaAnx[ax.id]) ax.analisadoIA=iaAnx[ax.id];
     }
   }
   function persistAnexo(ax){
@@ -6004,6 +6007,7 @@
             '</div>'+
             '<span class="badge '+catColor(a.categoria)+'">'+esc(a.categoria)+'</span>'+
             '<span class="badge muted">'+a.tipo.toUpperCase()+'</span>'+
+            (a.analisadoIA?'<span class="badge anx-ia-ok" title="Conteúdo lido pela RAI em '+esc(a.analisadoIA)+'">'+ico('sparkles',12)+' Já analisado pela IA</span>':'')+
             (nAnot?'<span class="badge info">'+ico('message-circle',12)+' '+nAnot+'</span>':'')+
             '<div style="display:flex;gap:6px">'+
               '<button class="btn sm" data-act="ver">'+ico('eye')+' Visualizar</button>'+
@@ -7764,11 +7768,21 @@
         var m=a.dataURL.match(/^data:([^;]+);base64,(.*)$/);
         if(!m) return;
         var mime=m[1], base64=m[2];
-        // Só formatos que os modelos de visão leem diretamente
+        // Formatos que Claude, OpenAI e Gemini leem diretamente (imagem e PDF)
         if(!/^image\/(png|jpe?g|gif|webp)$/.test(mime) && mime!=='application/pdf') return;
-        out.push({nome:a.nome, categoria:a.categoria||'', mime:mime, dataURL:a.dataURL, base64:base64});
+        out.push({id:a.id, nome:a.nome, categoria:a.categoria||'', mime:mime, dataURL:a.dataURL, base64:base64});
       });
       return out.slice(0,6); // teto de segurança
+    }
+    // Marca anexos como analisados pela IA (persistente por guia) e re-renderiza a guia se estiver aberta
+    function marcarAnexosAnalisados(g, anexos){
+      var key='regula_anx_ia_'+g.numero;
+      var set={}; try{ set=JSON.parse(localStorage.getItem(key)||'{}'); }catch(e){}
+      var stamp=new Date().toISOString().slice(0,16).replace('T',' ');
+      anexos.forEach(function(a){ if(a.id) set[a.id]=stamp; });
+      localStorage.setItem(key, JSON.stringify(set));
+      // atualiza o objeto em memória (o selo aparece na próxima abertura/refresh da seção de anexos)
+      (g.anexosLista||[]).forEach(function(ax){ if(set[ax.id]){ ax.analisadoIA=set[ax.id]; } });
     }
 
     // Monta estrutura uma única vez
@@ -8033,7 +8047,8 @@
         var omsgs=[{role:'system',content:SYS}].concat(history.map(function(m){
           var content=(m.parts||[]).map(function(p){
             if(p.media && /^image\//.test(p.media.mime)) return {type:'image_url',image_url:{url:'data:'+p.media.mime+';base64,'+p.media.base64}};
-            if(p.media) return {type:'text',text:'[anexo '+p.media.mime+' não suportado como imagem]'};
+            if(p.media && p.media.mime==='application/pdf') return {type:'file',file:{filename:p.media.nome||'anexo.pdf',file_data:'data:application/pdf;base64,'+p.media.base64}};
+            if(p.media) return {type:'text',text:'[anexo '+p.media.mime+' não suportado]'};
             return {type:'text',text:p.text||''};
           });
           return {role:m.role==='model'?'assistant':'user',content:content};
@@ -8087,18 +8102,18 @@
       chatLog.appendChild(typing);
       chatLog.scrollTop=chatLog.scrollHeight;
 
-      // Monta a mensagem do usuário; na 1ª pergunta técnica, anexa o CONTEÚDO dos anexos (imagem/PDF) p/ visão
+      // Monta a mensagem do usuário; na 1ª pergunta técnica, anexa o CONTEÚDO dos anexos (imagem/PDF) p/ visão.
+      // Os três provedores (Claude, OpenAI, Gemini) leem imagem E PDF.
       var userParts=[{text:q}];
+      var anexosEnviadosAgora=[];
       if(chatMode==='tecnica' && chatGuia && !anexosVisaoEnviados){
-        var provVisao=(cfg.prov==='claude'||cfg.prov==='openai'||cfg.prov==='gemini');
-        var anx=provVisao?anexosParaVisao(chatGuia):[];
-        // OpenAI só lê imagem (não PDF direto): filtra
-        if(cfg.prov==='openai') anx=anx.filter(function(a){return /^image\//.test(a.mime);});
+        var anx=anexosParaVisao(chatGuia);
         if(anx.length){
-          userParts.push({text:'\n\n[Seguem '+anx.length+' anexo(s) desta guia para leitura visual — cruze o conteúdo com os serviços solicitados:]'});
+          userParts.push({text:'\n\n[Seguem '+anx.length+' anexo(s) desta guia para leitura — cruze o conteúdo com os serviços solicitados:]'});
           anx.forEach(function(a){
             userParts.push({text:'\nAnexo: '+a.nome+(a.categoria?' ('+a.categoria+')':'')+':'});
-            userParts.push({media:{mime:a.mime,base64:a.base64}});
+            userParts.push({media:{mime:a.mime,base64:a.base64,nome:a.nome}});
+            anexosEnviadosAgora.push(a);
           });
           anexosVisaoEnviados=true;
         }
@@ -8111,6 +8126,8 @@
         if(res.ok){
           chatHistory.push({role:'model',parts:[{text:res.text}]});
           addMsg('bot',res.text);
+          // Marca os anexos que foram enviados à IA como "analisados" (persistente por guia)
+          if(anexosEnviadosAgora.length && chatGuia){ marcarAnexosAnalisados(chatGuia, anexosEnviadosAgora); }
         } else {
           addMsg('bot','❌ '+res.text);
         }
