@@ -4770,9 +4770,9 @@
     var TABS_DEF=[
       {id:'resumo',        label:'Resumo',           ico:'layout-dashboard', grp:0},
       {id:'ia',            label:'Parecer Técnico',   ico:'bot',              grp:3, tip:'Atalho: F7'},
-      {id:'carencias',     label:'Carências',         ico:'calendar-clock',   grp:3, tip:'Atalho: F10'},
       {id:'mensalidades',  label:'Mensalidades',      ico:'receipt',          grp:3, tip:'Atalho: F8'},
       {id:'histatend',     label:'Hist. atendimento', ico:'history',          grp:3, tip:'Atalho: F9'},
+      {id:'carencias',     label:'Carências',         ico:'calendar-clock',   grp:3, tip:'Atalho: F10'},
       {id:'obsimp',        label:'Obs. Impressas',    ico:'printer',          grp:4},
       {id:'obsnaoimp',     label:'Obs. Não Impressas',ico:'eye-off',          grp:4},
       {id:'operadora',     label:'Parecer Operadora', ico:'file-check-2',     grp:5},
