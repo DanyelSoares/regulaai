@@ -154,7 +154,7 @@
     {id:'U6',nome:'Dr. Tiago Reis',perfil:'auditor'}
   ];
 
-  var STATUS = ['Em análise','Aguardando complemento','Em junta médica','Cotação de OPME','Analisada','Liberada','Negada'];
+  var STATUS = ['Em análise','Aguardando complemento','Em junta médica','Cotação de OPME','Analisada','Liberada','Parcialmente liberada','Negada'];
   var ORIGENS = ['Site','Web Prestador','Emissão guias'];
 
   var MOTIVOS_COMP = ['Documentação incompleta','Laudo médico ilegível','Ausência de exame complementar','DUT não atendida','Justificativa clínica insuficiente'];

@@ -404,6 +404,7 @@
     var cls='muted';
     if(s==='Liberada') cls='';
     else if(s==='Negada') cls='danger';
+    else if(s==='Parcialmente liberada') cls='warn';
     else if(s==='Em junta médica') cls='info';
     else if(s==='Aguardando complemento'||s==='Cotação de OPME') cls='warn';
     var tip=_statusTips[s]||('Status atual da guia: '+s);
@@ -5479,7 +5480,22 @@
       if(!g.parecerOperadora) d.innerHTML='<div class="empty"><div class="ico">'+icoLg('file-pen-line')+'</div>Nenhum parecer da operadora registrado.<br><br>'+(can('parecer')?'<button class="btn" id="emPar">Emitir parecer agora</button>':'')+'</div>';
       else {
         var p=g.parecerOperadora;
-        d.innerHTML='<div class="ai-box"><div class="hd"><div class="tt">Parecer da Operadora</div><span class="badge dark">'+esc(p.decisao)+'</span></div><dl class="kv"><dt>Motivo</dt><dd>'+esc(p.motivo||'—')+'</dd><dt>Justificativa</dt><dd>'+esc(p.justificativa||'—')+'</dd><dt>Observações impressas</dt><dd>'+esc(p.obsImp||'—')+'</dd><dt>Observações não impressas</dt><dd>'+esc(p.obsInt||'—')+'</dd><dt>Emitido por</dt><dd>'+esc(p.user)+' · '+esc(p.ts)+'</dd></dl></div>';
+        var itensHtml='';
+        if(p.itens && p.itens.length){
+          itensHtml='<div class="pit-tbl-wrap" style="margin:8px 0"><table class="pit-tbl"><thead><tr><th>Tipo</th><th>Código</th><th>Serviço</th><th>Parecer</th><th>Motivo / Justificativa</th></tr></thead><tbody>'+
+            p.itens.map(function(it){
+              var bd=it.parecer==='fav'?'<span class="badge ok" style="font-size:10px">Favorável</span>':'<span class="badge danger" style="font-size:10px">Desfavorável</span>';
+              return '<tr><td class="nw">'+esc(it.tipo)+'</td><td class="rm-cod">'+esc(it.cod)+'</td><td>'+esc(it.desc)+'</td><td>'+bd+'</td><td>'+esc(it.motivo||'')+(it.justificativa?'<div class="pit-just">'+esc(it.justificativa)+'</div>':'')+'</td></tr>';
+            }).join('')+'</tbody></table></div>';
+        } else if(p.motivo||p.justificativa){
+          // compat. com pareceres antigos (decisão única)
+          itensHtml='<dl class="kv"><dt>Motivo</dt><dd>'+esc(p.motivo||'—')+'</dd><dt>Justificativa</dt><dd>'+esc(p.justificativa||'—')+'</dd></dl>';
+        }
+        var r=p.resumo;
+        var resumoHtml=r?'<div class="pit-resumo-in" style="margin-bottom:8px">'+ico('gauge',13)+' '+r.favoravel+' favorável(is) · '+r.desfavoravel+' desfavorável(is)'+(r.semParecer?' · '+r.semParecer+' sem parecer':'')+'</div>':'';
+        d.innerHTML='<div class="ai-box"><div class="hd"><div class="tt">Parecer da Operadora</div><span class="badge dark">'+esc(p.decisao)+'</span></div>'+
+          resumoHtml+itensHtml+
+          '<dl class="kv"><dt>Observações impressas</dt><dd>'+esc(p.obsImp||'—')+'</dd><dt>Observações não impressas</dt><dd>'+esc(p.obsInt||'—')+'</dd><dt>Emitido por</dt><dd>'+esc(p.user)+' · '+esc(p.ts)+'</dd></dl></div>';
       }
       setTimeout(function(){ var b2=d.querySelector('#emPar'); if(b2) b2.onclick=function(){openParecer(g)}; },0);
     } else if(t==='obsimp'){
@@ -6444,24 +6460,137 @@
     return d;
   }
 
+  // Lista unificada dos serviços solicitados na guia (para parecer por item)
+  function itensSolicitadosGuia(g){
+    var out=[];
+    (g.procedimentos||[]).forEach(function(p){ out.push({tipo:'Procedimento', cod:p.cod, desc:p.desc, key:'proc|'+p.cod}); });
+    (g.pacotes||[]).forEach(function(p){ out.push({tipo:'Pacote', cod:p.cod, desc:p.desc, key:'pac|'+p.cod}); });
+    (g.diariasTaxas||[]).forEach(function(p){ out.push({tipo:'Diária/Taxa', cod:p.cod, desc:p.desc, key:'dt|'+p.cod}); });
+    (g.matmed||[]).filter(function(m){return !m.opme;}).forEach(function(p){ out.push({tipo:'Mat/Med', cod:p.cod, desc:p.desc, key:'mm|'+p.cod}); });
+    (g.matmed||[]).filter(function(m){return m.opme;}).forEach(function(p){ out.push({tipo:'OPME', cod:p.cod, desc:p.desc, key:'opme|'+p.cod}); });
+    return out;
+  }
+
   function openParecer(g){
     if(!can('parecer')){ toast('Seu perfil não pode emitir parecer','warn'); return; }
     var ia = g._cache || AI.analisarGuiaComIA(g,{pesos:getFluxoPesos(g.fluxo&&g.fluxo.id)});
-    var body='<div class="field"><label>Decisão</label><select id="pDec"><option value="Aprovação">Aprovação</option><option value="Aprovação com ressalva">Aprovação com ressalva</option><option value="Reprovação">Reprovação</option><option value="Solicitar complemento">Solicitar complemento</option><option value="Encaminhar para junta médica">Encaminhar para junta médica</option></select></div>'+
-      '<div class="field"><label>Motivo padronizado</label><select id="pMot"></select></div>'+
-      '<div class="field"><div class="field-lbl-row"><label>Justificativa técnica</label><button class="btn sm ghost" id="pJustIA" type="button">'+ico('sparkles')+' Gerar análise técnica</button></div><textarea id="pJust" placeholder="Descreva a justificativa técnica..."></textarea></div>'+
-      '<div class="g2"><div class="field"><label>Observações impressas (vão para o prestador)</label><textarea id="pImp"></textarea></div><div class="field"><label>Observações não impressas (internas)</label><textarea id="pInt"></textarea></div></div>'+
-      '<div class="ai-box"><div class="hd"><div class="tt">'+ico('lightbulb')+' Sugestão técnica</div></div><p style="margin:6px 0">'+esc(ia.parecerGeral)+'</p><button class="btn sm ghost" id="usarIA">Usar sugestão</button></div>';
+    var itens = itensSolicitadosGuia(g);
+    // estado do parecer por item (recupera do parecer salvo, se houver)
+    var pareceresItem={}; // key -> {parecer:'fav'|'desf', motivo, justificativa}
+    if(g.parecerOperadora && g.parecerOperadora.itens){ g.parecerOperadora.itens.forEach(function(it){ if(it.key) pareceresItem[it.key]=it; }); }
+
+    var TIPO_ICO={'Procedimento':'stethoscope','Pacote':'package','Diária/Taxa':'calendar-days','Mat/Med':'pill','OPME':'wrench'};
+    function linhaItem(it){
+      var pa=pareceresItem[it.key];
+      var badge = !pa?'<span class="badge muted" style="font-size:10px">Sem parecer</span>'
+        :(pa.parecer==='fav'?'<span class="badge ok" style="font-size:10px">'+ico('check',11)+' Favorável</span>':'<span class="badge danger" style="font-size:10px">'+ico('x',11)+' Desfavorável</span>');
+      return '<tr data-k="'+esc(it.key)+'">'+
+        '<td class="pit-chk"><input type="checkbox" class="pit-cb" data-k="'+esc(it.key)+'"></td>'+
+        '<td class="nw">'+ico(TIPO_ICO[it.tipo]||'dot',12)+' '+esc(it.tipo)+'</td>'+
+        '<td class="rm-cod">'+esc(it.cod)+'</td>'+
+        '<td>'+esc(it.desc)+(pa&&pa.justificativa?'<div class="pit-just">'+esc(pa.justificativa)+'</div>':'')+'</td>'+
+        '<td class="pit-st">'+badge+'</td>'+
+      '</tr>';
+    }
+    var tabelaItens = itens.length
+      ? '<div class="pit-tbl-wrap"><table class="pit-tbl"><thead><tr>'+
+          '<th class="pit-chk"><input type="checkbox" id="pitAll" title="Selecionar todos"></th>'+
+          '<th>Tipo</th><th>Código</th><th>Serviço solicitado</th><th>Parecer</th>'+
+        '</tr></thead><tbody id="pitBody">'+itens.map(linhaItem).join('')+'</tbody></table></div>'
+      : '<div class="resumo-mini-empty">Nenhum serviço solicitado nesta guia.</div>';
+
+    var body=
+      '<div class="pit-hd">'+ico('list-checks',14)+' Parecer por item — selecione os serviços e aplique um parecer. Você pode dar pareceres diferentes para conjuntos diferentes.</div>'+
+      tabelaItens+
+      '<div class="pit-acao" id="pitAcao" style="display:none">'+
+        '<div class="pit-acao-hd"><b><span id="pitSelCount">0</span> item(ns) selecionado(s)</b></div>'+
+        '<div class="g2" style="gap:10px">'+
+          '<div class="field"><label>Parecer para os selecionados</label>'+
+            '<select id="pitParecer"><option value="fav">Favorável (aprovar)</option><option value="desf">Desfavorável (reprovar)</option></select></div>'+
+          '<div class="field"><label>Motivo padronizado</label><select id="pitMot"></select></div>'+
+        '</div>'+
+        '<div class="field"><label>Justificativa (aplicada aos selecionados)</label><textarea id="pitJust" placeholder="Justificativa técnica para estes itens..."></textarea></div>'+
+        '<div style="display:flex;gap:8px"><button class="btn" id="pitAplicar" type="button">'+ico('check-check',13)+' Aplicar aos selecionados</button>'+
+          '<button class="btn ghost" id="pitLimpar" type="button">'+ico('eraser',13)+' Limpar parecer dos selecionados</button></div>'+
+      '</div>'+
+      '<div class="pit-resumo" id="pitResumo"></div>'+
+      '<div class="g2" style="margin-top:6px"><div class="field"><label>Observações impressas (vão para o prestador)</label><textarea id="pImp"></textarea></div><div class="field"><label>Observações não impressas (internas)</label><textarea id="pInt"></textarea></div></div>'+
+      '<div class="ai-box"><div class="hd"><div class="tt">'+ico('lightbulb')+' Sugestão técnica</div></div><p style="margin:6px 0">'+esc(ia.parecerGeral)+'</p><button class="btn sm ghost" id="pJustIA" type="button">'+ico('sparkles')+' Gerar análise técnica (obs. impressas)</button></div>';
     var foot='<button class="btn ghost" id="pCancel">Cancelar</button><button class="btn" id="pSalvar">'+ico('save')+' Salvar parecer</button>';
     var m = modal('Parecer da Operadora · '+esc(g.numero), 'A decisão final é exclusiva da operadora. A análise técnica atua apenas como apoio.', body, foot);
 
-    function fillMot(){
-      var dec=m.querySelector('#pDec').value;
-      var list = dec.indexOf('Reprov')>=0?MOCK.MOTIVOS_REPR:(dec.indexOf('complemento')>=0?MOCK.MOTIVOS_COMP:MOCK.MOTIVOS_RESS);
-      m.querySelector('#pMot').innerHTML = list.map(function(x){return '<option>'+esc(x)+'</option>'}).join('');
+    // preenche obs salvas
+    if(g.parecerOperadora){ if(g.parecerOperadora.obsImp) m.querySelector('#pImp').value=g.parecerOperadora.obsImp; if(g.parecerOperadora.obsInt) m.querySelector('#pInt').value=g.parecerOperadora.obsInt; }
+
+    // ── seleção de itens ──
+    function selKeys(){ return $$('.pit-cb',m).filter(function(cb){return cb.checked;}).map(function(cb){return cb.getAttribute('data-k');}); }
+    function updSel(){
+      var n=selKeys().length;
+      m.querySelector('#pitSelCount').textContent=n;
+      m.querySelector('#pitAcao').style.display=n?'block':'none';
     }
-    fillMot(); m.querySelector('#pDec').onchange=fillMot;
-    m.querySelector('#usarIA').onclick=function(){ m.querySelector('#pJust').value = ia.parecerGeral+'\n\nSugestões: '+ia.sugestoesArgumentos.join(' / '); toast('Sugestão aplicada','ok'); };
+    function fillMotP(){
+      var pr=m.querySelector('#pitParecer').value;
+      var list = pr==='desf'?MOCK.MOTIVOS_REPR:MOCK.MOTIVOS_RESS;
+      m.querySelector('#pitMot').innerHTML = list.map(function(x){return '<option>'+esc(x)+'</option>'}).join('');
+    }
+    fillMotP();
+    m.querySelector('#pitParecer').onchange=fillMotP;
+    $$('.pit-cb',m).forEach(function(cb){ cb.onchange=updSel; });
+    var allCb=m.querySelector('#pitAll'); if(allCb) allCb.onchange=function(){ $$('.pit-cb',m).forEach(function(cb){cb.checked=allCb.checked;}); updSel(); };
+
+    function repintarLinha(key){
+      var it=itens.filter(function(x){return x.key===key;})[0]; if(!it) return;
+      var tr=m.querySelector('tr[data-k="'+CSS.escape(key)+'"]'); if(!tr) return;
+      var novo=el('tbody'); novo.innerHTML=linhaItem(it);
+      var ntr=novo.firstChild;
+      // preserva o checkbox marcado
+      var estava=tr.querySelector('.pit-cb').checked;
+      tr.parentNode.replaceChild(ntr,tr);
+      ntr.querySelector('.pit-cb').checked=estava;
+      ntr.querySelector('.pit-cb').onchange=updSel;
+      lcIcons();
+    }
+    function atualizarResumo(){
+      var fav=0,desf=0,sem=0;
+      itens.forEach(function(it){ var pa=pareceresItem[it.key]; if(!pa)sem++; else if(pa.parecer==='fav')fav++; else desf++; });
+      var st = statusDerivado(fav,desf,sem,itens.length);
+      m.querySelector('#pitResumo').innerHTML=
+        '<div class="pit-resumo-in">'+ico('gauge',13)+' <b>Resumo:</b> '+fav+' favorável(is) · '+desf+' desfavorável(is) · '+sem+' sem parecer '+
+        '<span class="pit-status-badge '+st.cls+'">→ '+st.label+'</span></div>';
+    }
+    function statusDerivado(fav,desf,sem,total){
+      if(total===0) return {label:'Sem itens', cls:'muted', status:g.status};
+      if(sem>0 && fav===0 && desf===0) return {label:'Pendente (sem parecer)', cls:'muted', status:'Em análise'};
+      if(desf===0 && sem===0) return {label:'Liberada', cls:'ok', status:'Liberada'};
+      if(fav===0 && sem===0) return {label:'Negada', cls:'danger', status:'Negada'};
+      return {label:'Parcialmente liberada', cls:'warn', status:'Parcialmente liberada'};
+    }
+
+    m.querySelector('#pitAplicar').onclick=function(){
+      var keys=selKeys(); if(!keys.length){ toast('Selecione ao menos um item','warn'); return; }
+      var pr=m.querySelector('#pitParecer').value;
+      var mot=m.querySelector('#pitMot').value;
+      var just=m.querySelector('#pitJust').value.trim();
+      keys.forEach(function(k){
+        var it=itens.filter(function(x){return x.key===k;})[0]||{};
+        pareceresItem[k]={key:k, tipo:it.tipo, cod:it.cod, desc:it.desc, parecer:pr, motivo:mot, justificativa:just};
+        repintarLinha(k);
+      });
+      // desmarca e limpa o painel
+      $$('.pit-cb',m).forEach(function(cb){cb.checked=false;}); if(allCb) allCb.checked=false;
+      m.querySelector('#pitJust').value='';
+      updSel(); atualizarResumo();
+      toast(keys.length+' item(ns): parecer '+(pr==='fav'?'favorável':'desfavorável')+' aplicado','ok');
+    };
+    m.querySelector('#pitLimpar').onclick=function(){
+      var keys=selKeys(); if(!keys.length){ toast('Selecione ao menos um item','warn'); return; }
+      keys.forEach(function(k){ delete pareceresItem[k]; repintarLinha(k); });
+      $$('.pit-cb',m).forEach(function(cb){cb.checked=false;}); if(allCb) allCb.checked=false;
+      updSel(); atualizarResumo();
+      toast('Parecer removido dos itens selecionados','ok');
+    };
+    atualizarResumo();
     m.querySelector('#pJustIA').onclick=function(){
       var btn=this;
       btn.innerHTML=ico('loader')+' Gerando…'; btn.disabled=true;
@@ -6481,8 +6610,8 @@
         linhas.push('Conduta recomendada: '+_limpa(ia.proximaAcao)+'.');
         if(ia.sugestoesArgumentos.length) linhas.push('Pontos de atenção: '+ia.sugestoesArgumentos.join(' / ')+'.');
         linhas.push('Aderência regulatória apurada: '+ia.aderencia+'% ('+ia.classificacao.label+').');
-        m.querySelector('#pJust').value=linhas.join('\n\n');
-        btn.innerHTML=ico('sparkles')+' Gerar análise técnica'; btn.disabled=false;
+        m.querySelector('#pImp').value=linhas.join('\n\n');
+        btn.innerHTML=ico('sparkles')+' Gerar análise técnica (obs. impressas)'; btn.disabled=false;
         lcIcons();
         hidePageLoader();
         document.body.classList.remove('pl--blurring');
@@ -6492,16 +6621,19 @@
     };
     m.querySelector('#pCancel').onclick=function(){ m.parentNode.remove(); };
     m.querySelector('#pSalvar').onclick=function(){
-      var dec=m.querySelector('#pDec').value;
       var obsImp=m.querySelector('#pImp').value;
       var obsInt=m.querySelector('#pInt').value;
-      var par={decisao:dec, motivo:m.querySelector('#pMot').value, justificativa:m.querySelector('#pJust').value, obsImp:obsImp, obsInt:obsInt, user:perfilDef[State.perfil].nome, ts:new Date().toISOString().slice(0,16).replace('T',' ')};
+      // consolida pareceres por item + status derivado
+      var itensPar=Object.keys(pareceresItem).map(function(k){return pareceresItem[k];});
+      var fav=0,desf=0,sem=0;
+      itens.forEach(function(it){ var pa=pareceresItem[it.key]; if(!pa)sem++; else if(pa.parecer==='fav')fav++; else desf++; });
+      if(itens.length && !itensPar.length){ toast('Dê parecer a pelo menos um item antes de salvar','warn'); return; }
+      var st=statusDerivado(fav,desf,sem,itens.length);
+      var dec=st.label; // decisão derivada (Liberada / Negada / Parcialmente liberada / Pendente)
+      var par={decisao:dec, itens:itensPar, resumo:{favoravel:fav,desfavoravel:desf,semParecer:sem,total:itens.length},
+        obsImp:obsImp, obsInt:obsInt, user:perfilDef[State.perfil].nome, ts:new Date().toISOString().slice(0,16).replace('T',' ')};
       g.parecerOperadora=par;
-      // Atualiza status
-      if(dec==='Aprovação'||dec==='Aprovação com ressalva') g.status='Liberada';
-      else if(dec==='Reprovação') g.status='Negada';
-      else if(dec==='Solicitar complemento') g.status='Aguardando complemento';
-      else if(dec==='Encaminhar para junta médica') g.status='Em junta médica';
+      g.status=st.status;
       // Persiste parecer
       var sv=JSON.parse(localStorage.getItem('regula_pareceres')||'{}');
       sv[g.numero]=par; localStorage.setItem('regula_pareceres',JSON.stringify(sv));
@@ -6517,7 +6649,7 @@
       }
       // Invalida cache para forçar reanálise com contexto atualizado no próximo Reprocessar
       g._cache=null;
-      MOCK.LOGS.unshift({ts:par.ts,user:par.user,perfil:State.perfil,acao:'Parecer da Operadora emitido',ref:g.numero+' → '+dec});
+      MOCK.LOGS.unshift({ts:par.ts,user:par.user,perfil:State.perfil,acao:'Parecer da Operadora emitido',ref:g.numero+' → '+dec+' ('+fav+' fav / '+desf+' desf'+(sem?' / '+sem+' s/ parecer':'')+')'});
       if(obsImp||obsInt) MOCK.LOGS.unshift({ts:par.ts,user:par.user,perfil:State.perfil,tipo:'ia',acao:'Feedback ao modelo IA registrado via Parecer da Operadora',ref:'Guia '+g.numero});
       toast('Parecer salvo · '+g.status,'ok');
       m.parentNode.remove(); render();
