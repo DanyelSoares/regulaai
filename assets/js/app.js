@@ -240,6 +240,38 @@
   function ehGestor(){ return State.perfil==='gestor' || State.perfil==='admin'; }
 
   // Retorna a etapa atualmente em execução de uma guia
+  function etapaAtualIdx(g){
+    for(var i=0;i<g.etapas.length;i++){ if(g.etapas[i].status==='em_execucao') return i; }
+    // sem etapa em execução: se todas concluídas, a "atual" é a última; senão a primeira
+    return g.etapas.every(function(e){return e.status==='concluida';}) ? g.etapas.length-1 : 0;
+  }
+  // Permissão de mover etapas: enfermeiro só avança; gestor/auditor/admin avançam e voltam.
+  function podeMoverEtapa(dir){
+    if(!ehGestor() && State.perfil==='enfermeiro') return dir>0; // enfermeiro: só avançar
+    return State.perfil==='auditor' || State.perfil==='gestor' || State.perfil==='admin' || ehGestor();
+  }
+  // Move a etapa atual da guia uma posição adiante (dir=+1) ou atrás (dir=-1). Registra log.
+  function moverEtapa(g, dir){
+    if(!podeMoverEtapa(dir)){ toast(dir>0?'Sem permissão para avançar etapa':'Seu perfil não pode retornar etapas','warn'); return false; }
+    var idx=etapaAtualIdx(g);
+    var alvo=idx+dir;
+    if(alvo<0 || alvo>=g.etapas.length){ toast(dir>0?'Já está na última etapa':'Já está na primeira etapa','warn'); return false; }
+    var ts=new Date().toISOString().slice(0,16).replace('T',' ');
+    var atual=g.etapas[idx], destino=g.etapas[alvo];
+    if(dir>0){
+      // avançar: conclui a atual, inicia a próxima
+      atual.status='concluida'; if(!atual.fim) atual.fim=ts;
+      destino.status='em_execucao'; if(!destino.inicio) destino.inicio=ts;
+    } else {
+      // voltar: a atual volta a aguardando, a anterior volta a em_execucao
+      atual.status='aguardando'; atual.inicio=''; atual.fim='';
+      destino.status='em_execucao'; destino.fim='';
+    }
+    var uName=perfilDef[State.perfil]?perfilDef[State.perfil].nome:State.perfil;
+    MOCK.LOGS.unshift({ts:ts,user:uName,perfil:State.perfil,acao:(dir>0?'Etapa avançada':'Etapa retornada'),ref:'Guia '+g.numero+': '+atual.nome+' → '+destino.nome});
+    logAcao(dir>0?'Etapa do fluxo avançada':'Etapa do fluxo retornada', g.numero+' — '+destino.nome);
+    return true;
+  }
   function etapaAtualDe(g){
     for(var i=0;i<g.etapas.length;i++){ if(g.etapas[i].status==='em_execucao') return g.etapas[i]; }
     return g.etapas[0]||null;
@@ -275,9 +307,10 @@
       });
     }
     if(efetivo === 'auditor'){
+      // Médico auditor só trata guias cuja etapa ATUAL é "AUDITORIA EXTERNA - MÉDICO"
       return base.filter(function(g){
         var et = etapaAtualDe(g);
-        return et && et.responsavel === 'auditor';
+        return et && et.nome && et.nome.indexOf('AUDITORIA EXTERNA - MÉDICO')>=0;
       });
     }
     return base;
@@ -5420,6 +5453,7 @@
             '<dt>CID</dt><dd>'+esc(MOCK.cidGuia(g).codigo)+'</dd>'+
             '<dt>Indicação clínica / Hipótese diagnóstica</dt><dd>'+esc(MOCK.cidGuia(g).descricao)+'</dd>'+
             '<dt>Origem</dt><dd><span class="badge muted">'+esc(g.origem)+'</span></dd>'+
+            '<dt>Status da guia</dt><dd>'+statusBadge(g.status)+'</dd>'+
           '</dl>'+
         '</div>'+
         '<div class="guia-risk-grid guia-risk-grid--row" style="margin-top:14px">'+
@@ -5462,12 +5496,33 @@
         card.onclick=function(){ showRisco4Detalhe(g, RISKS[+card.getAttribute('data-risk4')]); };
       });
     } else if(t==='etapas'){
+      var idxAtual=etapaAtualIdx(g);
+      var etAtual=g.etapas[idxAtual];
+      var podeAvancar=podeMoverEtapa(1) && idxAtual<g.etapas.length-1;
+      var podeVoltar=podeMoverEtapa(-1) && idxAtual>0;
+      // Barra de controle da etapa atual
+      if(etAtual){
+        var ctrl=el('div',{class:'etapa-ctrl'});
+        ctrl.innerHTML=
+          '<div class="etapa-ctrl-info">'+ico('git-branch',14)+' Etapa atual: <b>'+esc(etAtual.nome)+'</b> <span class="badge muted" style="font-size:10px">resp.: '+esc(etAtual.responsavel)+'</span></div>'+
+          '<div class="etapa-ctrl-btns">'+
+            (podeVoltar?'<button class="btn sm ghost" id="etVoltar">'+ico('chevron-left',13)+' Voltar etapa</button>':'')+
+            (podeAvancar?'<button class="btn sm" id="etAvancar">Avançar etapa '+ico('chevron-right',13)+'</button>':'')+
+          '</div>';
+        d.appendChild(ctrl);
+        if(!podeAvancar && !podeVoltar){
+          d.appendChild(el('div',{class:'etapa-ctrl-note'},ico('info',12)+' '+(State.perfil==='enfermeiro'?'Seu perfil pode apenas avançar etapas.':'Sem etapas disponíveis para mover a partir daqui.')));
+        }
+      }
       var tl=el('div',{class:'timeline'});
       g.etapas.forEach(function(e){
         var cls = e.status==='concluida'?'done':(e.status==='em_execucao'?'cur':'');
         tl.appendChild(el('div',{class:'tl-item '+cls},'<h4>'+e.ordem+'. '+esc(e.nome)+'</h4><div class="meta">Responsável: '+esc(e.responsavel)+' · Prazo: '+e.prazoHoras+'h · Status: <b>'+esc(e.status)+'</b>'+(e.inicio?' · Início: '+esc(e.inicio):'')+(e.fim?' · Fim: '+esc(e.fim):'')+'</div>'));
       });
       d.appendChild(tl);
+      function _reetapas(){ var novo=renderGuiaTab(g,ia,'etapas'); d.replaceWith(novo); }
+      var _av=d.querySelector('#etAvancar'); if(_av) _av.onclick=function(){ if(moverEtapa(g,1)){ toast('Guia avançada para a próxima etapa','ok'); _reetapas(); } };
+      var _vt=d.querySelector('#etVoltar'); if(_vt) _vt.onclick=function(){ if(moverEtapa(g,-1)){ toast('Guia retornada à etapa anterior','ok'); _reetapas(); } };
     } else if(t==='ia'){
       d.appendChild(renderParecerIA(ia,g));
     } else if(t==='carencias'){

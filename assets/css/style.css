@@ -707,6 +707,11 @@ tbody tr:hover{background:#f7fbf8;cursor:pointer}
 .pit-status-badge.danger{background:#fdecea;color:#a01b14}
 .pit-status-badge.warn{background:#fff7e0;color:#8a6300}
 .pit-status-badge.muted{background:#eef1ef;color:#4a5a50}
+/* Controle de etapas (avançar/voltar) */
+.etapa-ctrl{display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:space-between;padding:12px 14px;border:1.5px solid var(--g-200);background:var(--g-50);border-radius:10px;margin-bottom:14px}
+.etapa-ctrl-info{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--ink-1)}
+.etapa-ctrl-btns{display:flex;gap:8px}
+.etapa-ctrl-note{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--muted);margin-bottom:12px}
 
 /* Aderência mini */
 .ader{display:flex;align-items:center;gap:8px;min-width:120px}
