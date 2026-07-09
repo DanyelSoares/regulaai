@@ -217,7 +217,7 @@
   // "logs" = acesso à área de Logs (só Admin/Gestor).
   var perfilDef = {
     enfermeiro: {nome: ENFERMEIROS[0].nome, cor: ENFERMEIROS[0].cor,
-                 perms:['ver','triagem','complemento','config','parametrizar'],
+                 perms:['ver','triagem','complemento','parecer','aprovar','reprovar','junta','config','parametrizar'],
                  fluxos: ENFERMEIROS[0].fluxos, enfermeiroId: ENFERMEIROS[0].id},
     auditor:    {nome:'Dr. Marcos Vinícius',cor:'#066b34', perms:['ver','triagem','complemento','parecer','aprovar','reprovar','junta','config','parametrizar']},
     gestor:     {nome:'Patrícia Andrade',  cor:'#054f27', perms:['ver','triagem','complemento','parecer','aprovar','reprovar','junta','config','parametrizar','logs']},
@@ -306,14 +306,14 @@
         return et && et.responsavel === 'enfermeiro';
       });
     }
-    if(efetivo === 'auditor'){
-      // Médico auditor só trata guias cuja etapa ATUAL é "AUDITORIA EXTERNA - MÉDICO"
-      return base.filter(function(g){
-        var et = etapaAtualDe(g);
-        return et && et.nome && et.nome.indexOf('AUDITORIA EXTERNA - MÉDICO')>=0;
-      });
-    }
+    // Auditor pode auditar QUALQUER guia (todos os perfis podem). A etapa "AUDITORIA EXTERNA - MÉDICO"
+    // é apenas a fila de OBRIGAÇÃO do auditor — destacada na lista, sem restringir o acesso.
     return base;
+  }
+  // A guia está na fila de obrigação do auditor (etapa atual = AUDITORIA EXTERNA - MÉDICO)?
+  function ehFilaAuditor(g){
+    var et = etapaAtualDe(g);
+    return !!(et && et.nome && et.nome.indexOf('AUDITORIA EXTERNA - MÉDICO')>=0);
   }
 
   // Barra de visão compartilhada entre Dashboard e Guias (apenas Gestor)
@@ -385,7 +385,7 @@
           label='Todos os enfermeiros ('+ENFERMEIROS.map(function(e){return e.nome.split(' ')[0];}).join(', ')+')';
         }
       } else {
-        label='Auditor — etapas de auditoria médica / junta médica';
+        label='Auditor — vê todas as guias (fila de obrigação: AUDITORIA EXTERNA - MÉDICO)';
       }
       var guias=guiasVisiveis();
       bann.innerHTML=ico('eye',14)+' Simulando visão: '+label+' — <b>'+guias.length+'</b> guia(s) visíveis.'+
@@ -1082,9 +1082,10 @@
     if(!ehGestor()){
       var bann=el('div',{class:'perfil-banner'});
       var bIcon=State.perfil==='enfermeiro'?'stethoscope':'search';
+      var _filaN=State.perfil==='auditor'?guias.filter(function(gg){return ehFilaAuditor(gg);}).length:0;
       var bMsg=State.perfil==='enfermeiro'
         ?'Você está visualizando '+guias.length+' guia(s) atribuída(s) ao perfil Enfermeiro nos fluxos: '+perfilDef.enfermeiro.fluxos.join(', ')+'.'
-        :'Você está visualizando '+guias.length+' guia(s) atribuída(s) ao perfil Auditor (etapas de auditoria médica e junta médica).';
+        :'Você pode auditar qualquer uma das '+guias.length+' guia(s). <b>'+_filaN+'</b> na sua fila de obrigação (etapa AUDITORIA EXTERNA - MÉDICO), destacadas com "Sua fila".';
       bann.innerHTML=ico(bIcon,14)+' '+bMsg;
       wrap.appendChild(bann);
     }
@@ -1914,6 +1915,7 @@
       tr.innerHTML=
         // GUIA
         '<td><b>'+esc(g.numero)+'</b>'+(g.prazoVencido?' <span class="badge danger">prazo</span>':'')+
+          ((State.perfil==='auditor' && ehFilaAuditor(g))?' <span class="badge fila-aud" title="Etapa AUDITORIA EXTERNA - MÉDICO: sua fila de auditoria">'+ico('stethoscope',10)+' Sua fila</span>':'')+
           '<div style="margin-top:5px;cursor:pointer" data-ident="status-cell" data-tip="Status">'+statusBadge(g.status)+'</div>'+
           '<div style="margin-top:9px">'+(_gespec?'<span class="badge muted'+(State.filtros.especialidade===_gespec?' cell-filtered':'')+'" style="font-size:10px;cursor:pointer" title="Especialidade">'+ico('stethoscope',10)+' '+esc(_gespec)+'</span>':'<span style="font-size:10px;color:transparent">—</span>')+'</div>'+
         '</td>'+

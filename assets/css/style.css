@@ -712,6 +712,8 @@ tbody tr:hover{background:#f7fbf8;cursor:pointer}
 .etapa-ctrl-info{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--ink-1)}
 .etapa-ctrl-btns{display:flex;gap:8px}
 .etapa-ctrl-note{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--muted);margin-bottom:12px}
+.badge.fila-aud{background:#eaf6ef;color:#066b34;border-color:#a6dabc;font-weight:700}
+.badge.fila-aud svg{vertical-align:-2px;margin-right:1px}
 
 /* Aderência mini */
 .ader{display:flex;align-items:center;gap:8px;min-width:120px}
