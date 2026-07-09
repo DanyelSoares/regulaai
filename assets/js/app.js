@@ -172,6 +172,29 @@
     sv[ax.id]={categoria:ax.categoria,anotacoes:ax.anotacoes};
     localStorage.setItem('regula_anexos',JSON.stringify(sv));
   }
+  // Extratos salvos do que a IA leu de cada anexo (por guia): { <anexoId>: {hash,nome,pacienteDoc,confereNome,extrato,ts} }
+  function getAnxExtratosG(numeroGuia){ try{ return JSON.parse(localStorage.getItem('regula_anx_extrato_'+numeroGuia)||'{}'); }catch(e){ return {}; } }
+  // Enriquece o resultado da análise (motor) com os fatos já lidos dos anexos, SEM reler os arquivos.
+  // Adiciona alerta crítico de divergência de nome e nota de achado por anexo.
+  function aplicarExtratosAnexosNaAnalise(g, ia){
+    if(!ia) return ia;
+    var ex=getAnxExtratosG(g.numero);
+    var ids=Object.keys(ex); if(!ids.length) return ia;
+    ia.alertas=ia.alertas||[]; ia.pendencias=ia.pendencias||[];
+    ids.forEach(function(id){
+      var e=ex[id]; if(!e) return;
+      var nome=e.nome||'anexo';
+      if((''+e.confereNome).toLowerCase()==='nao'){
+        var al='⚠️ DIVERGÊNCIA DE NOME no anexo "'+nome+'": documento em nome de '+(e.pacienteDoc||'—')+', guia de '+((g.beneficiario&&g.beneficiario.nome)||'—')+' — possível anexo trocado.';
+        if(ia.alertas.indexOf(al)<0) ia.alertas.unshift(al);
+      }
+      if(e.extrato){
+        var nota='Anexo "'+nome+'" (lido pela IA): '+e.extrato;
+        if(ia.pendencias.indexOf(nota)<0 && ia.alertas.indexOf(nota)<0) ia.pendencias.push(nota);
+      }
+    });
+    return ia;
+  }
   // Persiste um anexo NOVO (adicionado pelo usuário) na guia
   function persistAnexoNovo(numeroGuia, ax){
     var sv=JSON.parse(localStorage.getItem('regula_anexos_novos')||'{}');
@@ -4769,6 +4792,7 @@
 
   function openGuia(g, tab){
     g._cache = AI.analisarGuiaComIA(g,{pesos:getFluxoPesos(g.fluxo&&g.fluxo.id)});
+    aplicarExtratosAnexosNaAnalise(g, g._cache); // incorpora o que a IA já leu dos anexos
     var ia=g._cache;
     var TABS_DEF=[
       {id:'resumo',        label:'Resumo',           ico:'layout-dashboard', grp:0},
@@ -4846,6 +4870,8 @@
           observacaoAuditor: obsAuditor,
           parecerOperadora: parecerOp
         });
+        // Reaproveita o que a IA já leu dos anexos (extratos salvos) — sem reler os arquivos
+        aplicarExtratosAnexosNaAnalise(g, g._cache);
         ia=g._cache;
         setTab('ia');
         hidePageLoader();
@@ -7759,10 +7785,14 @@
       return L.join('\n');
     }
 
+    // Hash simples e rápido do conteúdo (para detectar anexo alterado e diferenciar arquivos de mesmo nome)
+    function _hashConteudo(s){ var h=5381; s=''+s; for(var i=0;i<s.length;i++){ h=((h<<5)+h+s.charCodeAt(i))|0; } return (h>>>0).toString(36); }
+
     // Coleta os anexos COM conteúdo (dataURL) de imagem/PDF para enviar à IA com visão.
-    // Retorna [{nome, categoria, mime, dataURL, base64}]. Limita p/ não estourar o payload.
+    // Retorna [{id, ref, hash, nome, categoria, mime, dataURL, base64}]. Limita p/ não estourar o payload.
+    // ref = rótulo ÚNICO e estável (id + hash curto) para que anexos de mesmo nome NUNCA se confundam.
     function anexosParaVisao(g){
-      var out=[];
+      var out=[], idx=0;
       (g.anexosLista||[]).forEach(function(a){
         if(!a.dataURL || typeof a.dataURL!=='string') return;
         var m=a.dataURL.match(/^data:([^;]+);base64,(.*)$/);
@@ -7770,18 +7800,27 @@
         var mime=m[1], base64=m[2];
         // Formatos que Claude, OpenAI e Gemini leem diretamente (imagem e PDF)
         if(!/^image\/(png|jpe?g|gif|webp)$/.test(mime) && mime!=='application/pdf') return;
-        out.push({id:a.id, nome:a.nome, categoria:a.categoria||'', mime:mime, dataURL:a.dataURL, base64:base64});
+        idx++;
+        var hash=_hashConteudo(base64.slice(0,4096)+'|'+base64.length); // amostra + tamanho = suficiente e barato
+        out.push({id:a.id||('anx'+idx), ref:'Anexo #'+idx+' ['+(a.id||('anx'+idx))+'·'+hash+']', hash:hash,
+                  nome:a.nome, categoria:a.categoria||'', mime:mime, dataURL:a.dataURL, base64:base64});
       });
       return out.slice(0,6); // teto de segurança
     }
-    // Marca anexos como analisados pela IA (persistente por guia) e re-renderiza a guia se estiver aberta
+
+    // Extratos persistidos do que a IA leu de cada anexo (por guia). Estrutura por id:
+    // { hash, nome, extrato(texto), pacienteDoc, confereNome:'sim'|'nao'|'?', ts }
+    function _anxExtratosKey(g){ return 'regula_anx_extrato_'+g.numero; }
+    function getAnxExtratos(g){ try{ return JSON.parse(localStorage.getItem(_anxExtratosKey(g))||'{}'); }catch(e){ return {}; } }
+    function saveAnxExtratos(g, obj){ localStorage.setItem(_anxExtratosKey(g), JSON.stringify(obj)); }
+
+    // Marca anexos como analisados pela IA (persistente por guia)
     function marcarAnexosAnalisados(g, anexos){
       var key='regula_anx_ia_'+g.numero;
       var set={}; try{ set=JSON.parse(localStorage.getItem(key)||'{}'); }catch(e){}
       var stamp=new Date().toISOString().slice(0,16).replace('T',' ');
       anexos.forEach(function(a){ if(a.id) set[a.id]=stamp; });
       localStorage.setItem(key, JSON.stringify(set));
-      // atualiza o objeto em memória (o selo aparece na próxima abertura/refresh da seção de anexos)
       (g.anexosLista||[]).forEach(function(ax){ if(set[ax.id]){ ax.analisadoIA=set[ax.id]; } });
     }
 
@@ -8083,8 +8122,9 @@
     }
 
     // Executa um turno de conversa: monta a mensagem (anexando o conteúdo dos anexos na 1ª vez), chama a IA e mostra a resposta.
-    // baseText: texto da mensagem do usuário (ou instrução automática). mostrarUser: se true, ecoa a mensagem no chat.
-    async function enviarTurno(baseText, mostrarUser){
+    // baseText: texto da mensagem. mostrarUser: se true, ecoa a mensagem no chat. opts.reusarSalvos: reprocessar sem reler anexos já lidos.
+    async function enviarTurno(baseText, mostrarUser, opts){
+      opts=opts||{};
       var cfg=getIaCfg();
       if(!cfg.key){ addMsg('bot',msgSemChave(),true); return; }
       if(mostrarUser) addMsg('user',baseText);
@@ -8094,20 +8134,43 @@
       chatLog.appendChild(typing);
       chatLog.scrollTop=chatLog.scrollHeight;
 
-      // Na 1ª mensagem técnica, anexa o CONTEÚDO dos anexos (imagem/PDF) p/ visão. Os 3 provedores leem imagem E PDF.
       var userParts=[{text:baseText}];
       var anexosEnviadosAgora=[];
-      if(chatMode==='tecnica' && chatGuia && !anexosVisaoEnviados){
+      if(chatMode==='tecnica' && chatGuia && (!anexosVisaoEnviados || opts.reusarSalvos)){
         var anx=anexosParaVisao(chatGuia);
-        if(anx.length){
-          userParts.push({text:'\n\n[Seguem '+anx.length+' anexo(s) desta guia para leitura — cruze o conteúdo com os serviços solicitados:]'});
-          anx.forEach(function(a){
-            userParts.push({text:'\nAnexo: '+a.nome+(a.categoria?' ('+a.categoria+')':'')+':'});
+        var extratos=getAnxExtratos(chatGuia);
+        var nomeGuia=(chatGuia.beneficiario&&chatGuia.beneficiario.nome)||'';
+        var novos=[], jaLidos=[];
+        anx.forEach(function(a){
+          var ex=extratos[a.id];
+          // considera "já lido" se há extrato salvo E o hash do conteúdo bate (arquivo não mudou)
+          if(ex && ex.hash===a.hash) jaLidos.push({a:a, ex:ex}); else novos.push(a);
+        });
+
+        // Anexos JÁ lidos → injeta o extrato salvo (texto), sem reenviar a imagem/PDF
+        if(jaLidos.length){
+          userParts.push({text:'\n\n[LEITURAS JÁ REGISTRADAS de anexos (use como fato, não releia):]'});
+          jaLidos.forEach(function(j){
+            userParts.push({text:'\n• '+j.a.ref+' — arquivo "'+j.a.nome+'": '+(j.ex.extrato||'(sem extrato)')+
+              ' | Paciente no documento: '+(j.ex.pacienteDoc||'?')+' | Confere com a guia: '+(j.ex.confereNome||'?')+'.'});
+          });
+        }
+
+        // Anexos NOVOS ou ALTERADOS → envia o conteúdo para leitura visual
+        if(novos.length){
+          userParts.push({text:'\n\n[Seguem '+novos.length+' anexo(s) para LEITURA. Para CADA um: identifique o NOME DO PACIENTE no documento e confira se é o mesmo da guia ("'+nomeGuia+'"). Rotule cada anexo pelo seu identificador exato (ref) — anexos de mesmo nome são DIFERENTES e não devem ser confundidos:]'});
+          novos.forEach(function(a){
+            userParts.push({text:'\n'+a.ref+' — arquivo "'+a.nome+'"'+(a.categoria?' ('+a.categoria+')':'')+':'});
             userParts.push({media:{mime:a.mime,base64:a.base64,nome:a.nome}});
             anexosEnviadosAgora.push(a);
           });
-          anexosVisaoEnviados=true;
+          // pede o bloco estruturado de extratos ao final (será salvo e removido da exibição)
+          userParts.push({text:'\n\nAo FINAL da sua resposta, e SOMENTE se houver anexos novos acima, inclua um bloco EXATAMENTE neste formato para persistência (não comente sobre ele):\n'+
+            '<<<EXTRATOS_ANEXOS>>>\n'+
+            novos.map(function(a){ return '{"id":"'+a.id+'","nome":"'+(a.nome||'').replace(/"/g,'')+'","hash":"'+a.hash+'","pacienteDoc":"<nome do paciente no documento ou vazio>","confereNome":"<sim|nao|?>","extrato":"<1-2 frases com o achado principal do documento>"}'; }).join('\n')+
+            '\n<<<FIM>>>'});
         }
+        anexosVisaoEnviados=true;
       }
       chatHistory.push({role:'user',parts:userParts});
 
@@ -8115,8 +8178,22 @@
         var res=await callIA(cfg,chatHistory);
         typing.remove();
         if(res.ok){
-          chatHistory.push({role:'model',parts:[{text:res.text}]});
-          addMsg('bot',res.text);
+          // Extrai e persiste o bloco de EXTRATOS dos anexos (se houver); remove-o antes de exibir
+          var textoExibir=res.text;
+          if(chatGuia){
+            var mBloco=res.text.match(/<<<EXTRATOS_ANEXOS>>>([\s\S]*?)<<<FIM>>>/);
+            if(mBloco){
+              var extSalvos=getAnxExtratos(chatGuia);
+              mBloco[1].split(/\r?\n/).forEach(function(ln){
+                ln=ln.trim(); if(!ln||ln[0]!=='{') return;
+                try{ var o=JSON.parse(ln); if(o.id){ extSalvos[o.id]={hash:o.hash||'',nome:o.nome||'',pacienteDoc:o.pacienteDoc||'',confereNome:(o.confereNome||'?'),extrato:o.extrato||'',ts:new Date().toISOString().slice(0,16).replace('T',' ')}; } }catch(e){}
+              });
+              saveAnxExtratos(chatGuia, extSalvos);
+              textoExibir=res.text.replace(/<<<EXTRATOS_ANEXOS>>>[\s\S]*?<<<FIM>>>/,'').trim();
+            }
+          }
+          chatHistory.push({role:'model',parts:[{text:textoExibir}]});
+          addMsg('bot',textoExibir);
           if(anexosEnviadosAgora.length && chatGuia){ marcarAnexosAnalisados(chatGuia, anexosEnviadosAgora); }
         } else {
           addMsg('bot','❌ '+res.text);
@@ -8133,12 +8210,15 @@
     async function analiseAutomaticaGuia(){
       var cfg=getIaCfg();
       if(!cfg.key){ addMsg('bot',msgSemChave(),true); return; }
+      var nomeGuia=(chatGuia&&chatGuia.beneficiario&&chatGuia.beneficiario.nome)||'';
       var instrucao='Faça agora a ANÁLISE TÉCNICA INICIAL COMPLETA desta guia, de forma objetiva e estruturada, usando TODO o dossiê fornecido e LENDO os anexos enviados. Organize em tópicos curtos: '+
         '1) Resumo do caso (beneficiário, quadro/indicação clínica, serviços solicitados); '+
-        '2) Achados dos anexos (o que consta em cada laudo/exame/documento e se sustentam a solicitação); '+
-        '3) Aderência às diretrizes/DUT e pontos de atenção regulatórios; '+
-        '4) Coerência entre indicação clínica × serviços × histórico × carências; '+
-        '5) Alertas/pendências e recomendação de apoio (sem autorizar/negar). '+
+        '2) CONFERÊNCIA DOS ANEXOS: para CADA anexo, identifique o NOME DO PACIENTE no documento e confirme se é o mesmo da guia ("'+nomeGuia+'"). '+
+        'Se algum documento estiver em nome DIFERENTE, DESTAQUE no topo como alerta crítico: "⚠️ DIVERGÊNCIA: documento em nome de <X>, guia de '+nomeGuia+' — possível anexo trocado." (não bloqueia, apenas alerta). Cite cada anexo pelo seu identificador (ref); anexos de mesmo nome são DIFERENTES; '+
+        '3) Achados dos anexos (o que consta em cada laudo/exame e se sustentam a solicitação); '+
+        '4) Aderência às diretrizes/DUT e pontos de atenção regulatórios; '+
+        '5) Coerência entre indicação clínica × serviços × histórico × carências; '+
+        '6) Alertas/pendências e recomendação de apoio (sem autorizar/negar). '+
         'Seja direto. Ao final, ofereça: "Posso detalhar algum ponto ou discutir alternativas.".';
       await enviarTurno(instrucao, false);
     }
