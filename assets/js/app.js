@@ -1403,7 +1403,13 @@
       }
       h+='<div class="donut-tip-sep"></div><div class="donut-tip-title">Como é calculado</div>'+
         '<div style="font-size:11px;color:var(--ink);line-height:1.55;margin-top:3px">'+
-          'A IA pontua cada guia em <b>5 dimensões</b>: documentação, DUT, vinculações de procedimentos, Mat/Med e cobertura contratual. Cada dimensão tem um <b>peso proporcional</b> ao seu impacto regulatório.'+
+          'A IA pontua cada guia considerando <b>4 eixos de risco</b>, cada um com peso configurável em Configurações → Classificação de Risco:'+
+        '</div>'+
+        '<div style="font-size:10.5px;color:var(--ink);margin-top:6px;line-height:1.65">'+
+          '<div><b style="color:var(--g-700)">Regulatório</b> — documentação obrigatória, DUT, vinculação de procedimentos e Mat/Med.</div>'+
+          '<div><b style="color:var(--g-700)">Assistencial</b> — UTI, OPME, oncologia/imunobiológico, alta complexidade e regime de urgência.</div>'+
+          '<div><b style="color:var(--g-700)">Documental</b> — anexos ausentes, DUT não comprovada e prazo de auditoria vencido.</div>'+
+          '<div><b style="color:var(--g-700)">Contratual</b> — internação, OPME/alto custo, DUT contratual e garantia de atendimento.</div>'+
         '</div>'+
         '<div style="font-size:10.5px;color:var(--muted);margin-top:7px;line-height:1.6">'+
           '<span style="color:var(--g-600);font-weight:700">Alta (&ge;90%)</span> — todos os critérios essenciais atendidos, sem pendências documentais.<br>'+
