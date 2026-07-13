@@ -6733,6 +6733,14 @@
     var _PROFS=['—','PRESTADOR TESTE DOIS','Dr. Marcos Vinícius','Dr. Tiago Ramalho','Dra. Helena Prado'];
     function opts(arr,sel){ return arr.map(function(x){return '<option'+(x===sel?' selected':'')+'>'+esc(x)+'</option>';}).join(''); }
 
+    // Catálogo de serviços do sistema (o Autorizado é ESCOLHIDO da lista, não digitado livremente)
+    var _SERVICOS=(MOCK.PROCEDIMENTOS||[]).map(function(p){ return {cod:p.cod, desc:p.desc}; });
+    // garante que o item solicitado esteja na lista (para vir pré-selecionado)
+    if(cod && !_SERVICOS.some(function(s){return s.cod===cod;})) _SERVICOS.unshift({cod:cod, desc:desc||cod});
+    _SERVICOS.sort(function(a,b){ return String(a.cod).localeCompare(String(b.cod)); });
+    function optSrvCod(sel){ return _SERVICOS.map(function(s){return '<option value="'+esc(s.cod)+'"'+(s.cod===sel?' selected':'')+'>'+esc(s.cod)+'</option>';}).join(''); }
+    function optSrvDesc(sel){ return _SERVICOS.map(function(s){return '<option value="'+esc(s.cod)+'"'+(s.cod===sel?' selected':'')+'>'+esc(s.desc)+'</option>';}).join(''); }
+
     var body=
       '<div class="audp-tabs">'+
         '<button class="audp-tab active" data-at="cod">Alterações no código ou quantidade</button>'+
@@ -6751,7 +6759,7 @@
             '<div class="audp-row"><label>Qtde</label><input type="number" id="audQtdSol" value="1" min="0" style="max-width:90px" readonly></div>'+
           '</div>'+
           '<div class="audp-col"><div class="audp-col-hd">Autorizado</div>'+
-            '<div class="audp-row"><label>Código</label><input type="text" id="audCodAut" value="'+esc(cod)+'"><input type="text" id="audDescAut" class="audp-desc" value="'+esc(desc)+'"></div>'+
+            '<div class="audp-row"><label>Código</label><select id="audCodAut" style="max-width:120px">'+optSrvCod(cod)+'</select><select id="audDescAut" class="audp-desc">'+optSrvDesc(cod)+'</select></div>'+
             '<div class="audp-row"><label>Qtde</label><input type="number" id="audQtdAut" value="1" min="0" style="max-width:90px"></div>'+
             '<div class="audp-row"><label>Técnica a utilizar</label><select id="audTecnica" class="audp-desc">'+opts(_TECNICAS,'—')+'</select></div>'+
           '</div>'+
@@ -6789,13 +6797,20 @@
       $$('.audp-pane',m).forEach(function(p){ p.style.display=(p.getAttribute('data-pane')===at)?'block':'none'; });
     }; });
 
+    // Autorizado: código e descrição são selects sincronizados (escolher um ajusta o outro)
+    var _selCod=m.querySelector('#audCodAut'), _selDesc=m.querySelector('#audDescAut');
+    _selCod.onchange=function(){ _selDesc.value=_selCod.value; };
+    _selDesc.onchange=function(){ _selCod.value=_selDesc.value; };
+
     m.querySelector('#audDesistir').onclick=function(){ m.parentNode.remove(); };
     m.querySelector('#audOk').onclick=function(){
       var codAut=m.querySelector('#audCodAut').value, qtdAut=m.querySelector('#audQtdAut').value;
       var tec=m.querySelector('#audTecnica').value, obs=m.querySelector('#audObs').value;
+      var srvAut=_SERVICOS.filter(function(s){return s.cod===codAut;})[0];
+      var descAut=srvAut?srvAut.desc:codAut;
       var ts=new Date().toISOString().slice(0,16).replace('T',' ');
       var uName=perfilDef[State.perfil]?perfilDef[State.perfil].nome:State.perfil;
-      var ref='Guia '+g.numero+' — proc '+cod+(codAut&&codAut!==cod?' → '+codAut:'')+' (qtd aut '+qtdAut+(tec&&tec!=='—'?', técnica '+tec:'')+')';
+      var ref='Guia '+g.numero+' — proc '+cod+(codAut&&codAut!==cod?' → '+codAut+' '+descAut:'')+' (qtd aut '+qtdAut+(tec&&tec!=='—'?', técnica '+tec:'')+')';
       MOCK.LOGS.unshift({ts:ts,user:uName,perfil:State.perfil,acao:'Auditoria de procedimento registrada',ref:ref});
       if(typeof logAcao==='function') logAcao('Auditoria de procedimento', ref+(obs?' — '+(obs.length>60?obs.slice(0,60)+'…':obs):''));
       toast('Auditoria de procedimento registrada','ok');
