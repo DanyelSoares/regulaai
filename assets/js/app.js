@@ -6573,7 +6573,7 @@
       '<div class="pit-resumo" id="pitResumo"></div>'+
       '<div class="g2" style="margin-top:6px"><div class="field"><label>Observações impressas (vão para o prestador)</label><textarea id="pImp"></textarea></div><div class="field"><label>Observações não impressas (internas)</label><textarea id="pInt"></textarea></div></div>'+
       '<div class="ai-box"><div class="hd"><div class="tt">'+ico('lightbulb')+' Sugestão técnica</div></div><p style="margin:6px 0">'+esc(ia.parecerGeral)+'</p><button class="btn sm ghost" id="pJustIA" type="button">'+ico('sparkles')+' Gerar análise técnica (obs. impressas)</button></div>';
-    var foot='<button class="btn ghost" id="pCancel">Cancelar</button><button class="btn" id="pSalvar">'+ico('save')+' Salvar parecer</button>';
+    var foot='<button class="btn ghost" id="pAudProc">'+ico('clipboard-check')+' Auditoria de procedimento</button><button class="btn ghost" id="pCancel">Cancelar</button><button class="btn" id="pSalvar">'+ico('save')+' Salvar parecer</button>';
     var m = modal('Parecer da Operadora · '+esc(g.numero), 'A decisão final é exclusiva da operadora. A análise técnica atua apenas como apoio.', body, foot);
 
     // preenche obs salvas
@@ -6648,6 +6648,16 @@
       toast('Parecer removido dos itens selecionados','ok');
     };
     atualizarResumo();
+    // Botão "Auditoria de procedimento" — abre modal de auditoria por procedimento (código/qtd + equipe médica)
+    var _bAud=m.querySelector('#pAudProc');
+    if(_bAud) _bAud.onclick=function(){
+      var selecionados=selKeys();
+      // procedimento base: 1º selecionado (se houver), senão o 1º procedimento da guia
+      var procBase=null;
+      if(selecionados.length){ procBase=itens.filter(function(x){return x.key===selecionados[0];})[0]; }
+      if(!procBase){ procBase=itens.filter(function(x){return x.tipo==='Procedimento';})[0]||itens[0]; }
+      openAuditoriaProcedimento(g, procBase);
+    };
     m.querySelector('#pJustIA').onclick=function(){
       var btn=this;
       btn.innerHTML=ico('loader')+' Gerando…'; btn.disabled=true;
@@ -6711,6 +6721,87 @@
       toast('Parecer salvo · '+g.status,'ok');
       m.parentNode.remove(); render();
     };
+  }
+
+  // Modal "Auditoria de procedimento" (aberto do Parecer da Operadora) — código/qtd solicitado × autorizado + equipe médica
+  function openAuditoriaProcedimento(g, proc){
+    proc=proc||{}; var cod=proc.cod||'', desc=proc.desc||'';
+    var _AUDITORES=['PRESTADOR TESTE DOIS','Dr. Marcos Vinícius','Dr. Tiago Ramalho','Dra. Helena Prado','Junta Médica'];
+    var _MOTIVOS=['Divergência de código','Divergência de quantidade','Adequação técnica','Alteração de equipe médica','Revisão de percentuais','Outros'];
+    var _TECNICAS=['—','Convencional','Videolaparoscópica','Robótica','Endoscópica','Percutânea'];
+    var _EQUIPE=['—','Prestador','Executante','Solicitante'];
+    var _PROFS=['—','PRESTADOR TESTE DOIS','Dr. Marcos Vinícius','Dr. Tiago Ramalho','Dra. Helena Prado'];
+    function opts(arr,sel){ return arr.map(function(x){return '<option'+(x===sel?' selected':'')+'>'+esc(x)+'</option>';}).join(''); }
+
+    var body=
+      '<div class="audp-tabs">'+
+        '<button class="audp-tab active" data-at="cod">Alterações no código ou quantidade</button>'+
+        '<button class="audp-tab" data-at="eq">Demais alterações / Equipe médica</button>'+
+      '</div>'+
+      // Cabeçalho comum
+      '<div class="audp-head g2">'+
+        '<div class="field"><label>Auditor médico</label><select id="audAuditor">'+opts(_AUDITORES, _AUDITORES[0])+'</select></div>'+
+        '<div class="field"><label>Motivo da auditoria</label><select id="audMotivo"><option value=""></option>'+opts(_MOTIVOS,'')+'</select></div>'+
+      '</div>'+
+      // ── Aba 1: código/quantidade ──
+      '<div class="audp-pane" data-pane="cod">'+
+        '<div class="audp-cols">'+
+          '<div class="audp-col"><div class="audp-col-hd">Solicitado</div>'+
+            '<div class="audp-row"><label>Código</label><input type="text" id="audCodSol" value="'+esc(cod)+'" readonly><input type="text" id="audDescSol" class="audp-desc" value="'+esc(desc)+'" readonly></div>'+
+            '<div class="audp-row"><label>Qtde</label><input type="number" id="audQtdSol" value="1" min="0" style="max-width:90px" readonly></div>'+
+          '</div>'+
+          '<div class="audp-col"><div class="audp-col-hd">Autorizado</div>'+
+            '<div class="audp-row"><label>Código</label><input type="text" id="audCodAut" value="'+esc(cod)+'"><input type="text" id="audDescAut" class="audp-desc" value="'+esc(desc)+'"></div>'+
+            '<div class="audp-row"><label>Qtde</label><input type="number" id="audQtdAut" value="1" min="0" style="max-width:90px"></div>'+
+            '<div class="audp-row"><label>Técnica a utilizar</label><select id="audTecnica" class="audp-desc">'+opts(_TECNICAS,'—')+'</select></div>'+
+          '</div>'+
+        '</div>'+
+        '<div class="field" style="margin-top:6px"><label>Observações</label><textarea id="audObs" style="min-height:120px"></textarea></div>'+
+      '</div>'+
+      // ── Aba 2: equipe médica ──
+      '<div class="audp-pane" data-pane="eq" style="display:none">'+
+        '<div class="g2">'+
+          '<div class="field"><label style="color:#b3261e">Equipe</label><input type="text" id="audEquipe" style="max-width:120px"></div>'+
+          '<div class="field"><label style="color:#b3261e">Via</label><input type="text" id="audVia" style="max-width:120px"></div>'+
+        '</div>'+
+        '<div class="g2">'+
+          '<div class="field"><label>Percentual calculado</label><input type="text" id="audPercCalc" style="max-width:120px"></div>'+
+          '<div class="field"><label>Percentual diferenciado</label><input type="text" id="audPercDif" style="max-width:120px"></div>'+
+        '</div>'+
+        '<div class="field"><label>Anestesista</label><select id="audAnest">'+opts(_PROFS,'—')+'</select></div>'+
+        (function(){
+          var padrao=[30,20,20,20];
+          return [1,2,3,4].map(function(n,i){
+            return '<div class="audp-aux"><div class="field audp-aux-nome"><label>'+n+'º Auxiliar</label><select class="audAuxSel" data-n="'+n+'">'+opts(_PROFS,'—')+'</select></div>'+
+              '<div class="field audp-aux-pct"><label>% normal</label><input type="number" class="audAuxNorm" value="'+padrao[i]+'"></div>'+
+              '<div class="field audp-aux-pct"><label>% diferenciado</label><input type="number" class="audAuxDif" placeholder=""></div></div>';
+          }).join('');
+        })()+
+        '<div class="field"><label>Auxiliar de anestesista</label><select id="audAuxAnest">'+opts(_PROFS,'—')+'</select></div>'+
+      '</div>';
+    var foot='<button class="btn ghost" id="audDesistir">'+ico('x')+' Desistir</button><button class="btn" id="audOk">'+ico('check')+' OK</button>';
+    var m=modal('Auditoria de procedimento · '+esc(g.numero), 'Solicitado × Autorizado — ajuste de código, quantidade, técnica e equipe médica.', body, foot);
+
+    // troca de abas
+    $$('.audp-tab',m).forEach(function(b){ b.onclick=function(){
+      $$('.audp-tab',m).forEach(function(x){x.classList.remove('active');}); b.classList.add('active');
+      var at=b.getAttribute('data-at');
+      $$('.audp-pane',m).forEach(function(p){ p.style.display=(p.getAttribute('data-pane')===at)?'block':'none'; });
+    }; });
+
+    m.querySelector('#audDesistir').onclick=function(){ m.parentNode.remove(); };
+    m.querySelector('#audOk').onclick=function(){
+      var codAut=m.querySelector('#audCodAut').value, qtdAut=m.querySelector('#audQtdAut').value;
+      var tec=m.querySelector('#audTecnica').value, obs=m.querySelector('#audObs').value;
+      var ts=new Date().toISOString().slice(0,16).replace('T',' ');
+      var uName=perfilDef[State.perfil]?perfilDef[State.perfil].nome:State.perfil;
+      var ref='Guia '+g.numero+' — proc '+cod+(codAut&&codAut!==cod?' → '+codAut:'')+' (qtd aut '+qtdAut+(tec&&tec!=='—'?', técnica '+tec:'')+')';
+      MOCK.LOGS.unshift({ts:ts,user:uName,perfil:State.perfil,acao:'Auditoria de procedimento registrada',ref:ref});
+      if(typeof logAcao==='function') logAcao('Auditoria de procedimento', ref+(obs?' — '+(obs.length>60?obs.slice(0,60)+'…':obs):''));
+      toast('Auditoria de procedimento registrada','ok');
+      m.parentNode.remove();
+    };
+    lcIcons();
   }
 
   /* === Relógio dinâmico === */
