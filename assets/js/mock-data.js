@@ -175,10 +175,16 @@
     'AUDITORIA ESPECIALIZADA (ANALÍTICA/BUCO/NEURO)':30,'AUDITORIA MÉDICA URG/PA':8,
     'PARAMETRIZAÇÃO':96
   };
+  // Data/hora de um "dia base" (1..28) contado a partir de hoje menos ~9 dias, para as etapas sempre caírem em período recente
+  function _etapaBaseData(){
+    var d=new Date(); d.setDate(d.getDate()-9);
+    return {y:d.getFullYear(), m:d.getMonth()+1};
+  }
   function buildEtapas(fluxo, statusGuia){
     var lst=[]; var marcaCorrente = statusGuia==='Em análise' || statusGuia==='Aguardando complemento' || statusGuia==='Em junta médica';
     var corrIdx = marcaCorrente ? Math.min(fluxo.etapas.length-2, Math.max(1, Math.floor(fluxo.etapas.length*0.45))) : fluxo.etapas.length;
     var baseDay=1, baseHour=8, cumHours=0;
+    var _bd=_etapaBaseData();
     for(var i=0;i<fluxo.etapas.length;i++){
       var nome=fluxo.etapas[i];
       var st = i<corrIdx?'concluida':(i===corrIdx?'em_execucao':'aguardando');
@@ -188,10 +194,10 @@
       var variacao=1 + ((i*0.13)%0.8 - 0.4);
       var horasReal=Math.round(horasBase*variacao);
       var dIni=Math.floor(cumHours/24)+baseDay, hIni=baseHour+(cumHours%24);
-      var inicioPad='2026-06-'+String(Math.min(dIni,28)).padStart(2,'0')+' '+String(Math.min(hIni,23)).padStart(2,'0')+':00';
+      var inicioPad=_bd.y+'-'+String(_bd.m).padStart(2,'0')+'-'+String(Math.min(dIni,28)).padStart(2,'0')+' '+String(Math.min(hIni,23)).padStart(2,'0')+':00';
       cumHours+=horasReal;
       var dFim=Math.floor(cumHours/24)+baseDay, hFim=baseHour+(cumHours%24);
-      var fimPad='2026-06-'+String(Math.min(dFim,28)).padStart(2,'0')+' '+String(Math.min(hFim,23)).padStart(2,'0')+':00';
+      var fimPad=_bd.y+'-'+String(_bd.m).padStart(2,'0')+'-'+String(Math.min(dFim,28)).padStart(2,'0')+' '+String(Math.min(hFim,23)).padStart(2,'0')+':00';
       lst.push({ ordem:i+1, nome:nome, ia:IA_POR_ETAPA[nome]||'apoio', status:st,
         prazoHoras: nome.indexOf('URG')>=0?4:(nome.indexOf('JUNTA')>=0?72:24),
         horasReais: st!=='aguardando'?horasReal:0,
@@ -220,6 +226,11 @@
     {numero:'314862795',benId:'B4',presS:'P1',presE:'P1',solicitante:'THIAGO NASCIMENTO CRUZ',tipo:'Cirurgia',natureza:'Internação',subInternacao:'Cirúrgica',regime:'Eletivo',fluxoId:'F4',status:'Negada',origem:'Site',uti:false,opme:false,dut:true,anexos:true,prio:'Média',procs:['30602131'],pacs:['PKT-CAT-01'],mm:[],dt:['DT-005'],risco:'medio',obs:'Negada por DUT não atendida.'}
   ];
 
+  // Datas mock relativas a hoje (garante que caiam sempre nos filtros padrão de período, ex.: "últimos 30 dias")
+  function _isoOffset(diasAtras){
+    var d=new Date(); d.setDate(d.getDate()-diasAtras);
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  }
   function hydrate(){
     var out=[];
     for(var i=0;i<GUIAS_RAW.length;i++){
@@ -230,11 +241,12 @@
       var pe = PRESTADORES.filter(function(p){return p.id===g.presE})[0];
       var fluxo = FLUXOS.filter(function(f){return f.id===g.fluxoId})[0];
       var diasEm = 1 + (i%9);
+      var dEmissao = _isoOffset(i%9);
       out.push({
         numero:g.numero, beneficiario:ben, prestadorSol:ps, prestadorExe:pe, fluxo:fluxo,
         tipo:g.tipo, natureza:g.natureza, subInternacao:g.subInternacao||'', regime:g.regime, status:g.status, origem:g.origem, congenere:ben.cidade||'—', solicitante:g.solicitante||'—',
         uti:g.uti, opme:g.opme, dut:g.dut, anexos:g.anexos, prio:g.prio,
-        risco:g.risco, dataEmissao:'2026-06-0'+((i%9)+1), horaEmissao:String(8+(i%10)).padStart(2,'0')+':'+String((i*7+13)%60).padStart(2,'0'), internacao:g.internacao||'', alta:'',
+        risco:g.risco, dataEmissao:dEmissao, horaEmissao:String(8+(i%10)).padStart(2,'0')+':'+String((i*7+13)%60).padStart(2,'0'), internacao:g.internacao||'', alta:'',
         diasAuditoria:diasEm, prazoVencido: diasEm>5,
         procedimentos: PROCEDIMENTOS.filter(function(p){return g.procs.indexOf(p.cod)>=0}),
         pacotes: PACOTES.filter(function(p){return g.pacs.indexOf(p.cod)>=0}),
@@ -242,13 +254,13 @@
         diariasTaxas: DIARIAS_TAXAS.filter(function(p){return g.dt.indexOf(p.cod)>=0}),
         etapas: buildEtapas(fluxo, g.status),
         anexosLista: g.anexos ? [
-          {id:g.numero+'-A1',nome:'Laudo médico assinado.pdf',tipo:'pdf',categoria:'Laudo médico',tamanho:'412 KB',enviadoEm:'2026-06-0'+((i%9)+1)+' 09:12',enviadoPor:g.presS,paginas:3,anotacoes:[]},
-          {id:g.numero+'-A2',nome:'Exame de imagem.jpg',tipo:'img',categoria:'Exame complementar',tamanho:'1.8 MB',enviadoEm:'2026-06-0'+((i%9)+1)+' 09:15',enviadoPor:g.presS,paginas:1,anotacoes:[]},
-          {id:g.numero+'-A3',nome:'Guia TISS preenchida.pdf',tipo:'pdf',categoria:'Guia TISS',tamanho:'220 KB',enviadoEm:'2026-06-0'+((i%9)+1)+' 09:00',enviadoPor:g.presS,paginas:2,anotacoes:[]},
-          {id:g.numero+'-A4',nome:'Relatório clínico.pdf',tipo:'pdf',categoria:'Relatório clínico',tamanho:'305 KB',enviadoEm:'2026-06-0'+((i%9)+1)+' 09:22',enviadoPor:g.presS,paginas:4,anotacoes:[]}
+          {id:g.numero+'-A1',nome:'Laudo médico assinado.pdf',tipo:'pdf',categoria:'Laudo médico',tamanho:'412 KB',enviadoEm:dEmissao+' 09:12',enviadoPor:g.presS,paginas:3,anotacoes:[]},
+          {id:g.numero+'-A2',nome:'Exame de imagem.jpg',tipo:'img',categoria:'Exame complementar',tamanho:'1.8 MB',enviadoEm:dEmissao+' 09:15',enviadoPor:g.presS,paginas:1,anotacoes:[]},
+          {id:g.numero+'-A3',nome:'Guia TISS preenchida.pdf',tipo:'pdf',categoria:'Guia TISS',tamanho:'220 KB',enviadoEm:dEmissao+' 09:00',enviadoPor:g.presS,paginas:2,anotacoes:[]},
+          {id:g.numero+'-A4',nome:'Relatório clínico.pdf',tipo:'pdf',categoria:'Relatório clínico',tamanho:'305 KB',enviadoEm:dEmissao+' 09:22',enviadoPor:g.presS,paginas:4,anotacoes:[]}
         ] : [],
         observacoes:g.obs, parecerOperadora:null, parecerIA:null,
-        ultimaSync:'2026-06-09 23:'+(10+i)
+        ultimaSync:_isoOffset(0)+' 23:'+(10+i)
       });
     }
     return out;
