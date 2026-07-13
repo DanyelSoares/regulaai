@@ -445,7 +445,8 @@
   }
   function riskPill(r,guiaNumero){
     var clickable=guiaNumero!=null;
-    return '<span class="risk '+r+(clickable?' risk-clickable':'')+'"'+(clickable?' data-risco-guia="'+esc(String(guiaNumero))+'" title="Clique para ver o cálculo"':'')+'>'+r.charAt(0).toUpperCase()+r.slice(1)+'</span>';
+    var tip=clickable?'Risco Regulatório · Clique para ver o cálculo':'Risco Regulatório';
+    return '<span class="risk '+r+(clickable?' risk-clickable':'')+'"'+(clickable?' data-risco-guia="'+esc(String(guiaNumero))+'"':'')+' title="'+tip+'">'+r.charAt(0).toUpperCase()+r.slice(1)+'</span>';
   }
   function showRiscoCalculo(g){
     var det=calcRiscoDetalhe(g);
@@ -467,7 +468,7 @@
       : '<tr><td colspan="2" style="padding:10px;color:var(--muted);font-size:12.5px">Nenhum fator de risco presente nesta guia.</td></tr>';
 
     var body=
-      '<p style="font-size:13px;color:var(--muted);margin:0 0 14px">Soma dos fatores <b>presentes</b> nesta guia, conforme pesos configurados em <b>Configurações → Classificação de Risco</b>.</p>'+
+      '<p style="font-size:13px;color:var(--muted);margin:0 0 14px">Este é o risco <b>Regulatório</b> — soma dos fatores <b>presentes</b> nesta guia, conforme pesos configurados em <b>Configurações → Classificação de Risco → Regulatório</b>. Os eixos Assistencial/Documental/Contratual são calculados à parte e não entram nesta soma.</p>'+
       '<div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--g-700);margin-bottom:4px">Fatores presentes</div>'+
       '<table style="width:100%;border-collapse:collapse;margin-bottom:8px">'+
         '<thead><tr><th style="text-align:left;padding:0 10px 8px;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)">Fator</th>'+
@@ -485,7 +486,7 @@
         '<b>Faixas:</b> Baixo até '+lim.baixo+' · Médio até '+lim.medio+' · Alto até '+lim.alto+' · Crítico acima de '+lim.alto+'<br>'+
         '<b>Resultado:</b> '+det.score+' pontos → <span class="risk '+nivel+'" style="margin-left:4px">'+nivelLabel+'</span>'+
       '</div>';
-    modal(ico('shield-alert',16)+' Cálculo do nível de risco','Guia '+esc(g.numero),body);
+    modal(ico('shield-alert',16)+' Cálculo do risco Regulatório','Guia '+esc(g.numero),body);
   }
   document.addEventListener('click',function(e){
     var pill=e.target.closest&&e.target.closest('.risk-clickable');
