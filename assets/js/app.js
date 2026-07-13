@@ -6552,11 +6552,11 @@
   // Lista unificada dos serviços solicitados na guia (para parecer por item)
   function itensSolicitadosGuia(g){
     var out=[];
-    (g.procedimentos||[]).forEach(function(p){ out.push({tipo:'Procedimento', cod:p.cod, desc:p.desc, key:'proc|'+p.cod}); });
-    (g.pacotes||[]).forEach(function(p){ out.push({tipo:'Pacote', cod:p.cod, desc:p.desc, key:'pac|'+p.cod}); });
-    (g.diariasTaxas||[]).forEach(function(p){ out.push({tipo:'Diária/Taxa', cod:p.cod, desc:p.desc, key:'dt|'+p.cod}); });
-    (g.matmed||[]).filter(function(m){return !m.opme;}).forEach(function(p){ out.push({tipo:'Mat/Med', cod:p.cod, desc:p.desc, key:'mm|'+p.cod}); });
-    (g.matmed||[]).filter(function(m){return m.opme;}).forEach(function(p){ out.push({tipo:'OPME', cod:p.cod, desc:p.desc, key:'opme|'+p.cod}); });
+    (g.procedimentos||[]).forEach(function(p){ var x=MOCK.procDetalhe?MOCK.procDetalhe(p):{}; out.push({tipo:'Procedimento', cod:p.cod, desc:p.desc, qtdSolic:(x.qtdeSolic!=null?x.qtdeSolic:1), key:'proc|'+p.cod}); });
+    (g.pacotes||[]).forEach(function(p){ out.push({tipo:'Pacote', cod:p.cod, desc:p.desc, qtdSolic:1, key:'pac|'+p.cod}); });
+    (g.diariasTaxas||[]).forEach(function(p){ var x=_diariaDetalhe(p); out.push({tipo:'Diária/Taxa', cod:p.cod, desc:p.desc, qtdSolic:(x.qtdeSolic!=null?x.qtdeSolic:1), key:'dt|'+p.cod}); });
+    (g.matmed||[]).filter(function(m){return !m.opme;}).forEach(function(p){ var x=MOCK.matmedDetalhe?MOCK.matmedDetalhe(p):{}; out.push({tipo:'Mat/Med', cod:p.cod, desc:p.desc, qtdSolic:(x.qtdeSolic!=null?x.qtdeSolic:1), key:'mm|'+p.cod}); });
+    (g.matmed||[]).filter(function(m){return m.opme;}).forEach(function(p){ var x=MOCK.opmeDetalhe?MOCK.opmeDetalhe(p):{}; out.push({tipo:'OPME', cod:p.cod, desc:p.desc, qtdSolic:(x.qtde!=null?x.qtde:1), key:'opme|'+p.cod}); });
     return out;
   }
 
@@ -6578,13 +6578,14 @@
         '<td class="nw">'+ico(TIPO_ICO[it.tipo]||'dot',12)+' '+esc(it.tipo)+'</td>'+
         '<td class="rm-cod">'+esc(it.cod)+'</td>'+
         '<td>'+esc(it.desc)+(pa&&pa.justificativa?'<div class="pit-just">'+esc(pa.justificativa)+'</div>':'')+'</td>'+
+        '<td class="rm-c">'+(it.qtdSolic!=null?it.qtdSolic:'—')+'</td>'+
         '<td class="pit-st">'+badge+'</td>'+
       '</tr>';
     }
     var tabelaItens = itens.length
       ? '<div class="pit-tbl-wrap"><table class="pit-tbl"><thead><tr>'+
           '<th class="pit-chk"><input type="checkbox" id="pitAll" title="Selecionar todos"></th>'+
-          '<th>Tipo</th><th>Código</th><th>Serviço solicitado</th><th>Parecer</th>'+
+          '<th>Tipo</th><th>Código</th><th>Serviço solicitado</th><th>Qtde Solic.</th><th>Parecer</th>'+
         '</tr></thead><tbody id="pitBody">'+itens.map(linhaItem).join('')+'</tbody></table></div>'
       : '<div class="resumo-mini-empty">Nenhum serviço solicitado nesta guia.</div>';
 

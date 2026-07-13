@@ -695,6 +695,7 @@ tbody tr:hover{background:#f7fbf8;cursor:pointer}
 .pit-tbl td.nw,.pit-tbl th.nw{white-space:nowrap}
 .pit-tbl td.rm-cod{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;white-space:nowrap}
 .pit-tbl .pit-chk{width:34px;text-align:center}
+.pit-tbl th.rm-c,.pit-tbl td.rm-c{width:90px;text-align:center;white-space:nowrap;font-weight:700;color:var(--g-700)}
 .pit-tbl tbody tr:hover td{background:var(--g-50)}
 .pit-just{font-size:11.5px;color:var(--muted);margin-top:3px;font-style:italic}
 .pit-st{white-space:nowrap}
