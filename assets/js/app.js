@@ -6590,6 +6590,42 @@
         '</tr></thead><tbody id="pitBody">'+itens.map(linhaItem).join('')+'</tbody></table></div>'
       : '<div class="resumo-mini-empty">Nenhum serviço solicitado nesta guia.</div>';
 
+    // ── Sub-abas Observações / Críticas da guia / Processo de auditoria (padrão OperadoraSmile) ──
+    var crits = criticasDaGuia(g, ia);
+    function tabCriticas(){
+      if(!crits.length) return '<div class="resumo-mini-empty">Nenhuma crítica relevante identificada.</div>';
+      var linhas=crits.map(function(c){
+        return '<tr><td>'+ico('triangle-alert',12)+' '+esc(c.critica)+(c.codigo!=='—'?' <span class="pit-crit-cod">('+esc(c.codigo)+' — '+esc(c.procedimento)+')</span>':'')+'</td><td>—</td></tr>';
+      }).join('');
+      return '<div class="pit-tbl-wrap"><table class="pit-tbl"><thead><tr><th>Crítica do sistema</th><th>Operador que autorizou</th></tr></thead><tbody>'+linhas+'</tbody></table></div>';
+    }
+    function tabProcessoAuditoria(){
+      var idxAtual=etapaAtualIdx(g);
+      var podeAvancar=podeMoverEtapa(1) && idxAtual<g.etapas.length-1;
+      var podeVoltar=podeMoverEtapa(-1) && idxAtual>0;
+      var STL={aguardando:'Aguardando...',em_execucao:'Em execução',concluida:'Concluído'};
+      var linhas=g.etapas.map(function(e,i){
+        var cur=i===idxAtual;
+        return '<tr class="'+(cur?'pit-etapa-cur':'')+'"><td>'+e.ordem+'</td>'+
+          '<td>'+esc(g.fluxo.nome)+'</td>'+
+          '<td>'+esc(e.nome)+'</td>'+
+          '<td class="nw">'+(cur?ico('circle-dot',12):'')+'</td>'+
+          '<td>'+esc(STL[e.status]||e.status)+'</td>'+
+          '<td>'+(e.status==='concluida'?ico('check',12)+' Concluído':'—')+'</td>'+
+        '</tr>';
+      }).join('');
+      return '<div class="pit-tbl-wrap"><table class="pit-tbl"><thead><tr><th>Ordem</th><th>Processo de auditoria</th><th>Fase/Etapa</th><th>!</th><th>Situação</th><th>Resultado/Parecer</th></tr></thead><tbody>'+linhas+'</tbody></table></div>'+
+        '<div class="etapa-ctrl" style="margin-top:10px">'+
+          '<div class="etapa-ctrl-info">'+ico('git-branch',14)+' Etapa atual: <b>'+esc(g.etapas[idxAtual]?g.etapas[idxAtual].nome:'—')+'</b></div>'+
+          '<div class="etapa-ctrl-btns">'+
+            (podeVoltar?'<button class="btn sm ghost" id="paVoltar" type="button">'+ico('chevron-left',13)+' Voltar etapa</button>':'')+
+            (podeAvancar?'<button class="btn sm" id="paAvancar" type="button">Avançar etapa '+ico('chevron-right',13)+'</button>':'')+
+          '</div>'+
+        '</div>';
+    }
+    var pitTabs=[['obs','Observações'],['crit','Críticas da guia'],['proc','Processo de auditoria']];
+    var pitTabBar='<div class="pit-subtabs">'+pitTabs.map(function(t,i){return '<button type="button" class="pit-subtab'+(i===0?' active':'')+'" data-pit-tab="'+t[0]+'">'+esc(t[1])+'</button>';}).join('')+'</div>';
+
     var body=
       '<div class="pit-hd">'+ico('list-checks',14)+' Parecer por item — selecione os serviços e aplique um parecer. Você pode dar pareceres diferentes para conjuntos diferentes.</div>'+
       tabelaItens+
@@ -6605,13 +6641,33 @@
           '<button class="btn ghost" id="pitLimpar" type="button">'+ico('eraser',13)+' Limpar parecer dos selecionados</button></div>'+
       '</div>'+
       '<div class="pit-resumo" id="pitResumo"></div>'+
-      '<div class="g2" style="margin-top:6px"><div class="field"><label>Observações impressas (vão para o prestador)</label><textarea id="pImp"></textarea></div><div class="field"><label>Observações não impressas (internas)</label><textarea id="pInt"></textarea></div></div>'+
+      pitTabBar+
+      '<div id="pitTabObs">'+
+        '<div class="field"><label>Observações impressas (vão para o prestador)</label><textarea id="pImp"></textarea></div>'+
+        '<div class="field"><label>Observações não impressas (internas)</label><textarea id="pInt"></textarea></div>'+
+      '</div>'+
+      '<div id="pitTabCrit" style="display:none">'+tabCriticas()+'</div>'+
+      '<div id="pitTabProc" style="display:none">'+tabProcessoAuditoria()+'</div>'+
       '<div class="ai-box"><div class="hd"><div class="tt">'+ico('lightbulb')+' Sugestão técnica</div></div><p style="margin:6px 0">'+esc(ia.parecerGeral)+'</p><button class="btn sm ghost" id="pJustIA" type="button">'+ico('sparkles')+' Gerar análise técnica (obs. impressas)</button></div>';
     var foot='<button class="btn ghost" id="pAudProc">'+ico('clipboard-check')+' Auditoria de procedimento</button><button class="btn ghost" id="pCancel">Cancelar</button><button class="btn" id="pSalvar">'+ico('save')+' Salvar parecer</button>';
     var m = modal('Parecer da Operadora · '+esc(g.numero), 'A decisão final é exclusiva da operadora. A análise técnica atua apenas como apoio.', body, foot);
 
     // preenche obs salvas
     if(g.parecerOperadora){ if(g.parecerOperadora.obsImp) m.querySelector('#pImp').value=g.parecerOperadora.obsImp; if(g.parecerOperadora.obsInt) m.querySelector('#pInt').value=g.parecerOperadora.obsInt; }
+
+    // ── sub-abas Observações / Críticas da guia / Processo de auditoria ──
+    var _pitPanes={obs:'#pitTabObs',crit:'#pitTabCrit',proc:'#pitTabProc'};
+    function showPitTab(tab){
+      $$('.pit-subtab',m).forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-pit-tab')===tab); });
+      Object.keys(_pitPanes).forEach(function(k){ var el2=m.querySelector(_pitPanes[k]); if(el2) el2.style.display=(k===tab?'':'none'); });
+    }
+    $$('.pit-subtab',m).forEach(function(b){ b.onclick=function(){ showPitTab(b.getAttribute('data-pit-tab')); }; });
+    function _reprocessarAuditoria(){ var alvo=m.querySelector('#pitTabProc'); alvo.innerHTML=tabProcessoAuditoria(); ligarBotoesEtapa(); lcIcons(); }
+    function ligarBotoesEtapa(){
+      var bAv=m.querySelector('#paAvancar'); if(bAv) bAv.onclick=function(){ if(moverEtapa(g,1)){ toast('Guia avançada para a próxima etapa','ok'); _reprocessarAuditoria(); } };
+      var bVt=m.querySelector('#paVoltar'); if(bVt) bVt.onclick=function(){ if(moverEtapa(g,-1)){ toast('Guia retornada à etapa anterior','ok'); _reprocessarAuditoria(); } };
+    }
+    ligarBotoesEtapa();
 
     // ── seleção de itens ──
     function selKeys(){ return $$('.pit-cb',m).filter(function(cb){return cb.checked;}).map(function(cb){return cb.getAttribute('data-k');}); }

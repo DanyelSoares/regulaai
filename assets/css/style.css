@@ -699,6 +699,12 @@ tbody tr:hover{background:#f7fbf8;cursor:pointer}
 .pit-tbl tbody tr:hover td{background:var(--g-50)}
 .pit-just{font-size:11.5px;color:var(--muted);margin-top:3px;font-style:italic}
 .pit-st{white-space:nowrap}
+.pit-subtabs{display:flex;gap:0;border-bottom:1.5px solid var(--g-100);margin:14px 0 0}
+.pit-subtab{padding:8px 16px;font-size:12.5px;font-weight:600;border:none;border-bottom:2px solid transparent;background:none;cursor:pointer;color:var(--muted)}
+.pit-subtab.active{color:var(--g-700);border-bottom-color:var(--g-600)}
+#pitTabObs,#pitTabCrit,#pitTabProc{padding-top:12px}
+.pit-crit-cod{color:var(--muted);font-size:11px}
+.pit-etapa-cur td{background:var(--g-50);font-weight:700}
 .pit-acao{border:1.5px solid var(--g-200);background:var(--g-50);border-radius:10px;padding:12px 14px;margin-bottom:12px}
 .pit-acao-hd{font-size:12.5px;margin-bottom:8px;color:var(--g-700)}
 .pit-resumo{margin-bottom:6px}
