@@ -4288,9 +4288,26 @@
         rstContent.innerHTML='';
 
         if(tab==='limiares'){
+          // ── Fatores e pesos (Regulatório) ───────────────────────────
+          var secF=el('div',{class:'risco-section'});
+          secF.innerHTML='<h4>'+ico('shield-alert',14)+' Risco Regulatório — pesos dos fatores</h4>'+
+            '<p style="font-size:12px;color:var(--muted);margin:0 0 14px">Cada fator presente na guia soma seu peso. O total define o nível pelos limiares abaixo.</p>';
+          var tblF=el('table',{class:'cfg-table'});
+          tblF.innerHTML='<thead><tr><th>Fator</th><th style="width:130px;text-align:center">Peso</th></tr></thead>';
+          var tbF=el('tbody');
+          FATORES.forEach(function(f){
+            var tr=el('tr');
+            tr.innerHTML='<td><b>'+esc(f.label)+'</b><div style="font-size:11.5px;color:var(--muted)">'+esc(f.desc)+'</div></td>'+
+              '<td style="text-align:center"><input class="risco-peso" type="number" min="0" max="20" data-key="'+f.key+'" value="'+(cfg.pesos[f.key]!=null?cfg.pesos[f.key]:0)+'" style="width:80px;text-align:center;padding:6px;border:1px solid var(--line);border-radius:7px"/></td>';
+            tbF.appendChild(tr);
+          });
+          tblF.appendChild(tbF);
+          var _twF=el('div',{class:'table-wrap'}); _twF.appendChild(tblF); secF.appendChild(_twF);
+          rstContent.appendChild(secF);
+
           // ── Limiares ─────────────────────────────────────────────────
           var _somaPesos=0; FATORES.forEach(function(f){ _somaPesos+=(cfg.pesos[f.key]||0); });
-          var secL=el('div',{class:'risco-section'});
+          var secL=el('div',{class:'risco-section',style:'margin-top:18px'});
           secL.innerHTML='<h4>'+ico('sliders-horizontal',13)+' Limiares por nível (pontuação máxima)</h4>'+
             '<p style="font-size:12px;color:var(--muted);margin:0 0 14px">Pontuação <b>até</b> o limiar = nível correspondente. Acima do Alto = Crítico. '+
             'Soma atual dos pesos configurados: <b><span class="risco-teto-val">'+_somaPesos+'</span> pontos</b>.</p>'+
@@ -4312,18 +4329,27 @@
           secL.appendChild(limGrid); rstContent.appendChild(secL);
 
           var footL=el('div',{class:'risco-foot'});
-          footL.innerHTML='<button class="btn-animated" id="limSalvar">'+ico('save',14)+' Salvar limiares</button>';
+          footL.innerHTML='<button class="btn-animated" id="limSalvar">'+ico('save',14)+' Salvar risco Regulatório</button>';
           rstContent.appendChild(footL);
+
+          // atualiza a "soma máxima" ao vivo conforme os pesos são editados
+          rstContent.querySelectorAll('.risco-peso').forEach(function(inp){
+            inp.oninput=function(){
+              var s=0; rstContent.querySelectorAll('.risco-peso').forEach(function(i){ s+=(+i.value||0); });
+              var t=rstContent.querySelector('.risco-teto-val'); if(t) t.textContent=s;
+            };
+          });
 
           setTimeout(function(){
             $('#limSalvar').onclick=function(){
               var novoCfg=JSON.parse(JSON.stringify(cfg));
+              rstContent.querySelectorAll('.risco-peso').forEach(function(i){ novoCfg.pesos[i.getAttribute('data-key')]=+i.value||0; });
               ['baixo','medio','alto'].forEach(function(k){ novoCfg.limiares[k]=+rp.querySelector('.risco-lim[data-key="'+k+'"]').value||0; });
               if(novoCfg.limiares.baixo>=novoCfg.limiares.medio||novoCfg.limiares.medio>=novoCfg.limiares.alto){
                 toast('Limiares devem ser crescentes: Baixo < Médio < Alto','err'); return;
               }
               State.riscoConfig=novoCfg; localStorage.setItem('regula_risco_cfg',JSON.stringify(novoCfg));
-              aplicarRiscos(); toast('Limiares salvos e aplicados','ok'); render();
+              aplicarRiscos(); toast('Risco Regulatório salvo e aplicado','ok'); render();
             };
           },0);
 
