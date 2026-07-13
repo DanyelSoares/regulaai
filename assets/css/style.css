@@ -732,6 +732,14 @@ tbody tr:hover{background:#f7fbf8;cursor:pointer}
 .audp-aux .field{margin:0}
 .audp-aux-pct input{max-width:110px}
 @media(max-width:640px){.audp-cols{grid-template-columns:1fr}.audp-aux{grid-template-columns:1fr}}
+.audp-pick-hd{font-size:13px;color:var(--ink-1);margin-bottom:12px}
+.audp-pick-list{display:flex;flex-direction:column;gap:8px}
+.audp-pick-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:9px;cursor:pointer;transition:border-color .15s,background .15s}
+.audp-pick-item:hover{border-color:var(--g-300);background:var(--g-50)}
+.audp-pick-item input{accent-color:var(--g-500);flex:0 0 auto}
+.audp-pick-item:has(input:checked){border-color:var(--g-500);background:var(--g-50)}
+.audp-pick-cod{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;font-weight:700;color:var(--g-700);flex:0 0 auto}
+.audp-pick-desc{font-size:13px;color:var(--ink-1)}
 
 /* Aderência mini */
 .ader{display:flex;align-items:center;gap:8px;min-width:120px}

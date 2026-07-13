@@ -6648,15 +6648,16 @@
       toast('Parecer removido dos itens selecionados','ok');
     };
     atualizarResumo();
-    // Botão "Auditoria de procedimento" — abre modal de auditoria por procedimento (código/qtd + equipe médica)
+    // Botão "Auditoria de procedimento" — 1 código por vez; se houver vários procedimentos, pede para escolher qual
     var _bAud=m.querySelector('#pAudProc');
     if(_bAud) _bAud.onclick=function(){
-      var selecionados=selKeys();
-      // procedimento base: 1º selecionado (se houver), senão o 1º procedimento da guia
-      var procBase=null;
-      if(selecionados.length){ procBase=itens.filter(function(x){return x.key===selecionados[0];})[0]; }
-      if(!procBase){ procBase=itens.filter(function(x){return x.tipo==='Procedimento';})[0]||itens[0]; }
-      openAuditoriaProcedimento(g, procBase);
+      var procs=itens.filter(function(x){return x.tipo==='Procedimento';});
+      if(!procs.length){ toast('Esta guia não possui procedimentos para auditar','warn'); return; }
+      if(procs.length===1){ openAuditoriaProcedimento(g, procs[0]); return; }
+      // vários: se exatamente 1 procedimento estiver selecionado na lista, usa ele; senão, pede para escolher
+      var selProcs=selKeys().map(function(k){return itens.filter(function(x){return x.key===k;})[0];}).filter(function(x){return x&&x.tipo==='Procedimento';});
+      if(selProcs.length===1){ openAuditoriaProcedimento(g, selProcs[0]); return; }
+      escolherProcedimentoAuditoria(g, procs);
     };
     m.querySelector('#pJustIA').onclick=function(){
       var btn=this;
@@ -6721,6 +6722,25 @@
       toast('Parecer salvo · '+g.status,'ok');
       m.parentNode.remove(); render();
     };
+  }
+
+  // Seleção do procedimento a auditar (quando a guia tem mais de um) — 1 código por vez
+  function escolherProcedimentoAuditoria(g, procs){
+    var body='<div class="audp-pick-hd">'+ico('list-checks',14)+' Esta guia possui <b>'+procs.length+'</b> procedimentos. Selecione qual deseja auditar:</div>'+
+      '<div class="audp-pick-list">'+procs.map(function(p,i){
+        return '<label class="audp-pick-item"><input type="radio" name="audPick" value="'+i+'"'+(i===0?' checked':'')+'>'+
+          '<span class="audp-pick-cod">'+esc(p.cod)+'</span><span class="audp-pick-desc">'+esc(p.desc)+'</span></label>';
+      }).join('')+'</div>';
+    var foot='<button class="btn ghost" id="apkCancel">Cancelar</button><button class="btn" id="apkOk">'+ico('arrow-right')+' Auditar procedimento</button>';
+    var m=modal('Auditoria de procedimento · '+esc(g.numero), 'A auditoria é feita um procedimento por vez.', body, foot);
+    m.querySelector('#apkCancel').onclick=function(){ m.parentNode.remove(); };
+    m.querySelector('#apkOk').onclick=function(){
+      var sel=m.querySelector('input[name="audPick"]:checked');
+      var idx=sel?+sel.value:0;
+      m.parentNode.remove();
+      openAuditoriaProcedimento(g, procs[idx]);
+    };
+    lcIcons();
   }
 
   // Modal "Auditoria de procedimento" (aberto do Parecer da Operadora) — código/qtd solicitado × autorizado + equipe médica
