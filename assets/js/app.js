@@ -283,8 +283,13 @@
     var et=g.etapas[idx]; if(!et) return false;
     if(et.status==='em_execucao'){ toast('A etapa em execução não pode ser marcada como não realizada','warn'); return false; }
     var ts=new Date().toISOString().slice(0,16).replace('T',' ');
-    et.status = naoRealizada ? 'nao_realizado' : 'aguardando';
-    if(naoRealizada){ et.inicio=''; et.fim=''; }
+    if(naoRealizada){
+      et._statusAnterior=et.status; // guarda o estado (ex.: concluída) para restaurar ao reabrir
+      et.status='nao_realizado'; et.inicio=''; et.fim='';
+    } else {
+      et.status = et._statusAnterior || 'aguardando'; // reabre no mesmo estado em que estava antes
+      delete et._statusAnterior;
+    }
     var uName=perfilDef[State.perfil]?perfilDef[State.perfil].nome:State.perfil;
     MOCK.LOGS.unshift({ts:ts,user:uName,perfil:State.perfil,acao:(naoRealizada?'Etapa marcada como não realizada':'Etapa desmarcada (voltou a aguardando)'),ref:'Guia '+g.numero+': '+et.nome});
     logAcao(naoRealizada?'Etapa marcada como não realizada':'Etapa reaberta', g.numero+' — '+et.nome);
