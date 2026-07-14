@@ -276,6 +276,20 @@
     for(var i=0;i<g.etapas.length;i++){ if(g.etapas[i].status==='em_execucao') return g.etapas[i]; }
     return g.etapas[0]||null;
   }
+  // Marca/desmarca uma etapa específica (não precisa ser a atual) como "Não realizado" — etapa pulada, não faz parte do fluxo seguido nesta guia.
+  // Diferente de "aguardando": aguardando é uma etapa futura ainda não chegada; não_realizado é uma etapa que ficou de fora deliberadamente.
+  function marcarEtapaNaoRealizada(g, idx, naoRealizada){
+    if(!podeMoverEtapa(1)){ toast('Seu perfil não pode alterar o status das etapas','warn'); return false; }
+    var et=g.etapas[idx]; if(!et) return false;
+    if(et.status==='em_execucao'){ toast('A etapa em execução não pode ser marcada como não realizada','warn'); return false; }
+    var ts=new Date().toISOString().slice(0,16).replace('T',' ');
+    et.status = naoRealizada ? 'nao_realizado' : 'aguardando';
+    if(naoRealizada){ et.inicio=''; et.fim=''; }
+    var uName=perfilDef[State.perfil]?perfilDef[State.perfil].nome:State.perfil;
+    MOCK.LOGS.unshift({ts:ts,user:uName,perfil:State.perfil,acao:(naoRealizada?'Etapa marcada como não realizada':'Etapa desmarcada (voltou a aguardando)'),ref:'Guia '+g.numero+': '+et.nome});
+    logAcao(naoRealizada?'Etapa marcada como não realizada':'Etapa reaberta', g.numero+' — '+et.nome);
+    return true;
+  }
 
   // Filtra as guias visíveis de acordo com o perfil ativo
   // Enfermeiro: só guias nos seus fluxos E cuja etapa atual é de responsabilidade do enfermeiro
@@ -5549,15 +5563,26 @@
           d.appendChild(el('div',{class:'etapa-ctrl-note'},ico('info',12)+' '+(State.perfil==='enfermeiro'?'Seu perfil pode apenas avançar etapas.':'Sem etapas disponíveis para mover a partir daqui.')));
         }
       }
+      var STL={aguardando:'Aguardando',em_execucao:'Em execução',concluida:'Concluído',nao_realizado:'Não realizado'};
       var tl=el('div',{class:'timeline'});
-      g.etapas.forEach(function(e){
-        var cls = e.status==='concluida'?'done':(e.status==='em_execucao'?'cur':'');
-        tl.appendChild(el('div',{class:'tl-item '+cls},'<h4>'+e.ordem+'. '+esc(e.nome)+'</h4><div class="meta">Responsável: '+esc(e.responsavel)+' · Prazo: '+e.prazoHoras+'h · Status: <b>'+esc(e.status)+'</b>'+(e.inicio?' · Início: '+esc(e.inicio):'')+(e.fim?' · Fim: '+esc(e.fim):'')+'</div>'));
+      g.etapas.forEach(function(e,i){
+        var cls = e.status==='concluida'?'done':(e.status==='em_execucao'?'cur':(e.status==='nao_realizado'?'nr':''));
+        var podeMarcar = podeMoverEtapa(1) && e.status!=='em_execucao';
+        var btnNR = podeMarcar
+          ? ('<button class="btn xs ghost tl-nr-btn" data-idx="'+i+'" type="button">'+(e.status==='nao_realizado'?ico('rotate-ccw',11)+' Reabrir':ico('ban',11)+' Marcar como não realizado')+'</button>')
+          : '';
+        tl.appendChild(el('div',{class:'tl-item '+cls},'<h4>'+e.ordem+'. '+esc(e.nome)+'</h4><div class="meta">Responsável: '+esc(e.responsavel)+' · Prazo: '+e.prazoHoras+'h · Status: <b>'+esc(STL[e.status]||e.status)+'</b>'+(e.inicio?' · Início: '+esc(e.inicio):'')+(e.fim?' · Fim: '+esc(e.fim):'')+'</div>'+(btnNR?'<div class="tl-nr-wrap">'+btnNR+'</div>':'')));
       });
       d.appendChild(tl);
       function _reetapas(){ var novo=renderGuiaTab(g,ia,'etapas'); d.replaceWith(novo); }
       var _av=d.querySelector('#etAvancar'); if(_av) _av.onclick=function(){ if(moverEtapa(g,1)){ toast('Guia avançada para a próxima etapa','ok'); _reetapas(); } };
       var _vt=d.querySelector('#etVoltar'); if(_vt) _vt.onclick=function(){ if(moverEtapa(g,-1)){ toast('Guia retornada à etapa anterior','ok'); _reetapas(); } };
+      $$('.tl-nr-btn',d).forEach(function(b){
+        b.onclick=function(){
+          var idx=+b.getAttribute('data-idx'); var e=g.etapas[idx];
+          if(marcarEtapaNaoRealizada(g, idx, e.status!=='nao_realizado')){ toast(e.status==='nao_realizado'?'Etapa marcada como não realizada':'Etapa reaberta (aguardando)','ok'); _reetapas(); }
+        };
+      });
     } else if(t==='ia'){
       d.appendChild(renderParecerIA(ia,g));
     } else if(t==='carencias'){
@@ -6603,15 +6628,22 @@
       var idxAtual=etapaAtualIdx(g);
       var podeAvancar=podeMoverEtapa(1) && idxAtual<g.etapas.length-1;
       var podeVoltar=podeMoverEtapa(-1) && idxAtual>0;
-      var STL={aguardando:'Aguardando...',em_execucao:'Em execução',concluida:'Concluído'};
+      var STL={aguardando:'Aguardando...',em_execucao:'Em execução',concluida:'Concluído',nao_realizado:'Não realizado'};
       var linhas=g.etapas.map(function(e,i){
         var cur=i===idxAtual;
-        return '<tr class="'+(cur?'pit-etapa-cur':'')+'"><td>'+e.ordem+'</td>'+
+        var podeMarcar = podeMoverEtapa(1) && e.status!=='em_execucao';
+        var selNR = podeMarcar
+          ? ('<select class="pa-status-sel" data-idx="'+i+'" style="font-size:11px;padding:2px 4px;border:1px solid var(--line);border-radius:5px">'+
+              '<option value="0"'+(e.status!=='nao_realizado'?' selected':'')+'>'+esc(STL[e.status]||e.status)+'</option>'+
+              '<option value="1"'+(e.status==='nao_realizado'?' selected':'')+'>Não realizado</option>'+
+            '</select>')
+          : '<span>'+esc(STL[e.status]||e.status)+'</span>';
+        return '<tr class="'+(cur?'pit-etapa-cur':'')+(e.status==='nao_realizado'?' pit-etapa-nr':'')+'"><td>'+e.ordem+'</td>'+
           '<td>'+esc(g.fluxo.nome)+'</td>'+
           '<td>'+esc(e.nome)+'</td>'+
           '<td class="nw">'+(cur?ico('circle-dot',12):'')+'</td>'+
-          '<td>'+esc(STL[e.status]||e.status)+'</td>'+
-          '<td>'+(e.status==='concluida'?ico('check',12)+' Concluído':'—')+'</td>'+
+          '<td>'+selNR+'</td>'+
+          '<td>'+(e.status==='concluida'?ico('check',12)+' Concluído':(e.status==='nao_realizado'?ico('ban',12)+' Não realizado':'—'))+'</td>'+
         '</tr>';
       }).join('');
       return '<div class="pit-tbl-wrap"><table class="pit-tbl"><thead><tr><th>Ordem</th><th>Processo de auditoria</th><th>Fase/Etapa</th><th>!</th><th>Situação</th><th>Resultado/Parecer</th></tr></thead><tbody>'+linhas+'</tbody></table></div>'+
@@ -6666,6 +6698,13 @@
     function ligarBotoesEtapa(){
       var bAv=m.querySelector('#paAvancar'); if(bAv) bAv.onclick=function(){ if(moverEtapa(g,1)){ toast('Guia avançada para a próxima etapa','ok'); _reprocessarAuditoria(); } };
       var bVt=m.querySelector('#paVoltar'); if(bVt) bVt.onclick=function(){ if(moverEtapa(g,-1)){ toast('Guia retornada à etapa anterior','ok'); _reprocessarAuditoria(); } };
+      $$('.pa-status-sel',m).forEach(function(sel){
+        sel.onchange=function(){
+          var idx=+sel.getAttribute('data-idx');
+          if(marcarEtapaNaoRealizada(g, idx, sel.value==='1')){ toast(sel.value==='1'?'Etapa marcada como não realizada':'Etapa reaberta (aguardando)','ok'); _reprocessarAuditoria(); }
+          else { _reprocessarAuditoria(); }
+        };
+      });
     }
     ligarBotoesEtapa();
 
