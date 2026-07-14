@@ -514,12 +514,19 @@
     var g=State.guias.find(function(gg){return String(gg.numero)===numero;});
     if(g) showRiscoCalculo(g);
   });
-  function aderenciaBar(p){
+  function aderenciaBar(p,iaOuGuia){
     var cls   = p>=90?'alta':(p>=70?'mod':(p>=50?'baixa':'crit'));
     var label = p>=90?'Alta':(p>=70?'Moderada':(p>=50?'Baixa':'Crítica'));
-    var tip   = 'Aderência à DUT — '+label+' ('+p+'%). '
-              + 'Indica o grau de conformidade da guia com os critérios técnicos '
-              + 'exigidos pela ANS. Escala: Alta 90–100% · Moderada 70–89% · Baixa 50–69% · Crítica abaixo de 50%.';
+    var fatores='';
+    var cache = iaOuGuia && iaOuGuia.criteriosCumpridos ? iaOuGuia : (iaOuGuia && iaOuGuia._cache);
+    if(cache && cache.criteriosCumpridos){
+      var ok=cache.criteriosCumpridos.slice(0,4);
+      if(ok.length) fatores=' Fatores considerados: '+ok.join('; ')+(cache.criteriosCumpridos.length>4?'…':'')+'.';
+    }
+    var tip   = 'Aderência regulatória — '+label+' ('+p+'%). '
+              + 'Indica o grau de conformidade da guia com os critérios técnicos e documentais exigidos '
+              + '(documentação, DUT quando aplicável, vinculação de procedimentos/pacotes/Mat-Med/diárias e cobertura contratual). '
+              + 'Escala: Alta 90–100% · Moderada 70–89% · Baixa 50–69% · Crítica abaixo de 50%.'+fatores;
     return '<div class="ader '+cls+'" data-tip="'+tip+'" style="cursor:help">'
          + '<div class="t"><div class="f" style="width:'+p+'%"></div></div>'
          + '<div class="v">'+p+'%</div>'
@@ -2544,7 +2551,7 @@
           '</div>'+
           '<div class="k-etapa">'+ico('git-branch',10)+' '+esc(g.fluxo.nome)+' &rsaquo; <b>'+etapaLabel+'</b></div>'+
           '<div class="k-card-foot">'+
-            aderenciaBar(ad)+
+            aderenciaBar(ad,g)+
             '<span class="k-regime'+(g.regime==='Urgência'?' urgente':'')+'">'+esc(g.regime)+'</span>'+
           '</div>';
         c.onclick=function(){openGuia(g,'resumo')};
@@ -5475,10 +5482,8 @@
             '<span class="guia-metric-val guia-metric-num'+(g.prazoVencido?' vencido':'')+'">'+g.diasAuditoria+(g.prazoVencido?' <span class="badge danger" style="font-size:10px">vencido</span>':'')+'</span>'+
           '</div>'+
           '<div class="guia-metric">'+
-            '<span class="guia-metric-lbl">'+ico('bar-chart-2',11)+' Aderência à DUT</span>'+
-            (g.dut
-              ? '<span class="guia-metric-val guia-metric-num adp-'+adCls+'">'+adp+'%</span>'
-              : '<span class="guia-metric-val guia-metric-na">Não se aplica</span>')+
+            '<span class="guia-metric-lbl">'+ico('bar-chart-2',11)+' Aderência regulatória</span>'+
+            '<span class="guia-metric-val guia-metric-num adp-'+adCls+'">'+adp+'%</span>'+
           '</div>'+
           '<div class="guia-metric">'+
             '<span class="guia-metric-lbl">'+ico('git-branch',11)+' Fluxo</span>'+
@@ -6432,7 +6437,7 @@
     tt.innerHTML=ico('sparkles')+' Análise Técnica IA <span class="badge muted">Confiança '+Math.round(ia.confianca)+'%</span>';
     hd.appendChild(tt);
     var adpWrap=el('div',{class:'ia-adp-wrap'});
-    adpWrap.innerHTML=aderenciaBar(calcAdp());
+    adpWrap.innerHTML=aderenciaBar(calcAdp(),ia);
     hd.appendChild(adpWrap);
     box.appendChild(hd);
     var pEl=el('p',{style:'margin:6px 0 0'});
@@ -6473,7 +6478,7 @@
     }
 
     function updateAdp(){
-      adpWrap.innerHTML=aderenciaBar(calcAdp());
+      adpWrap.innerHTML=aderenciaBar(calcAdp(),ia);
     }
 
     // ── nota informativa ──────────────────────────────────
@@ -7327,7 +7332,7 @@
             manualTable(['Campo','Descrição'],[
               ['STATUS','Badge com o status atual da guia (Ex.: Em análise, Liberada, Negada)'],
               ['DIAS EM AUDITORIA','Número de dias desde a emissão até hoje'],
-              ['ADERÊNCIA À DUT','Percentual de aderência às Diretrizes de Utilização — verde (alta), amarelo (moderada), laranja (baixa), vermelho (crítica). Exibe "Não se aplica" quando nenhum procedimento da guia possui DUT vinculada'],
+              ['ADERÊNCIA REGULATÓRIA','Percentual de conformidade da guia com os critérios técnicos e documentais (documentação, DUT quando aplicável, vinculação de procedimentos/pacotes/Mat-Med/diárias e cobertura contratual) — verde (alta), amarelo (moderada), laranja (baixa), vermelho (crítica)'],
               ['FLUXO','Nome do fluxo assistencial vinculado (Ex.: Auditoria Urgência/Emergência)'],
             ])+
             '<p style="margin-top:12px"><b>Grid de Risco (4 dimensões, alinhadas sob os indicadores):</b></p>'+
@@ -7508,7 +7513,7 @@
             '<p>Exibe a análise técnica gerada pela IA com base nas regras DUT e nos parâmetros configurados:</p>'+
             manualTable(['Elemento','Descrição'],[
               ['Badge de confiança','Percentual de confiança da análise (Ex.: Confiança 87%)'],
-              ['Aderência à DUT','Barra visual com o percentual de aderência às diretrizes'],
+              ['Aderência regulatória','Barra visual com o percentual de conformidade da guia (documentação, DUT quando aplicável, vinculações e cobertura contratual)'],
               ['Parecer geral','Texto da conclusão técnica da IA'],
               ['Critérios cumpridos','Lista de itens validados positivamente pela IA'],
               ['Alertas','Itens com potencial inconsistência ou risco identificados'],
