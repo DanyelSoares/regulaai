@@ -6666,21 +6666,15 @@
   };
 
   // Monta o HTML completo do documento (autocontido, com CSS embutido no padrão de cores do sistema) e dispara a impressão/PDF.
-  function montarHtmlParecerTecnico(g, itens, classif, conteudo, crits){
+  function montarHtmlParecerTecnico(g, itens, classif, conteudo){
     var cor=_CORES_PARECER[classif.cls];
     var hoje=new Date(); var hojeFmt=String(hoje.getDate()).padStart(2,'0')+'/'+String(hoje.getMonth()+1).padStart(2,'0')+'/'+hoje.getFullYear();
     function linhaItens(){
       return itens.map(function(it){return '<tr><td>'+esc(it.tipo)+'</td><td class="mono">'+esc(it.cod)+'</td><td>'+esc(it.desc)+'</td><td style="text-align:center">'+(it.qtdSolic!=null?it.qtdSolic:'—')+'</td></tr>';}).join('');
     }
-    function checklistPendencias(){
+    function listaPendencias(){
       if(!conteudo.pendencias || !conteudo.pendencias.length) return '<p class="pt-muted">Nenhuma pendência identificada.</p>';
-      return '<ul class="pt-check">'+conteudo.pendencias.map(function(p){return '<li>☐ '+esc(p)+'</li>';}).join('')+'</ul>';
-    }
-    function tabelaCriticas(){
-      if(!crits.length) return '<p class="pt-muted">Nenhuma crítica relevante identificada.</p>';
-      return '<table class="pt-tbl"><thead><tr><th>Código</th><th>Procedimento</th><th>Crítica</th></tr></thead><tbody>'+
-        crits.map(function(c){return '<tr><td class="mono">'+esc(c.codigo)+'</td><td>'+esc(c.procedimento)+'</td><td>'+esc(c.critica)+'</td></tr>';}).join('')+
-        '</tbody></table>';
+      return '<ul class="pt-check">'+conteudo.pendencias.map(function(p){return '<li>'+esc(p)+'</li>';}).join('')+'</ul>';
     }
     var temDUT=(g.procedimentos||[]).some(function(p){return p.dut;});
     return '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Parecer Técnico — Guia '+esc(g.numero)+'</title><style>'+
@@ -6702,7 +6696,9 @@
       '.pt-tbl td{padding:6px 8px;border-bottom:1px solid #eaf6ef}'+
       '.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;white-space:nowrap}'+
       '.pt-check{list-style:none;padding:0;margin:6px 0}'+
-      '.pt-check li{padding:3px 0;font-size:12px}'+
+      '.pt-check li{padding:5px 0 5px 18px;font-size:12px;position:relative;border-bottom:1px solid #eaf6ef}'+
+      '.pt-check li::before{content:"";position:absolute;left:0;top:11px;width:7px;height:7px;border-radius:50%;background:#b8860b}'+
+      '.pt-check li:last-child{border-bottom:none}'+
       '.pt-muted{color:#5a6a60;font-size:12px;font-style:italic}'+
       '.pt-foot{margin-top:26px;font-size:10.5px;color:#5a6a60;border-top:1px solid #dfe7e1;padding-top:8px;font-style:italic}'+
       '.pt-ressalva{font-size:11.5px;color:#1a2a20}'+
@@ -6712,7 +6708,7 @@
       '<p class="pt-sub">Análise de Cobertura Assistencial'+(temDUT?' — Diretriz de Utilização (DUT), Anexo II, RN nº 465/2021 (ANS)':'')+'</p>'+
       '<div class="pt-class"><div class="k">Classificação técnica do parecer</div><div class="v">'+esc(classif.label)+'</div></div>'+
       '<div class="pt-box"><b>Resumo executivo para autorização</b><br><span style="font-size:12px">'+esc(conteudo.resumoMotivo||'')+'</span>'+
-      (conteudo.pendencias&&conteudo.pendencias.length?('<div style="margin-top:8px"><b style="font-size:11.5px">Pendências para reclassificação:</b>'+checklistPendencias()+'</div>'):'')+
+      (conteudo.pendencias&&conteudo.pendencias.length?('<div style="margin-top:8px;font-size:11.5px"><b>'+conteudo.pendencias.length+' pendência'+(conteudo.pendencias.length>1?'s':'')+'</b> para reclassificação — ver seção 6.</div>'):'')+
       '</div>'+
       '<h2>1. Identificação</h2>'+
       '<table class="kv">'+
@@ -6729,9 +6725,8 @@
       '<table class="pt-tbl"><thead><tr><th>Tipo</th><th>Código</th><th>Descrição</th><th style="text-align:center">Qtde Solic.</th></tr></thead><tbody>'+linhaItens()+'</tbody></table>'+
       '<h2>3. Base normativa aplicável</h2><p>'+esc(conteudo.baseNormativa||'').replace(/\n/g,'<br>')+'</p>'+
       '<h2>4. Análise técnica</h2><p>'+esc(conteudo.analiseTecnica||'').replace(/\n/g,'<br>')+'</p>'+
-      '<h2>Críticas da guia</h2>'+tabelaCriticas()+
       '<h2>5. Conclusão e posicionamento recomendado</h2><p>'+esc(conteudo.conclusao||'').replace(/\n/g,'<br>')+'</p>'+
-      '<h2>6. Documentos/informações pendentes para conclusão da análise</h2>'+checklistPendencias()+
+      '<h2>6. Documentos/informações pendentes para conclusão da análise</h2>'+listaPendencias()+
       '<h2>7. Ressalvas</h2>'+
       '<p class="pt-ressalva">Este parecer tem caráter exclusivamente técnico-regulatório, elaborado a partir dos dados e documentos anexados à guia no sistema. Não substitui: (i) avaliação da junta médica/auditoria da operadora; (ii) parecer de médico especialista sobre a adequação clínica ao quadro do paciente; (iii) orientação jurídica.</p>'+
       '<div class="pt-foot">Documento gerado em '+hojeFmt+' por '+esc(perfilDef[State.perfil].nome)+' via RegulaAI Saúde. Sujeito à validação e decisão final por profissional habilitado.</div>'+
@@ -6752,11 +6747,10 @@
       var ia = g._cache || AI.analisarGuiaComIA(g,{pesos:getFluxoPesos(g.fluxo&&g.fluxo.id)});
       var itens = itensSolicitadosGuia(g);
       var classif = classificacaoParecerTecnico(g);
-      var crits = criticasDaGuia(g, ia);
       var conteudo = await gerarConteudoParecerTecnicoIA(g, ia, itens, classif);
       var usouIA = !!conteudo;
       if(!conteudo) conteudo = conteudoParecerTecnicoFallback(g, ia, classif);
-      var html = montarHtmlParecerTecnico(g, itens, classif, conteudo, crits);
+      var html = montarHtmlParecerTecnico(g, itens, classif, conteudo);
       if(w.closed){ toast('A janela do parecer foi fechada antes de terminar.','warn'); return; }
       w.document.open(); w.document.write(html); w.document.close();
       logAcao('Parecer técnico gerado (PDF)', g.numero+' — '+classif.label+(usouIA?'':' [sem IA configurada — versão estruturada]'));
