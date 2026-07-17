@@ -6740,21 +6740,31 @@
   }
 
   // Ponto de entrada: gera o Parecer Técnico (IA se configurada, senão fallback estruturado) e abre para impressão/PDF.
+  // A janela é aberta de forma SÍNCRONA (ainda no clique do usuário) para não ser bloqueada como pop-up;
+  // o conteúdo (que depende de uma chamada assíncrona à IA) é escrito nela assim que fica pronto.
   async function gerarEImprimirParecerTecnico(g){
-    var ia = g._cache || AI.analisarGuiaComIA(g,{pesos:getFluxoPesos(g.fluxo&&g.fluxo.id)});
-    var itens = itensSolicitadosGuia(g);
-    var classif = classificacaoParecerTecnico(g);
-    var crits = criticasDaGuia(g, ia);
-    toast('Gerando parecer técnico…','ok');
-    var conteudo = await gerarConteudoParecerTecnicoIA(g, ia, itens, classif);
-    var usouIA = !!conteudo;
-    if(!conteudo) conteudo = conteudoParecerTecnicoFallback(g, ia, classif);
-    var html = montarHtmlParecerTecnico(g, itens, classif, conteudo, crits);
     var w = window.open('', '_blank');
     if(!w){ toast('Não foi possível abrir a janela de impressão. Verifique o bloqueador de pop-ups.','err'); return; }
-    w.document.open(); w.document.write(html); w.document.close();
-    logAcao('Parecer técnico gerado (PDF)', g.numero+' — '+classif.label+(usouIA?'':' [sem IA configurada — versão estruturada]'));
-    toast(usouIA?'Parecer técnico gerado.':'Parecer técnico gerado (IA não configurada — versão com dados do sistema).','ok');
+    w.document.write('<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Gerando parecer técnico…</title>'+
+      '<style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:#5a6a60;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}</style>'+
+      '</head><body><p>Gerando parecer técnico…</p></body></html>');
+    try{
+      var ia = g._cache || AI.analisarGuiaComIA(g,{pesos:getFluxoPesos(g.fluxo&&g.fluxo.id)});
+      var itens = itensSolicitadosGuia(g);
+      var classif = classificacaoParecerTecnico(g);
+      var crits = criticasDaGuia(g, ia);
+      var conteudo = await gerarConteudoParecerTecnicoIA(g, ia, itens, classif);
+      var usouIA = !!conteudo;
+      if(!conteudo) conteudo = conteudoParecerTecnicoFallback(g, ia, classif);
+      var html = montarHtmlParecerTecnico(g, itens, classif, conteudo, crits);
+      if(w.closed){ toast('A janela do parecer foi fechada antes de terminar.','warn'); return; }
+      w.document.open(); w.document.write(html); w.document.close();
+      logAcao('Parecer técnico gerado (PDF)', g.numero+' — '+classif.label+(usouIA?'':' [sem IA configurada — versão estruturada]'));
+      toast(usouIA?'Parecer técnico gerado.':'Parecer técnico gerado (IA não configurada — versão com dados do sistema).','ok');
+    }catch(e){
+      if(!w.closed){ w.document.open(); w.document.write('<p style="font-family:sans-serif;padding:20px">Erro ao gerar o parecer técnico. Feche esta janela e tente novamente.</p>'); w.document.close(); }
+      toast('Erro ao gerar o parecer técnico.','err');
+    }
   }
 
   function openParecer(g){
