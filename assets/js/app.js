@@ -6446,6 +6446,15 @@
     var warnEl=el('div',{class:'ai-warn'});
     warnEl.innerHTML=ia.avisoLegal;
     box.appendChild(warnEl);
+    if(g){
+      var btnPT=el('button',{class:'btn sm ghost',style:'margin-top:10px',type:'button'},ico('file-text',13)+' Gerar parecer técnico (PDF)');
+      btnPT.onclick=function(){
+        var orig=btnPT.innerHTML;
+        btnPT.innerHTML=ico('loader',13)+' Gerando…'; btnPT.disabled=true; lcIcons();
+        gerarEImprimirParecerTecnico(g).finally(function(){ btnPT.innerHTML=orig; btnPT.disabled=false; lcIcons(); });
+      };
+      box.appendChild(btnPT);
+    }
     d.appendChild(box);
 
     // ── Justificativa de indicação por serviço solicitado ──────────
@@ -6596,6 +6605,158 @@
     return out;
   }
 
+  // ── Parecer Técnico (documento em PDF) ────────────────────────────────────
+  // Classificação exibida na caixa colorida do topo — derivada do parecer da Operadora já salvo.
+  function classificacaoParecerTecnico(g){
+    var p=g.parecerOperadora;
+    if(!p || !p.decisao || p.decisao==='Pendente') return {cls:'inconclusivo', label:'INCONCLUSIVO — PENDÊNCIA DOCUMENTAL'};
+    if(p.decisao==='Liberada') return {cls:'favoravel', label:'FAVORÁVEL — COBERTURA OBRIGATÓRIA'};
+    if(p.decisao==='Negada') return {cls:'desfavoravel', label:'DESFAVORÁVEL — NÃO COBERTURA'};
+    return {cls:'inconclusivo', label:'INCONCLUSIVO — PARCIALMENTE LIBERADA'};
+  }
+
+  // Monta o prompt enviado à IA para redigir o corpo técnico do parecer (seções 3 a 6 do modelo).
+  function promptParecerTecnico(g, ia, itens, classif){
+    var temDUT=(g.procedimentos||[]).some(function(p){return p.dut;});
+    var linhaItens=itens.map(function(it){return '- '+it.tipo+' '+it.cod+' — '+it.desc+(it.qtdSolic?(' (Qtde solic.: '+it.qtdSolic+')'):'');}).join('\n');
+    return 'Redija um PARECER TÉCNICO de auditoria assistencial para subsidiar a decisão da operadora (auditoria médica/área de autorização) sobre a guia abaixo, no MESMO PADRÃO e nível de detalhamento de um parecer técnico-regulatório profissional (com base normativa, análise técnica criteriosa e conclusão objetiva).\n\n'+
+      'CLASSIFICAÇÃO JÁ DEFINIDA (não altere, apenas fundamente): '+classif.label+'\n\n'+
+      'SERVIÇOS SOLICITADOS NESTA GUIA:\n'+linhaItens+'\n\n'+
+      (temDUT
+        ? 'IMPORTANTE: um ou mais procedimentos desta guia estão sujeitos a Diretriz de Utilização (DUT) da ANS (RN 465/2021, Anexo II). Cite a DUT aplicável ao(s) procedimento(s) (pelo número/nome do item da DUT quando puder inferir do procedimento e do CID, ou de forma genérica caso não seja possível identificar o item exato) e analise o enquadramento clínico frente aos critérios da diretriz.'
+        : 'Nenhum procedimento desta guia está sujeito a DUT — NÃO cite DUT nem Anexo II da RN 465/2021 neste parecer; baseie a análise apenas nos critérios contratuais/documentais/clínicos apresentados.')+'\n\n'+
+      'Responda em JSON válido (sem markdown ao redor, sem \`\`\`), com este formato exato:\n'+
+      '{"baseNormativa":"texto da seção Base normativa aplicável","analiseTecnica":"texto da seção Análise técnica (enquadramento clínico/documental e, se houver DUT, adequação metodológica)","conclusao":"texto da seção Conclusão e posicionamento recomendado, incluindo a regra de reclassificação quando aplicável","pendencias":["item pendente 1","item pendente 2"],"resumoMotivo":"1-2 frases do motivo da classificação, para o Resumo executivo"}\n'+
+      'Cada campo de texto deve ter 2 a 5 frases, técnico e objetivo, em português. "pendencias" pode ser um array vazio se a classificação for Favorável sem pendências. Não inclua nada fora do JSON.';
+  }
+
+  // Gera o conteúdo do parecer técnico via IA (chamada única). Retorna {baseNormativa,analiseTecnica,conclusao,pendencias,resumoMotivo} ou null se IA não configurada/falhar.
+  async function gerarConteudoParecerTecnicoIA(g, ia, itens, classif){
+    if(!window.getIaCfg || !window.callIAComSistema || !window.resumoGuiaTexto || !window.ctxTecnico) return null;
+    var cfg=window.getIaCfg();
+    if(!cfg.key) return null;
+    var sistema=window.ctxTecnico(window.resumoGuiaTexto(g))+'\n\nMODO: GERAÇÃO DE PARECER TÉCNICO FORMAL (documento único, não é conversa). Responda SOMENTE com o JSON solicitado pelo usuário, sem texto antes ou depois.';
+    var resp=await window.callIAComSistema(cfg, sistema, promptParecerTecnico(g, ia, itens, classif));
+    if(!resp.ok) return null;
+    try{
+      var txt=resp.text.trim().replace(/^```json/i,'').replace(/^```/,'').replace(/```$/,'').trim();
+      var obj=JSON.parse(txt);
+      if(!obj.pendencias) obj.pendencias=[];
+      return obj;
+    }catch(e){ return null; }
+  }
+
+  // Fallback sem IA: monta o corpo do parecer só com os dados estruturados já calculados pelo sistema (sem análise normativa detalhada).
+  function conteudoParecerTecnicoFallback(g, ia, classif){
+    var temDUT=(g.procedimentos||[]).some(function(p){return p.dut;});
+    var baseNormativa = temDUT
+      ? 'Um ou mais procedimentos desta guia estão sujeitos a Diretriz de Utilização (DUT) da ANS, conforme Anexo II da RN nº 465/2021. A comprovação do enquadramento na DUT '+(g.dut?'foi registrada como atendida':'não foi comprovada')+' na documentação apresentada.'
+      : 'Nenhum procedimento desta guia está sujeito a Diretriz de Utilização (DUT) específica da ANS. A análise considera exclusivamente os critérios contratuais, documentais e de vinculação técnica apresentados.';
+    var analiseTecnica='Critérios cumpridos: '+(ia.criteriosCumpridos.length?ia.criteriosCumpridos.join('; '):'nenhum registrado')+'. '+
+      (ia.criteriosNaoCumpridos.length?('Critérios não cumpridos: '+ia.criteriosNaoCumpridos.join('; ')+'. '):'')+
+      'Aderência regulatória apurada: '+ia.aderencia+'% ('+ia.classificacao.label+').';
+    var conclusao=ia.parecerGeral+' Conduta recomendada: '+ia.proximaAcao+'.';
+    return {baseNormativa:baseNormativa, analiseTecnica:analiseTecnica, conclusao:conclusao, pendencias:ia.pendencias||[], resumoMotivo:(ia.pendencias&&ia.pendencias.length)?ia.pendencias.join('; '):ia.parecerGeral};
+  }
+
+  var _CORES_PARECER={
+    favoravel:{bg:'#eaf6ef',border:'#0a8a43',text:'#054f27'},
+    desfavoravel:{bg:'#fbebea',border:'#b3261e',text:'#7a1a15'},
+    inconclusivo:{bg:'#fdf3e0',border:'#b8860b',text:'#7a5a08'}
+  };
+
+  // Monta o HTML completo do documento (autocontido, com CSS embutido no padrão de cores do sistema) e dispara a impressão/PDF.
+  function montarHtmlParecerTecnico(g, itens, classif, conteudo, crits){
+    var cor=_CORES_PARECER[classif.cls];
+    var hoje=new Date(); var hojeFmt=String(hoje.getDate()).padStart(2,'0')+'/'+String(hoje.getMonth()+1).padStart(2,'0')+'/'+hoje.getFullYear();
+    function linhaItens(){
+      return itens.map(function(it){return '<tr><td>'+esc(it.tipo)+'</td><td class="mono">'+esc(it.cod)+'</td><td>'+esc(it.desc)+'</td><td style="text-align:center">'+(it.qtdSolic!=null?it.qtdSolic:'—')+'</td></tr>';}).join('');
+    }
+    function checklistPendencias(){
+      if(!conteudo.pendencias || !conteudo.pendencias.length) return '<p class="pt-muted">Nenhuma pendência identificada.</p>';
+      return '<ul class="pt-check">'+conteudo.pendencias.map(function(p){return '<li>☐ '+esc(p)+'</li>';}).join('')+'</ul>';
+    }
+    function tabelaCriticas(){
+      if(!crits.length) return '<p class="pt-muted">Nenhuma crítica relevante identificada.</p>';
+      return '<table class="pt-tbl"><thead><tr><th>Código</th><th>Procedimento</th><th>Crítica</th></tr></thead><tbody>'+
+        crits.map(function(c){return '<tr><td class="mono">'+esc(c.codigo)+'</td><td>'+esc(c.procedimento)+'</td><td>'+esc(c.critica)+'</td></tr>';}).join('')+
+        '</tbody></table>';
+    }
+    var temDUT=(g.procedimentos||[]).some(function(p){return p.dut;});
+    return '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Parecer Técnico — Guia '+esc(g.numero)+'</title><style>'+
+      '@page{margin:18mm 16mm}'+
+      'body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:#0b1a12;font-size:12.5px;line-height:1.55;margin:0;padding:24px}'+
+      'h1{font-size:19px;margin:0 0 2px;color:#054f27}'+
+      '.pt-sub{font-size:12px;color:#5a6a60;margin:0 0 16px;font-style:italic}'+
+      '.pt-class{border:1.5px solid '+cor.border+';background:'+cor.bg+';color:'+cor.text+';border-radius:8px;padding:10px 16px;text-align:center;margin-bottom:16px}'+
+      '.pt-class .k{font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;opacity:.85}'+
+      '.pt-class .v{font-size:16px;font-weight:800;margin-top:2px}'+
+      '.pt-box{border:1px solid #dfe7e1;background:#f5f8f6;border-radius:8px;padding:12px 16px;margin-bottom:16px}'+
+      '.pt-box b{color:#054f27}'+
+      'h2{font-size:14.5px;color:#054f27;border-bottom:2px solid #cfead9;padding-bottom:4px;margin:22px 0 8px}'+
+      'table.kv{width:100%;border-collapse:collapse;margin-bottom:4px}'+
+      'table.kv td{padding:5px 8px;border-bottom:1px solid #eaf6ef;vertical-align:top}'+
+      'table.kv td:first-child{font-weight:700;width:190px;color:#1a2a20}'+
+      '.pt-tbl{width:100%;border-collapse:collapse;font-size:11.5px;margin-top:6px}'+
+      '.pt-tbl th{background:#eaf6ef;color:#054f27;text-align:left;padding:6px 8px;font-size:10px;text-transform:uppercase;letter-spacing:.3px;border-bottom:1px solid #cfead9}'+
+      '.pt-tbl td{padding:6px 8px;border-bottom:1px solid #eaf6ef}'+
+      '.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;white-space:nowrap}'+
+      '.pt-check{list-style:none;padding:0;margin:6px 0}'+
+      '.pt-check li{padding:3px 0;font-size:12px}'+
+      '.pt-muted{color:#5a6a60;font-size:12px;font-style:italic}'+
+      '.pt-foot{margin-top:26px;font-size:10.5px;color:#5a6a60;border-top:1px solid #dfe7e1;padding-top:8px;font-style:italic}'+
+      '.pt-ressalva{font-size:11.5px;color:#1a2a20}'+
+      '@media print{body{padding:0}}'+
+      '</style></head><body>'+
+      '<h1>PARECER TÉCNICO</h1>'+
+      '<p class="pt-sub">Análise de Cobertura Assistencial'+(temDUT?' — Diretriz de Utilização (DUT), Anexo II, RN nº 465/2021 (ANS)':'')+'</p>'+
+      '<div class="pt-class"><div class="k">Classificação técnica do parecer</div><div class="v">'+esc(classif.label)+'</div></div>'+
+      '<div class="pt-box"><b>Resumo executivo para autorização</b><br><span style="font-size:12px">'+esc(conteudo.resumoMotivo||'')+'</span>'+
+      (conteudo.pendencias&&conteudo.pendencias.length?('<div style="margin-top:8px"><b style="font-size:11.5px">Pendências para reclassificação:</b>'+checklistPendencias()+'</div>'):'')+
+      '</div>'+
+      '<h2>1. Identificação</h2>'+
+      '<table class="kv">'+
+        '<tr><td>Guia</td><td>'+esc(g.numero)+'</td></tr>'+
+        '<tr><td>Beneficiário</td><td>'+esc(g.beneficiario.nome)+'</td></tr>'+
+        '<tr><td>Carteirinha</td><td>'+esc(g.beneficiario.carteirinha||'—')+'</td></tr>'+
+        '<tr><td>Solicitante</td><td>'+esc(g.solicitante||'—')+'</td></tr>'+
+        '<tr><td>Tipo / Regime / Natureza</td><td>'+esc(g.tipo)+' / '+esc(g.regime)+' / '+esc(g.natureza)+'</td></tr>'+
+        '<tr><td>Data de emissão</td><td>'+esc(g.dataEmissao||'—')+'</td></tr>'+
+      '</table>'+
+      '<h2>2. Objeto do parecer</h2>'+
+      '<p>Parecer técnico elaborado para subsidiar a área de autorização/auditoria médica da operadora na análise dos serviços solicitados nesta guia, à luz das diretrizes técnicas e regulatórias aplicáveis'+(temDUT?', incluindo a Diretriz de Utilização (DUT) do Anexo II da RN nº 465/2021 da ANS':'')+'. <i>Este documento não constitui a decisão final de autorização, que permanece a cargo da auditoria médica/profissional habilitado da operadora.</i></p>'+
+      '<h2>Serviços solicitados</h2>'+
+      '<table class="pt-tbl"><thead><tr><th>Tipo</th><th>Código</th><th>Descrição</th><th style="text-align:center">Qtde Solic.</th></tr></thead><tbody>'+linhaItens()+'</tbody></table>'+
+      '<h2>3. Base normativa aplicável</h2><p>'+esc(conteudo.baseNormativa||'').replace(/\n/g,'<br>')+'</p>'+
+      '<h2>4. Análise técnica</h2><p>'+esc(conteudo.analiseTecnica||'').replace(/\n/g,'<br>')+'</p>'+
+      '<h2>Críticas da guia</h2>'+tabelaCriticas()+
+      '<h2>5. Conclusão e posicionamento recomendado</h2><p>'+esc(conteudo.conclusao||'').replace(/\n/g,'<br>')+'</p>'+
+      '<h2>6. Documentos/informações pendentes para conclusão da análise</h2>'+checklistPendencias()+
+      '<h2>7. Ressalvas</h2>'+
+      '<p class="pt-ressalva">Este parecer tem caráter exclusivamente técnico-regulatório, elaborado a partir dos dados e documentos anexados à guia no sistema. Não substitui: (i) avaliação da junta médica/auditoria da operadora; (ii) parecer de médico especialista sobre a adequação clínica ao quadro do paciente; (iii) orientação jurídica.</p>'+
+      '<div class="pt-foot">Documento gerado em '+hojeFmt+' por '+esc(perfilDef[State.perfil].nome)+' via RegulaAI Saúde. Sujeito à validação e decisão final por profissional habilitado.</div>'+
+      '<script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script>'+
+      '</body></html>';
+  }
+
+  // Ponto de entrada: gera o Parecer Técnico (IA se configurada, senão fallback estruturado) e abre para impressão/PDF.
+  async function gerarEImprimirParecerTecnico(g){
+    var ia = g._cache || AI.analisarGuiaComIA(g,{pesos:getFluxoPesos(g.fluxo&&g.fluxo.id)});
+    var itens = itensSolicitadosGuia(g);
+    var classif = classificacaoParecerTecnico(g);
+    var crits = criticasDaGuia(g, ia);
+    toast('Gerando parecer técnico…','ok');
+    var conteudo = await gerarConteudoParecerTecnicoIA(g, ia, itens, classif);
+    var usouIA = !!conteudo;
+    if(!conteudo) conteudo = conteudoParecerTecnicoFallback(g, ia, classif);
+    var html = montarHtmlParecerTecnico(g, itens, classif, conteudo, crits);
+    var w = window.open('', '_blank');
+    if(!w){ toast('Não foi possível abrir a janela de impressão. Verifique o bloqueador de pop-ups.','err'); return; }
+    w.document.open(); w.document.write(html); w.document.close();
+    logAcao('Parecer técnico gerado (PDF)', g.numero+' — '+classif.label+(usouIA?'':' [sem IA configurada — versão estruturada]'));
+    toast(usouIA?'Parecer técnico gerado.':'Parecer técnico gerado (IA não configurada — versão com dados do sistema).','ok');
+  }
+
   function openParecer(g){
     if(!can('parecer')){ toast('Seu perfil não pode emitir parecer','warn'); return; }
     var ia = g._cache || AI.analisarGuiaComIA(g,{pesos:getFluxoPesos(g.fluxo&&g.fluxo.id)});
@@ -6691,7 +6852,7 @@
       '<div id="pitTabCrit" style="display:none">'+tabCriticas()+'</div>'+
       '<div id="pitTabProc" style="display:none">'+tabProcessoAuditoria()+'</div>'+
       '<div class="ai-box"><div class="hd"><div class="tt">'+ico('lightbulb')+' Sugestão técnica</div></div><p style="margin:6px 0">'+esc(ia.parecerGeral)+'</p><button class="btn sm ghost" id="pJustIA" type="button">'+ico('sparkles')+' Gerar análise técnica (obs. impressas)</button></div>';
-    var foot='<button class="btn ghost" id="pAudProc">'+ico('clipboard-check')+' Auditoria de procedimento</button><button class="btn ghost" id="pCancel">Cancelar</button><button class="btn" id="pSalvar">'+ico('save')+' Salvar parecer</button>';
+    var foot='<button class="btn ghost" id="pAudProc">'+ico('clipboard-check')+' Auditoria de procedimento</button><button class="btn ghost" id="pGerarPT">'+ico('file-text')+' Gerar parecer técnico (PDF)</button><button class="btn ghost" id="pCancel">Cancelar</button><button class="btn" id="pSalvar">'+ico('save')+' Salvar parecer</button>';
     var m = modal('Parecer da Operadora · '+esc(g.numero), 'A decisão final é exclusiva da operadora. A análise técnica atua apenas como apoio.', body, foot);
 
     // preenche obs salvas
@@ -6797,6 +6958,12 @@
       var selProcs=selKeys().map(function(k){return itens.filter(function(x){return x.key===k;})[0];}).filter(function(x){return x&&x.tipo==='Procedimento';});
       if(selProcs.length===1){ openAuditoriaProcedimento(g, selProcs[0]); return; }
       escolherProcedimentoAuditoria(g, procs);
+    };
+    var _bPT=m.querySelector('#pGerarPT');
+    if(_bPT) _bPT.onclick=function(){
+      var btn=this; var orig=btn.innerHTML;
+      btn.innerHTML=ico('loader')+' Gerando…'; btn.disabled=true; lcIcons();
+      gerarEImprimirParecerTecnico(g).finally(function(){ btn.innerHTML=orig; btn.disabled=false; lcIcons(); });
     };
     m.querySelector('#pJustIA').onclick=function(){
       var btn=this;
@@ -8574,6 +8741,42 @@
       if(dg.candidates&&dg.candidates[0]) return {ok:true,text:dg.candidates[0].content.parts[0].text};
       return {ok:false,text:(dg.error&&dg.error.message)||'Sem resposta. Tente novamente.'};
     }
+
+    // Chamada única de IA com um "system" explícito (não depende do chat/contexto global).
+    // Usada por geradores de documento (ex.: Parecer Técnico em PDF) que não são uma conversa.
+    async function callIAComSistema(cfg, sistema, userText){
+      if(cfg.prov==='claude'){
+        var r=await fetch('https://api.anthropic.com/v1/messages',{
+          method:'POST',
+          headers:{'Content-Type':'application/json','x-api-key':cfg.key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+          body:JSON.stringify({model:cfg.model,max_tokens:4096,system:sistema,messages:[{role:'user',content:[{type:'text',text:userText}]}]})
+        });
+        var d=await r.json();
+        if(d.content&&d.content[0]&&d.content[0].text) return {ok:true,text:d.content[0].text};
+        return {ok:false,text:(d.error&&d.error.message)||'Sem resposta do Claude.'};
+      }
+      if(cfg.prov==='openai'){
+        var ro=await fetch('https://api.openai.com/v1/chat/completions',{
+          method:'POST',
+          headers:{'Content-Type':'application/json','Authorization':'Bearer '+cfg.key},
+          body:JSON.stringify({model:cfg.model,max_tokens:4096,messages:[{role:'system',content:sistema},{role:'user',content:userText}]})
+        });
+        var dao=await ro.json();
+        if(dao.choices&&dao.choices[0]&&dao.choices[0].message) return {ok:true,text:dao.choices[0].message.content};
+        return {ok:false,text:(dao.error&&dao.error.message)||'Sem resposta do OpenAI.'};
+      }
+      var rg=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+cfg.model+':generateContent?key='+cfg.key,{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({system_instruction:{parts:[{text:sistema}]},contents:[{role:'user',parts:[{text:userText}]}]})
+      });
+      var dg=await rg.json();
+      if(dg.candidates&&dg.candidates[0]) return {ok:true,text:dg.candidates[0].content.parts[0].text};
+      return {ok:false,text:(dg.error&&dg.error.message)||'Sem resposta. Tente novamente.'};
+    }
+    window.getIaCfg=getIaCfg;
+    window.callIAComSistema=callIAComSistema;
+    window.resumoGuiaTexto=resumoGuiaTexto;
+    window.ctxTecnico=ctxTecnico;
 
     // Executa um turno de conversa: monta a mensagem (anexando o conteúdo dos anexos na 1ª vez), chama a IA e mostra a resposta.
     // baseText: texto da mensagem. mostrarUser: se true, ecoa a mensagem no chat. opts.reusarSalvos: reprocessar sem reler anexos já lidos.
