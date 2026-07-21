@@ -6605,6 +6605,49 @@
     return out;
   }
 
+  // ── Concordância IA × Auditor ──────────────────────────────────────────────
+  // Deriva a "sugestão da IA" (Favorável/Desfavorável/Inconclusivo) a partir da aderência/classificação
+  // já calculada por AI.analisarGuiaComIA — mesmo vocabulário usado no Parecer Técnico (PDF).
+  function sugestaoIA(ia){
+    if(ia.pendencias && ia.pendencias.length) return 'Inconclusivo';
+    if(ia.aderencia>=70) return 'Favorável';
+    if(ia.aderencia<50) return 'Desfavorável';
+    return 'Inconclusivo';
+  }
+  // Mapeia a decisão real do auditor (statusDerivado) para o mesmo vocabulário de 3 estados.
+  function decisaoAuditorTexto(par){
+    if(par.decisao==='Liberada') return 'Favorável';
+    if(par.decisao==='Negada') return 'Desfavorável';
+    if(par.decisao==='Parcialmente liberada') return 'Inconclusivo';
+    return 'Inconclusivo'; // Pendente / sem itens
+  }
+  // Registra, ao salvar o Parecer da Operadora, se o auditor concordou com a sugestão da IA.
+  // Persistido em regula_concordancia como {numeroGuia: registro} — usado pelo painel de Relatórios.
+  function registrarConcordanciaIA(g, ia, par){
+    var sugIA = sugestaoIA(ia);
+    var decAuditor = decisaoAuditorTexto(par);
+    var concordou = sugIA===decAuditor;
+    var reg = {
+      guia: g.numero, ts: par.ts, auditor: par.user, perfil: State.perfil,
+      fluxo: g.fluxo?g.fluxo.nome:'—', aderencia: ia.aderencia,
+      sugestaoIA: sugIA, decisaoAuditor: decAuditor, concordou: concordou
+    };
+    try{
+      var sv=JSON.parse(localStorage.getItem('regula_concordancia')||'{}');
+      sv[g.numero]=reg;
+      localStorage.setItem('regula_concordancia',JSON.stringify(sv));
+    }catch(e){}
+    MOCK.LOGS.unshift({ts:par.ts,user:par.user,perfil:State.perfil,tipo:'ia',
+      acao:'Concordância IA × Auditor registrada',
+      ref:'Guia '+g.numero+' — IA: '+sugIA+' · Auditor: '+decAuditor+' → '+(concordou?'Concordante':'Divergente')});
+    return reg;
+  }
+  // Retorna todos os registros de concordância salvos (usado pelo painel de Relatórios)
+  function getConcordanciaRegistros(){
+    try{ return JSON.parse(localStorage.getItem('regula_concordancia')||'{}'); }catch(e){ return {}; }
+  }
+  window.getConcordanciaRegistros = getConcordanciaRegistros;
+
   // ── Parecer Técnico (documento em PDF) ────────────────────────────────────
   // Classificação exibida na caixa colorida do topo — derivada do parecer da Operadora já salvo.
   function classificacaoParecerTecnico(g){
@@ -7025,6 +7068,8 @@
         if(obsInt) novaObs+=(novaObs?'\n':'')+'[Parecer — obs. internas]: '+obsInt;
         try{ localStorage.setItem(obsKey,novaObs); }catch(e){}
       }
+      // Registra a concordância IA × Auditor com base na análise vigente ao abrir o parecer
+      registrarConcordanciaIA(g, ia, par);
       // Invalida cache para forçar reanálise com contexto atualizado no próximo Reprocessar
       g._cache=null;
       MOCK.LOGS.unshift({ts:par.ts,user:par.user,perfil:State.perfil,acao:'Parecer da Operadora emitido',ref:g.numero+' → '+dec+' ('+fav+' fav / '+desf+' desf'+(sem?' / '+sem+' s/ parecer':'')+')'});

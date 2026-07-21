@@ -15,6 +15,7 @@
     {id:'opme',        label:'OPME',             ico:'bone'},
     {id:'custos',      label:'Custos',           ico:'dollar-sign'},
     {id:'alertas',     label:'Alertas Inteligentes', ico:'bell-ring'},
+    {id:'concordancia',label:'Concordância IA × Auditor', ico:'scale'},
     {id:'comparativos',label:'Comparativos',     ico:'git-compare'},
   ];
 
@@ -443,6 +444,12 @@
     var bg  = s>=70?'#fee2e2':(s>=45?'#ffedd5':(s>=25?'#fef9c3':'#dcfce7'));
     return '<span class="rel-score" style="color:'+cor+';background:'+bg+'">'+s+'</span>';
   }
+  // Selo de taxa de concordância (0-100%) — verde quando alta, vermelho quando baixa (inverso do scoreBadge de risco)
+  function taxaConcordBadge(pct){
+    var cor = pct>=80?'#16a34a':(pct>=60?'#a16207':(pct>=40?'#c2410c':'#b91c1c'));
+    var bg  = pct>=80?'#dcfce7':(pct>=60?'#fef9c3':(pct>=40?'#ffedd5':'#fee2e2'));
+    return '<span class="rel-score" style="color:'+cor+';background:'+bg+'">'+pct+'%</span>';
+  }
   // Mini barra de distribuição. riscoKey (opcional) torna a linha clicável p/ filtrar; ativo=nível selecionado
   function distRow(label, valor, max, cor, riscoKey, ativo){
     var pct=max?Math.round(valor/max*100):0;
@@ -483,6 +490,7 @@
     if(id==='prestadores') return renderPrestadores();
     if(id==='procedimentos') return renderProcedimentos();
     if(id==='alertas') return renderAlertas();
+    if(id==='concordancia') return renderConcordancia();
     if(id==='comparativos') return renderComparativos();
     return '';
   }
@@ -1364,6 +1372,87 @@
       '<div class="table-wrap"><table class="cfg-table rel-alert-table"><thead><tr>'+
         '<th>ID</th><th>Data</th><th>Guia</th><th>Médico</th><th>Severidade</th><th>Tipo</th><th>Score</th><th>Valor</th><th>Status</th>'+
       '</tr></thead><tbody>'+linhas+'</tbody></table></div></div>'+
+    '</div>';
+  }
+
+  // ── Concordância IA × Auditor ──────────────────────────────────────
+  // Compara a sugestão da IA (derivada da aderência/classificação no momento da análise)
+  // com a decisão real registrada pelo auditor no Parecer da Operadora — mede o quanto
+  // a IA e a auditoria humana convergem, e detalha os casos de divergência.
+  function renderConcordancia(){
+    var M=analitico();
+    var guiasNoRecorte={}; M.guias.forEach(function(g){ guiasNoRecorte[g.numero]=true; });
+    var todos = (window.getConcordanciaRegistros ? window.getConcordanciaRegistros() : {});
+    var regs = Object.keys(todos).map(function(k){return todos[k];}).filter(function(r){ return guiasNoRecorte[r.guia]; });
+
+    if(!regs.length){
+      return '<div class="rel-section"><div class="rel-soon"><div class="rel-soon-ico">'+ico('scale',26)+'</div><h3>Nenhum registro de concordância ainda</h3><p>Os registros são criados automaticamente sempre que um Parecer da Operadora é salvo, comparando a sugestão da IA com a decisão do auditor. Salve pareceres nas guias do período selecionado para ver os dados aqui.</p></div></div>';
+    }
+
+    var total=regs.length;
+    var concord=regs.filter(function(r){return r.concordou;}).length;
+    var diverg=total-concord;
+    var pctConcord=total?Math.round(concord/total*100):0;
+
+    // por auditor
+    var porAuditor={};
+    regs.forEach(function(r){
+      var a=r.auditor||'—';
+      if(!porAuditor[a]) porAuditor[a]={nome:a, total:0, concord:0};
+      porAuditor[a].total++; if(r.concordou) porAuditor[a].concord++;
+    });
+    var auditores=Object.keys(porAuditor).map(function(k){
+      var o=porAuditor[k]; o.pct = o.total?Math.round(o.concord/o.total*100):0; return o;
+    }).sort(function(a,b){return b.total-a.total;});
+
+    // por tipo de divergência (sugestão IA → decisão auditor)
+    var porTipoDiv={};
+    regs.filter(function(r){return !r.concordou;}).forEach(function(r){
+      var k=r.sugestaoIA+' → '+r.decisaoAuditor;
+      porTipoDiv[k]=(porTipoDiv[k]||0)+1;
+    });
+    var maxDiv=Math.max(1,Math.max.apply(null,Object.keys(porTipoDiv).map(function(k){return porTipoDiv[k];}).concat([0])));
+    var distDiv=Object.keys(porTipoDiv).sort(function(a,b){return porTipoDiv[b]-porTipoDiv[a];})
+      .map(function(k){return distRow(k, porTipoDiv[k], maxDiv, '#c2410c');}).join('');
+
+    var kpis='<div class="rel-kpi-grid" style="margin-bottom:16px">'+
+      kpiCard('Taxa de concordância', pctConcord+'%', total+' parecer(es) avaliado(s)', pctConcord>=80?'var(--g-700)':(pctConcord>=60?'#c2410c':'#b91c1c'))+
+      kpiCard('Concordantes', concord, 'IA e auditor no mesmo sentido', 'var(--g-700)')+
+      kpiCard('Divergentes', diverg, 'auditor decidiu diferente da IA', '#b91c1c')+
+      kpiCard('Auditores avaliados', auditores.length, 'com pareceres no período', '#0f766e')+
+    '</div>';
+
+    var tabAuditores = rankTable('Concordância por auditor',[
+      {h:'Auditor', f:function(r){return esc(r.nome);}},
+      {h:'Pareceres', num:true, f:function(r){return r.total;}},
+      {h:'Concordantes', num:true, f:function(r){return r.concord;}},
+      {h:'Taxa', num:true, f:function(r){return taxaConcordBadge(r.pct);}}
+    ], auditores, {count:true, xlsx:'Concordância por auditor'});
+
+    var linhasDetalhe = regs.slice().sort(function(a,b){return (b.ts||'').localeCompare(a.ts||'');}).map(function(r){
+      return '<tr>'+
+        '<td><b>'+esc(r.guia)+'</b></td>'+
+        '<td>'+esc(r.ts||'—')+'</td>'+
+        '<td>'+esc(r.auditor||'—')+'</td>'+
+        '<td>'+esc(r.fluxo||'—')+'</td>'+
+        '<td style="text-align:right">'+r.aderencia+'%</td>'+
+        '<td>'+esc(r.sugestaoIA)+'</td>'+
+        '<td>'+esc(r.decisaoAuditor)+'</td>'+
+        '<td>'+(r.concordou?'<span class="badge ok" style="font-size:10px">'+ico('check',11)+' Concordante</span>':'<span class="badge danger" style="font-size:10px">'+ico('x',11)+' Divergente</span>')+'</td>'+
+      '</tr>';
+    }).join('');
+    var tabDetalhe = '<div class="rel-card"><div class="rel-card-hd">Histórico de pareceres'+
+      '<span class="rel-card-actions"><span class="rel-card-count" title="'+total+' registro(s)">'+total+'</span></span></div>'+
+      '<div class="table-wrap"><table class="cfg-table"><thead><tr>'+
+        '<th>Guia</th><th>Data</th><th>Auditor</th><th>Fluxo</th><th style="text-align:right">Aderência IA</th><th>Sugestão IA</th><th>Decisão auditor</th><th>Resultado</th>'+
+      '</tr></thead><tbody>'+linhasDetalhe+'</tbody></table></div></div>';
+
+    return '<div class="rel-section">'+
+      kpis+
+      '<div class="rel-note">'+ico('info',13)+' <span>A <b>sugestão da IA</b> é derivada da aderência regulatória calculada no momento em que o Parecer da Operadora foi salvo (≥70% sem pendências = Favorável; &lt;50% = Desfavorável; caso intermediário ou com pendências = Inconclusivo). A <b>decisão do auditor</b> vem do parecer realmente emitido. Divergência não significa erro — a IA é apoio técnico, a decisão final é sempre do profissional habilitado.</span></div>'+
+      (distDiv?'<div class="rel-card"><div class="rel-card-hd">Padrões de divergência (Sugestão IA → Decisão do auditor)</div><div style="padding:6px 14px 12px">'+distDiv+'</div></div>':'')+
+      tabAuditores+
+      tabDetalhe+
     '</div>';
   }
 
