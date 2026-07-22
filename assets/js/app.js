@@ -174,6 +174,49 @@
   }
   // Extratos salvos do que a IA leu de cada anexo (por guia): { <anexoId>: {hash,nome,pacienteDoc,confereNome,extrato,ts} }
   function getAnxExtratosG(numeroGuia){ try{ return JSON.parse(localStorage.getItem('regula_anx_extrato_'+numeroGuia)||'{}'); }catch(e){ return {}; } }
+  function saveAnxExtratoG(numeroGuia, obj){ try{ localStorage.setItem('regula_anx_extrato_'+numeroGuia, JSON.stringify(obj)); }catch(e){} }
+  // Hash barato de conteúdo (amostra + tamanho) — usado para detectar se um anexo já foi processado (OCR/IA)
+  function _hashConteudoG(s){ var h=5381; s=''+s; for(var i=0;i<s.length;i++){ h=((h<<5)+h+s.charCodeAt(i))|0; } return (h>>>0).toString(36); }
+  // Marca um anexo como "analisado pela IA" (mesma chave/badge usados pelo chat)
+  function marcarAnexoAnalisadoG(numeroGuia, anexoId){
+    var key='regula_anx_ia_'+numeroGuia;
+    var set={}; try{ set=JSON.parse(localStorage.getItem(key)||'{}'); }catch(e){}
+    var stamp=new Date().toISOString().slice(0,16).replace('T',' ');
+    set[anexoId]=stamp;
+    try{ localStorage.setItem(key, JSON.stringify(set)); }catch(e){}
+    return stamp;
+  }
+  // ── OCR dedicado: extrai o conteúdo de um anexo assim que ele é enviado (upload), sem esperar o chat.
+  // O resultado fica no mesmo cache (regula_anx_extrato_<guia>) já usado pelo chat/análise automática,
+  // que passam a encontrar o extrato pronto e pular a releitura (fallback: se não houver extrato, leem como antes).
+  async function extrairAnexoOCR(g, anexo){
+    if(!anexo || !anexo.dataURL || typeof anexo.dataURL!=='string') return;
+    var m=anexo.dataURL.match(/^data:([^;]+);base64,(.*)$/);
+    if(!m) return;
+    var mime=m[1], base64=m[2];
+    if(!/^image\/(png|jpe?g|gif|webp)$/.test(mime) && mime!=='application/pdf') return; // formatos sem leitura de visão
+    if(!window.getIaCfg || !window.callIAComSistemaEAnexo) return; // chat ainda não inicializou (sem #chatRoot)
+    var cfg=window.getIaCfg();
+    if(!cfg.key) return; // sem IA configurada — anexo fica sem OCR até o usuário configurar uma chave
+    var hash=_hashConteudoG(base64.slice(0,4096)+'|'+base64.length);
+    var nomeGuia=(g.beneficiario&&g.beneficiario.nome)||'';
+    var sistema='Você é um assistente de extração de documentos médicos/administrativos (OCR + interpretação). Responda SOMENTE com o JSON solicitado, sem texto antes ou depois, sem markdown.';
+    var prompt='Leia o documento anexado (arquivo "'+(anexo.nome||'')+'") e extraia as informações a seguir. '+
+      'Identifique o NOME DO PACIENTE constante no documento e confira se é o mesmo da guia ("'+nomeGuia+'"). '+
+      'Responda em JSON válido, exatamente neste formato: {"pacienteDoc":"<nome do paciente no documento ou vazio>","confereNome":"<sim|nao|?>","extrato":"<1-2 frases com o achado principal do documento>"}';
+    try{
+      var resp=await window.callIAComSistemaEAnexo(cfg, sistema, prompt, {mime:mime, base64:base64, nome:anexo.nome});
+      if(!resp || !resp.ok) return;
+      var txt=resp.text.trim().replace(/^```json/i,'').replace(/^```/,'').replace(/```$/,'').trim();
+      var o=JSON.parse(txt);
+      var extratos=getAnxExtratosG(g.numero);
+      extratos[anexo.id]={hash:hash, nome:anexo.nome||'', pacienteDoc:o.pacienteDoc||'', confereNome:(o.confereNome||'?'), extrato:o.extrato||'', ts:new Date().toISOString().slice(0,16).replace('T',' ')};
+      saveAnxExtratoG(g.numero, extratos);
+      anexo.analisadoIA=marcarAnexoAnalisadoG(g.numero, anexo.id);
+      g._cache=null; // força reanálise considerando o novo extrato
+      return extratos[anexo.id];
+    }catch(e){ return; }
+  }
   // Enriquece o resultado da análise (motor) com os fatos já lidos dos anexos, SEM reler os arquivos.
   // Adiciona alerta crítico de divergência de nome e nota de achado por anexo.
   function aplicarExtratosAnexosNaAnalise(g, ia){
@@ -6252,6 +6295,12 @@
         toast('Documento anexado e classificado como "'+cat+'".','ok');
         m.parentNode.remove();
         if(refresh) refresh();
+        // OCR dedicado: extrai o conteúdo do anexo em segundo plano, sem bloquear a tela
+        if(tipo==='img'||tipo==='pdf'){
+          extrairAnexoOCR(g, ax).then(function(res){
+            if(res && refresh) refresh();
+          });
+        }
       };
       reader.onerror=function(){ toast('Falha ao ler o arquivo.','err'); };
       reader.readAsDataURL(arquivo);
@@ -8822,8 +8871,49 @@
       if(dg.candidates&&dg.candidates[0]) return {ok:true,text:dg.candidates[0].content.parts[0].text};
       return {ok:false,text:(dg.error&&dg.error.message)||'Sem resposta. Tente novamente.'};
     }
+    // Igual a callIAComSistema, mas anexando um único arquivo (imagem/PDF) via visão — usado pelo OCR dedicado no upload.
+    // media = {mime, base64, nome}
+    async function callIAComSistemaEAnexo(cfg, sistema, userText, media){
+      var isPdf = media.mime==='application/pdf';
+      if(cfg.prov==='claude'){
+        var contentC=[{type:'text',text:userText}, isPdf
+          ? {type:'document',source:{type:'base64',media_type:'application/pdf',data:media.base64}}
+          : {type:'image',source:{type:'base64',media_type:media.mime,data:media.base64}}];
+        var r=await fetch('https://api.anthropic.com/v1/messages',{
+          method:'POST',
+          headers:{'Content-Type':'application/json','x-api-key':cfg.key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+          body:JSON.stringify({model:cfg.model,max_tokens:1024,system:sistema,messages:[{role:'user',content:contentC}]})
+        });
+        var d=await r.json();
+        if(d.content&&d.content[0]&&d.content[0].text) return {ok:true,text:d.content[0].text};
+        return {ok:false,text:(d.error&&d.error.message)||'Sem resposta do Claude.'};
+      }
+      if(cfg.prov==='openai'){
+        var contentO=[{type:'text',text:userText}, isPdf
+          ? {type:'file',file:{filename:media.nome||'anexo.pdf',file_data:'data:application/pdf;base64,'+media.base64}}
+          : {type:'image_url',image_url:{url:'data:'+media.mime+';base64,'+media.base64}}];
+        var ro=await fetch('https://api.openai.com/v1/chat/completions',{
+          method:'POST',
+          headers:{'Content-Type':'application/json','Authorization':'Bearer '+cfg.key},
+          body:JSON.stringify({model:cfg.model,max_tokens:1024,messages:[{role:'system',content:sistema},{role:'user',content:contentO}]})
+        });
+        var dao=await ro.json();
+        if(dao.choices&&dao.choices[0]&&dao.choices[0].message) return {ok:true,text:dao.choices[0].message.content};
+        return {ok:false,text:(dao.error&&dao.error.message)||'Sem resposta do OpenAI.'};
+      }
+      // Gemini (padrão)
+      var partsG=[{text:userText},{inline_data:{mime_type:media.mime,data:media.base64}}];
+      var rg2=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+cfg.model+':generateContent?key='+cfg.key,{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({system_instruction:{parts:[{text:sistema}]},contents:[{role:'user',parts:partsG}]})
+      });
+      var dg2=await rg2.json();
+      if(dg2.candidates&&dg2.candidates[0]) return {ok:true,text:dg2.candidates[0].content.parts[0].text};
+      return {ok:false,text:(dg2.error&&dg2.error.message)||'Sem resposta. Tente novamente.'};
+    }
     window.getIaCfg=getIaCfg;
     window.callIAComSistema=callIAComSistema;
+    window.callIAComSistemaEAnexo=callIAComSistemaEAnexo;
     window.resumoGuiaTexto=resumoGuiaTexto;
     window.ctxTecnico=ctxTecnico;
 
