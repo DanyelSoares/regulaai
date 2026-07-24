@@ -1236,11 +1236,18 @@
       '"indicacaoClinica":"<texto da indicação clínica/hipótese diagnóstica/motivo do pedido descrito no documento, se houver — apenas o texto descritivo, SEM o código CID>",'+
       '"cid":"<código CID-10 encontrado no documento, ex. \'J18.9\' — string vazia se não houver nenhum CID>",'+
       '"cidDescricao":"<significado/descrição oficial do código CID-10 informado em cid, mesmo que o documento não traga a descrição — você já conhece a tabela CID-10; string vazia se cid estiver vazio>",'+
-      '"procedimentos":[{"qtd":<número inteiro, padrão 1>,"descricao":"<nome do procedimento/exame exatamente como escrito no documento>"}]}\n\n'+
+      '"procedimentos":[{"qtd":<número inteiro, padrão 1>,"periodicidade":"<frequência de repetição, ex. \'Semanal\'/\'Mensal\'/\'A cada 15 dias\'/\'Diária\'; use \'Não especificado\' se o documento não indicar frequência>",'+
+      '"descricao":"<nome do procedimento/exame exatamente como escrito no documento, SEM incluir a quantidade/frequência no texto>"}]}\n\n'+
       'ATENÇÃO — não confunda "procedimento" com "indicação clínica":\n'+
       '- "procedimentos" é SOMENTE a lista do que o médico está SOLICITANDO que seja executado/realizado (uma cirurgia, um exame, uma consulta, uma terapia) — é sempre um item que existe numa tabela de códigos (TUSS).\n'+
       '- "indicacaoClinica" é o MOTIVO/JUSTIFICATIVA do pedido: diagnóstico, hipótese diagnóstica, achado clínico, lesão ou doença descrita (ex.: "nevo verrucoso", "dor abdominal", "suspeita de apendicite", "lesão pigmentada em dorso"). Isso NUNCA deve virar um item da lista "procedimentos", mesmo que apareça perto ou na mesma linha do procedimento no documento.\n'+
       '- Exemplo: se o documento pede "Exérese de lesão de pele" com a anotação "nevo verrucoso em face" ao lado, o procedimento é "Exérese de lesão de pele" (1 item em "procedimentos") e "nevo verrucoso em face" vai inteiramente para "indicacaoClinica" — NÃO cria um segundo procedimento com o nome da lesão/diagnóstico.\n\n'+
+      'ATENÇÃO — separe "quantidade" de "periodicidade" (são coisas diferentes, não confunda uma com a outra):\n'+
+      '- "qtd" é o NÚMERO DE VEZES que o procedimento é executado por ciclo de repetição (o "2" em "2x por semana", o "1" em "1 sessão").\n'+
+      '- "periodicidade" é o CICLO/FREQUÊNCIA de repetição (o "por semana" em "2x por semana").\n'+
+      '- Exemplo: "Fonoaudiologia especializada, 2x por semana" → qtd:2, periodicidade:"Semanal", descricao:"Fonoaudiologia especializada". '+
+      '"Terapia Ocupacional em ABA, 2x por semana" → qtd:2, periodicidade:"Semanal". "Plano terapêutico a cada 4 meses" → qtd:1, periodicidade:"A cada 4 meses". '+
+      'Se não houver NENHUMA indicação de frequência no documento para aquele item, use periodicidade:"Não especificado" (nunca deixe vazio, nunca invente um valor).\n\n'+
       'Liste em "procedimentos" TODOS os itens que serão de fato executados/realizados, um por objeto. Se algum dado não constar, use string vazia "". '+
       'Se o documento trouxer SOMENTE indicação clínica (sem CID) ou SOMENTE o código CID (sem texto de indicação), preencha apenas o campo correspondente e deixe o outro vazio — nunca invente um a partir do outro.';
   }
@@ -1253,11 +1260,15 @@
     return 'Você é um especialista em codificação TUSS (Terminologia Unificada da Saúde Suplementar, tabela 22 da ANS). '+
       'Para cada procedimento solicitado abaixo, escolha o(s) código(s) TUSS mais adequado(s) dentre os candidatos listados (não invente códigos fora da lista de candidatos). '+
       'Classifique sua confiança como: "certo" (um único candidato claramente correto), "multipla" (até 3 candidatos plausíveis, sem certeza de qual é o correto), '+
-      '"revisar" (um candidato provável mas com dúvida razoável) ou "incerto" (nenhum candidato faz sentido ou não há candidatos).\n\n'+
+      '"revisar" (um candidato razoavelmente próximo, mas com dúvida) ou "incerto" (mesmo o candidato mais próximo não tem relação nenhuma com o procedimento pedido, ou não há candidatos).\n\n'+
+      'IMPORTANTE: descrições de terapias/serviços multidisciplinares (ex.: "Analista de comportamento ABA", "Atendente em terapia (AT) ABA", planos terapêuticos individualizados, acompanhamento pedagógico) '+
+      'raramente têm um código TUSS com o mesmo nome — nesses casos, NÃO desista com "incerto" só porque não há um candidato idêntico. '+
+      'Procure entre os candidatos a sessão/consulta da especialidade profissional envolvida (ex.: psicologia, terapia ocupacional, fonoaudiologia) que melhor corresponda ao serviço descrito, e classifique como "revisar" (não "incerto") — '+
+      'só use "incerto" quando de fato nenhum candidato tiver qualquer relação com o procedimento (nem por especialidade, nem por tipo de atendimento).\n\n'+
       linhas+'\n\n'+
       'Responda SOMENTE com JSON válido (array), sem markdown, exatamente neste formato:\n'+
       '[{"indice":0,"confianca":"certo|multipla|revisar|incerto","opcoes":[{"cod":"...","desc":"..."}]}]\n'+
-      '"opcoes" deve ter no máximo 3 itens, escolhidos apenas entre os candidatos fornecidos para aquele procedimento, ordenados do mais provável ao menos provável. Se confianca for "incerto", "opcoes" pode ser um array vazio.';
+      '"opcoes" deve ter no máximo 3 itens, escolhidos apenas entre os candidatos fornecidos para aquele procedimento, ordenados do mais provável ao menos provável. Se confianca for "incerto" E realmente não houver nenhum candidato minimamente relacionado, "opcoes" pode ser um array vazio — caso contrário, inclua ao menos o melhor palpite disponível.';
   }
 
   function _idcodParseJson(texto){
@@ -1298,7 +1309,7 @@
       var respExtracao=await window.callIAComSistemaEAnexo(cfg, sistemaExtracao, _idcodPromptExtracao(), {mime:mime, base64:base64, nome:_idCodState.arquivo.name});
       if(!respExtracao.ok) throw new Error(respExtracao.text||'Falha na leitura do documento.');
       var dados=_idcodParseJson(respExtracao.text);
-      dados.procedimentos=(dados.procedimentos||[]).map(function(p){ return {qtd:p.qtd||1, descricao:p.descricao||''}; });
+      dados.procedimentos=(dados.procedimentos||[]).map(function(p){ return {qtd:p.qtd||1, periodicidade:p.periodicidade||'Não especificado', descricao:p.descricao||''}; });
 
       if(!dados.procedimentos.length){
         _idCodState.resultado=dados;
@@ -1311,7 +1322,7 @@
       resWrap.innerHTML='<div class="idcod-loading">'+ico('loader',16)+' Comparando com a base TUSS ('+((window.TUSS_TABELA||[]).length)+' códigos)…</div>'; lcIcons();
 
       var comCandidatos=dados.procedimentos.map(function(p){
-        return {qtd:p.qtd, descricao:p.descricao, candidatos:(MOCK.buscarTussCandidatos?MOCK.buscarTussCandidatos(p.descricao,15):[])};
+        return {qtd:p.qtd, periodicidade:p.periodicidade, descricao:p.descricao, candidatos:(MOCK.buscarTussCandidatos?MOCK.buscarTussCandidatos(p.descricao,15):[])};
       });
 
       btnId.innerHTML=ico('loader',14)+' Classificando confiança…'; lcIcons();
@@ -1324,7 +1335,7 @@
         var c=classificacoes.filter(function(x){return x.indice===i;})[0]||{confianca:'incerto',opcoes:[]};
         var opcoes=(c.opcoes||[]).slice(0,3);
         return {
-          qtd:p.qtd, descricaoOriginal:p.descricao,
+          qtd:p.qtd, periodicidade:p.periodicidade||'Não especificado', descricaoOriginal:p.descricao,
           confianca:IDCOD_CONF_LBL[c.confianca]?c.confianca:'incerto',
           opcoes:opcoes,
           codSelecionado: opcoes.length? opcoes[0].cod : ''
@@ -1373,7 +1384,7 @@
       '<div class="idcod-procs">'+
         '<div class="idcod-procs-hd"><h3>Procedimentos identificados <span class="resumo-mini-cnt">'+procs.length+'</span></h3></div>'+
         '<div class="table-wrap"><table class="cfg-table idcod-tbl"><thead><tr>'+
-          '<th style="width:60px">Qtd</th><th style="width:150px">Código TUSS</th><th>Descrição do procedimento</th><th style="width:150px">Confiança</th><th style="width:40px"></th>'+
+          '<th style="width:60px">Qtd</th><th style="width:150px">Código TUSS</th><th style="width:130px">Periodicidade</th><th>Descrição do procedimento</th><th style="width:150px">Confiança</th><th style="width:40px"></th>'+
         '</tr></thead><tbody id="idcodTbody">'+procs.map(_idcodLinhaProc).join('')+'</tbody></table></div>'+
         '<button class="btn ghost sm" id="idcodAddLinha" type="button" style="margin-top:10px">'+ico('plus',13)+' Adicionar procedimento</button>'+
       '</div>'+
@@ -1403,6 +1414,7 @@
     return '<tr data-idx="'+i+'">'+
       '<td><input type="number" min="1" class="idcod-qtd" data-idx="'+i+'" value="'+(p.qtd||1)+'" style="width:52px;text-align:center;border:1.5px solid var(--g-200);border-radius:6px;padding:4px 5px"></td>'+
       '<td>'+codCell+'</td>'+
+      '<td><input type="text" class="idcod-periodicidade" data-idx="'+i+'" value="'+esc(p.periodicidade||'Não especificado')+'" placeholder="Não especificado"></td>'+
       '<td><input type="text" class="idcod-desc" data-idx="'+i+'" value="'+esc(descOpcao||p.descricaoOriginal||'')+'" placeholder="Descrição do procedimento"></td>'+
       '<td><span class="risk '+confCls+' idcod-conf-pill" title="'+esc(tip)+'">'+confLbl+'</span></td>'+
       '<td style="text-align:center"><button class="idcod-del-row" data-idx="'+i+'" title="Remover" aria-label="Remover procedimento">'+ico('trash-2',14)+'</button></td>'+
@@ -1417,6 +1429,7 @@
     }
     function ligarEventosLinhas(){
       $$('.idcod-qtd',wrap).forEach(function(inp){ inp.onchange=function(){ dados.procedimentos[+this.getAttribute('data-idx')].qtd=+this.value||1; }; });
+      $$('.idcod-periodicidade',wrap).forEach(function(inp){ inp.onchange=function(){ dados.procedimentos[+this.getAttribute('data-idx')].periodicidade=this.value.trim()||'Não especificado'; }; });
       $$('.idcod-desc',wrap).forEach(function(inp){ inp.onchange=function(){ dados.procedimentos[+this.getAttribute('data-idx')].descricaoOriginal=this.value; }; });
       $$('.idcod-cod-input',wrap).forEach(function(inp){ inp.onchange=function(){ dados.procedimentos[+this.getAttribute('data-idx')].codSelecionado=this.value.trim(); }; });
       $$('.idcod-cod-sel',wrap).forEach(function(sel){ sel.onchange=function(){ dados.procedimentos[+this.getAttribute('data-idx')].codSelecionado=this.value; }; });
@@ -1431,7 +1444,7 @@
     ligarEventosLinhas();
 
     $('#idcodAddLinha').onclick=function(){
-      dados.procedimentos.push({qtd:1, descricaoOriginal:'', confianca:'incerto', opcoes:[], codSelecionado:''});
+      dados.procedimentos.push({qtd:1, periodicidade:'Não especificado', descricaoOriginal:'', confianca:'incerto', opcoes:[], codSelecionado:''});
       _reRenderTbody();
       wrap.querySelector('.resumo-mini-cnt').textContent=dados.procedimentos.length;
     };
@@ -1533,12 +1546,13 @@
         '<dt>CID</dt><dd>'+(d.cid?esc(d.cid)+' — '+esc(d.cidDescricao||'significado não registrado'):'—')+'</dd>'+
       '</dl>'+
       '<div class="table-wrap" style="margin-top:12px"><table class="cfg-table idcod-tbl"><thead><tr>'+
-        '<th style="width:60px">Qtd</th><th style="width:150px">Código TUSS</th><th>Descrição do procedimento</th><th style="width:150px">Confiança</th>'+
+        '<th style="width:60px">Qtd</th><th style="width:150px">Código TUSS</th><th style="width:130px">Periodicidade</th><th>Descrição do procedimento</th><th style="width:150px">Confiança</th>'+
       '</tr></thead><tbody>'+procs.map(function(p){
         var descOpcao=(p.opcoes||[]).filter(function(o){return o.cod===p.codSelecionado;})[0]||{};
         var confCls=IDCOD_CONF_CLS[p.confianca]||'critico';
         var confLbl=IDCOD_CONF_LBL[p.confianca]||'Não identificado';
         return '<tr><td style="text-align:center">'+(p.qtd||1)+'</td><td style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px">'+esc(p.codSelecionado||'—')+'</td>'+
+          '<td>'+esc(p.periodicidade||'Não especificado')+'</td>'+
           '<td>'+esc(descOpcao.desc||p.descricaoOriginal||'')+'</td>'+
           '<td><span class="risk '+confCls+'">'+confLbl+'</span></td></tr>';
       }).join('')+'</tbody></table></div>';

@@ -789,17 +789,23 @@
   // assets/js/tuss-data.js, carregado antes deste arquivo, expondo window.TUSS_TABELA.
   // Busca local por palavras-chave (case/acento-insensível) — retorna até `limite` candidatos ordenados por relevância.
   function _normTexto(s){ return (''+s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); }
+  // Stopwords em português — sem isso, frases longas/descritivas (comuns em pedidos de terapias, ex. "Analista de
+  // comportamento ABA que realiza a elaboração de plano...") ficam dominadas por palavras genéricas que aparecem
+  // em quase toda descrição da tabela, afogando o sinal das palavras clinicamente relevantes.
+  var _STOPWORDS_PT={'de':1,'da':1,'do':1,'das':1,'dos':1,'em':1,'que':1,'para':1,'com':1,'por':1,'ou':1,'e':1,
+    'a':1,'o':1,'as':1,'os':1,'um':1,'uma':1,'no':1,'na':1,'nos':1,'nas':1,'ao':1,'aos':1,'se':1,'sua':1,'seu':1,
+    'ser':1,'the':1};
   function buscarTussCandidatos(nomeBusca, limite){
     limite=limite||15;
     var tabela=global.TUSS_TABELA||[];
     var termo=_normTexto(nomeBusca);
-    var palavras=termo.split(/\s+/).filter(function(p){ return p.length>2; });
+    var palavras=termo.split(/\s+/).filter(function(p){ return p.length>2 && !_STOPWORDS_PT[p]; });
     if(!palavras.length) return [];
     var pontuados=tabela.map(function(t){
       var alvo=_normTexto(t.desc);
       var pts=0;
-      palavras.forEach(function(p){ if(alvo.indexOf(p)>=0) pts++; });
-      if(alvo===termo) pts+=10; // match exato pesa mais
+      palavras.forEach(function(p){ if(alvo.indexOf(p)>=0) pts+=p.length; }); // palavras mais longas/específicas pesam mais
+      if(alvo===termo) pts+=50; // match exato do texto inteiro pesa muito mais
       return {item:t, pts:pts};
     }).filter(function(x){ return x.pts>0; });
     pontuados.sort(function(a,b){ return b.pts-a.pts; });
