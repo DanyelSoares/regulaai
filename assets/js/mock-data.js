@@ -794,21 +794,69 @@
   // em quase toda descrição da tabela, afogando o sinal das palavras clinicamente relevantes.
   var _STOPWORDS_PT={'de':1,'da':1,'do':1,'das':1,'dos':1,'em':1,'que':1,'para':1,'com':1,'por':1,'ou':1,'e':1,
     'a':1,'o':1,'as':1,'os':1,'um':1,'uma':1,'no':1,'na':1,'nos':1,'nas':1,'ao':1,'aos':1,'se':1,'sua':1,'seu':1,
-    'ser':1,'the':1};
+    'ser':1,'the':1,'sem':1,'total':1,'exame':1,'realizar':1,'realizacao':1};
+  // A tabela TUSS oficial frequentemente usa a SIGLA na própria descrição (ex.: "TC - Tórax", "RM - Crânio",
+  // "RX - Tórax"), mesmo quando o pedido médico/a extração da IA trazem a forma por extenso ("Tomografia
+  // computadorizada de tórax"). Sem isso, busca por extenso não encontra o item — a sigla, sozinha, também vira
+  // um termo de busca válido (adicionada à lista de palavras quando a forma por extenso aparece no texto buscado).
+  // Confirmado contra a tabela real: exames de imagem seguem o padrão "SIGLA - Região" com estas siglas
+  // específicas (ex.: "TC - Tórax", "RM - Crânio", "RX - Tórax", "US - Abdome total") — a ANS usa "US", não "USG".
+  var _SIGLAS_RADIOLOGICAS=[
+    ['tomografia computadorizada','tc'], ['tomografia','tc'],
+    ['ressonancia magnetica','rm'], ['ressonancia','rm'],
+    ['ultrassonografia','us'], ['ultrassom','us'], ['usg','us'],
+    ['radiografia','rx'], ['raio x','rx'], ['raio-x','rx']
+  ];
+  // Retorna os "conceitos" de busca: cada conceito é um array de formas equivalentes (ex.: ["tomografia","tc"]).
+  // Uma palavra normal do texto vira um conceito de 1 forma só; quando ela corresponde a uma sigla radiológica
+  // conhecida, o conceito ganha a sigla como forma alternativa — o item bate no conceito se casar QUALQUER forma.
+  function _conceitosBusca(termoNorm, palavras){
+    var siglaDe={}; // palavra-fonte -> sigla (ex.: 'tomografia'->'tc'), só quando a palavra-fonte está no texto buscado
+    _SIGLAS_RADIOLOGICAS.forEach(function(par){
+      var fonte=par[0].split(' ')[0]; // usa só a 1ª palavra do termo fonte para casar com a tokenização
+      if(termoNorm.indexOf(par[0])>=0) siglaDe[fonte]=par[1];
+    });
+    return palavras.map(function(p){
+      return siglaDe[p] ? [p, siglaDe[p]] : [p];
+    });
+  }
+  function _bateForma(alvo, p){
+    // sigla/termo curto exige token isolado (evita "tc" casar dentro de outra palavra); termos maiores usam substring.
+    return p.length<=3 ? new RegExp('(^|[^a-z0-9])'+p+'([^a-z0-9]|$)').test(alvo) : alvo.indexOf(p)>=0;
+  }
   function buscarTussCandidatos(nomeBusca, limite){
     limite=limite||15;
     var tabela=global.TUSS_TABELA||[];
     var termo=_normTexto(nomeBusca);
     var palavras=termo.split(/\s+/).filter(function(p){ return p.length>2 && !_STOPWORDS_PT[p]; });
     if(!palavras.length) return [];
+    var conceitos=_conceitosBusca(termo, palavras);
+    // Siglas de exame de imagem/diagnóstico presentes no texto buscado (ex.: "tc","rm") — usadas para o bônus de prefixo abaixo.
+    var siglasNoTermo=[]; _SIGLAS_RADIOLOGICAS.forEach(function(par){ if(termo.indexOf(par[0])>=0 && siglasNoTermo.indexOf(par[1])<0) siglasNoTermo.push(par[1]); });
+    var palavrasNaoSigla=palavras.filter(function(p){ return siglasNoTermo.indexOf(p)<0; }); // palavras "de conteúdo" (região anatômica etc.), excluindo a própria sigla
     var pontuados=tabela.map(function(t){
       var alvo=_normTexto(t.desc);
-      var pts=0;
-      palavras.forEach(function(p){ if(alvo.indexOf(p)>=0) pts+=p.length; }); // palavras mais longas/específicas pesam mais
-      if(alvo===termo) pts+=50; // match exato do texto inteiro pesa muito mais
-      return {item:t, pts:pts};
-    }).filter(function(x){ return x.pts>0; });
-    pontuados.sort(function(a,b){ return b.pts-a.pts; });
+      var conceitosBatidos=0, pesoTotal=0;
+      conceitos.forEach(function(formas){
+        var bateAlguma=formas.some(function(f){ return _bateForma(alvo,f); });
+        // peso pela forma MAIS CURTA do conceito (a sigla, quando existir) — evita que a forma por extenso
+        // ("tomografia", 11 letras) infle artificialmente conceitos que só bateram pela sigla ("tc", 2 letras).
+        if(bateAlguma){ conceitosBatidos++; pesoTotal+=Math.min.apply(null, formas.map(function(f){return f.length;})); }
+      });
+      // Bônus forte: a tabela TUSS nomeia exames de imagem como "SIGLA - Região" (ex.: "TC - Tórax", "RM - Crânio").
+      // Se o item começa com uma das siglas do termo buscado, soma 1 ponto de bônus por CADA palavra de conteúdo
+      // que também bate — assim "TC - Tórax" (bate 1: "torax") vence "TC - Punção... contraste" só se também
+      // bater "torax", e itens que batem mais palavras de conteúdo (região + variante) sobem ainda mais no ranking.
+      if(siglasNoTermo.some(function(s){ return new RegExp('^'+s+'\\s*-').test(alvo); })){
+        var qtdBatidas=palavrasNaoSigla.filter(function(p){ return _bateForma(alvo,p) && p!=='contraste'; }).length;
+        if(qtdBatidas>0) conceitosBatidos+=100*qtdBatidas;
+      }
+      if(alvo===termo) conceitosBatidos+=1000; // match exato do texto inteiro vence qualquer outro critério
+      return {item:t, conceitosBatidos:conceitosBatidos, pesoTotal:pesoTotal};
+    }).filter(function(x){ return x.conceitosBatidos>0; });
+    // Prioriza cobrir MAIS conceitos distintos (ex.: "tc" E "torax") antes de olhar o peso bruto —
+    // evita que um item que só cita "tomografia computadorizada" de passagem vença o exame específico certo.
+    pontuados.sort(function(a,b){ return (b.conceitosBatidos-a.conceitosBatidos) || (b.pesoTotal-a.pesoTotal); });
     return pontuados.slice(0,limite).map(function(x){ return x.item; });
   }
 
