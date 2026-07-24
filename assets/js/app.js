@@ -1233,11 +1233,15 @@
       'Responda SOMENTE com JSON válido, sem markdown, exatamente neste formato:\n'+
       '{"solicitante":"<nome do médico solicitante>","especialidade":"<especialidade do solicitante, se constar>",'+
       '"crm":"<número do CRM>","crmUf":"<UF do CRM, 2 letras>","paciente":"<nome do paciente>",'+
-      '"indicacaoClinica":"<texto da indicação clínica/hipótese diagnóstica descrita no documento, se houver — apenas o texto descritivo, SEM o código CID>",'+
+      '"indicacaoClinica":"<texto da indicação clínica/hipótese diagnóstica/motivo do pedido descrito no documento, se houver — apenas o texto descritivo, SEM o código CID>",'+
       '"cid":"<código CID-10 encontrado no documento, ex. \'J18.9\' — string vazia se não houver nenhum CID>",'+
       '"cidDescricao":"<significado/descrição oficial do código CID-10 informado em cid, mesmo que o documento não traga a descrição — você já conhece a tabela CID-10; string vazia se cid estiver vazio>",'+
-      '"procedimentos":[{"qtd":<número inteiro, padrão 1>,"descricao":"<nome do procedimento/exame exatamente como escrito no documento>"}]}\n'+
-      'Liste TODOS os procedimentos/exames/itens solicitados no documento, um por objeto. Se algum dado não constar, use string vazia "". '+
+      '"procedimentos":[{"qtd":<número inteiro, padrão 1>,"descricao":"<nome do procedimento/exame exatamente como escrito no documento>"}]}\n\n'+
+      'ATENÇÃO — não confunda "procedimento" com "indicação clínica":\n'+
+      '- "procedimentos" é SOMENTE a lista do que o médico está SOLICITANDO que seja executado/realizado (uma cirurgia, um exame, uma consulta, uma terapia) — é sempre um item que existe numa tabela de códigos (TUSS).\n'+
+      '- "indicacaoClinica" é o MOTIVO/JUSTIFICATIVA do pedido: diagnóstico, hipótese diagnóstica, achado clínico, lesão ou doença descrita (ex.: "nevo verrucoso", "dor abdominal", "suspeita de apendicite", "lesão pigmentada em dorso"). Isso NUNCA deve virar um item da lista "procedimentos", mesmo que apareça perto ou na mesma linha do procedimento no documento.\n'+
+      '- Exemplo: se o documento pede "Exérese de lesão de pele" com a anotação "nevo verrucoso em face" ao lado, o procedimento é "Exérese de lesão de pele" (1 item em "procedimentos") e "nevo verrucoso em face" vai inteiramente para "indicacaoClinica" — NÃO cria um segundo procedimento com o nome da lesão/diagnóstico.\n\n'+
+      'Liste em "procedimentos" TODOS os itens que serão de fato executados/realizados, um por objeto. Se algum dado não constar, use string vazia "". '+
       'Se o documento trouxer SOMENTE indicação clínica (sem CID) ou SOMENTE o código CID (sem texto de indicação), preencha apenas o campo correspondente e deixe o outro vazio — nunca invente um a partir do outro.';
   }
   // Prompt da 2ª passada: para cada procedimento, recebe candidatos TUSS pré-filtrados e escolhe/classifica a confiança
