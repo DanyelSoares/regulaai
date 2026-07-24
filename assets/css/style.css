@@ -2127,6 +2127,7 @@ body.sidebar-collapsed .modal-backdrop{left:66px}
 .idcod-tbl input[type="text"],.idcod-tbl select{
   width:100%;border:1.5px solid var(--g-200);border-radius:6px;padding:6px 8px;font-size:12.5px;
 }
+.idcod-tbl tbody td{vertical-align:top;padding-top:12px;padding-bottom:12px}
 .idcod-cod-input,.idcod-cod-sel{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 .idcod-conf-pill{cursor:default}
 .idcod-cod-wrap{display:flex;align-items:center;gap:6px}
@@ -2136,11 +2137,11 @@ body.sidebar-collapsed .modal-backdrop{left:66px}
   border-radius:20px;padding:2px 7px;
 }
 .idcod-dut-badge{
-  display:inline-flex;align-items:center;gap:4px;margin-top:5px;
-  font-size:10.5px;font-weight:600;padding:2px 7px;border-radius:20px;white-space:nowrap;
+  display:inline-flex;align-items:center;gap:5px;margin-top:9px;
+  font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;white-space:nowrap;
+  letter-spacing:.2px;
 }
-.idcod-dut-badge.tem-dut{background:var(--g-50);color:var(--g-700);border:1px solid var(--g-100)}
-.idcod-dut-badge.sem-dut{background:#eef1ef;color:var(--muted);border:1px solid #dfe7e1}
+.idcod-dut-badge.tem-dut{background:var(--g-50);color:var(--g-700);border:1.5px solid var(--g-200)}
 .idcod-del-row{background:none;border:none;color:var(--muted);cursor:pointer;padding:4px;border-radius:6px}
 .idcod-del-row:hover{background:var(--danger-soft,#fdecea);color:var(--danger)}
 .idcod-hist-row{cursor:pointer}

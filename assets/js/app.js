@@ -1417,10 +1417,8 @@
       ? 'Até '+opcoes.length+' opções possíveis — selecione a correta.'
       : (p.confianca==='incerto' ? 'Nenhum código correspondente encontrado na base TUSS — preencha manualmente.' : 'Confiança da identificação automática.');
     var temDut = !!(p.codSelecionado && MOCK.buscarDutPorProcedimento && MOCK.buscarDutPorProcedimento(descAtual));
-    var dutBadge = p.codSelecionado
-      ? (temDut
-          ? '<span class="idcod-dut-badge tem-dut" title="Este procedimento possui Diretriz de Utilização (DUT) — clique no código para ver">'+ico('file-check',11)+' Com DUT</span>'
-          : '<span class="idcod-dut-badge sem-dut" title="Nenhuma Diretriz de Utilização (DUT) encontrada para este procedimento">'+ico('file-x',11)+' Sem DUT</span>')
+    var dutBadge = temDut
+      ? '<span class="idcod-dut-badge tem-dut" title="Este procedimento possui Diretriz de Utilização (DUT) — clique no código para ver">'+ico('file-check',11)+' DUT</span>'
       : '';
     return '<tr data-idx="'+i+'">'+
       '<td><input type="number" min="1" class="idcod-qtd" data-idx="'+i+'" value="'+(p.qtd||1)+'" style="width:52px;text-align:center;border:1.5px solid var(--g-200);border-radius:6px;padding:4px 5px"></td>'+
@@ -1575,9 +1573,7 @@
         var confCls=IDCOD_CONF_CLS[p.confianca]||'critico';
         var confLbl=IDCOD_CONF_LBL[p.confianca]||'Não identificado';
         var temDut=!!(p.codSelecionado && MOCK.buscarDutPorProcedimento && MOCK.buscarDutPorProcedimento(descAtual));
-        var dutBadge=p.codSelecionado
-          ? (temDut?'<span class="idcod-dut-badge tem-dut">'+ico('file-check',11)+' Com DUT</span>':'<span class="idcod-dut-badge sem-dut">'+ico('file-x',11)+' Sem DUT</span>')
-          : '';
+        var dutBadge=temDut?'<span class="idcod-dut-badge tem-dut">'+ico('file-check',11)+' DUT</span>':'';
         return '<tr><td style="text-align:center">'+(p.qtd||1)+'</td><td style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px">'+esc(p.codSelecionado||'—')+dutBadge+'</td>'+
           '<td>'+esc(p.periodicidade||'Não especificado')+'</td>'+
           '<td>'+esc(descAtual)+'</td>'+
