@@ -1312,6 +1312,25 @@
     }catch(e){ return ''; }
   }
 
+  // Preview do documento anexado com efeito de "scanner" (linha animada) por cima, exibido durante o processamento.
+  // Imagem: <img> direto do dataURL. PDF: <iframe> (renderização nativa do navegador) — mais fiel que um ícone genérico.
+  function _idcodPreviewAnexo(){
+    var dataURL=_idCodState.dataURL, mime=(dataURL.match(/^data:([^;]+);/)||[])[1]||'';
+    var conteudo = /^image\//.test(mime)
+      ? '<img src="'+dataURL+'" alt="Pré-visualização da solicitação anexada">'
+      : '<iframe src="'+dataURL+'" title="Pré-visualização da solicitação anexada"></iframe>';
+    return '<div class="idcod-scan-doc">'+conteudo+'<div class="idcod-scan-line"></div><div class="idcod-scan-glow"></div></div>';
+  }
+  function _idcodTelaAnalise(etapaLabel, subLabel){
+    return '<div class="idcod-scan-wrap">'+
+      _idcodPreviewAnexo()+
+      '<div class="idcod-scan-status">'+
+        '<div class="idcod-scan-tt">'+ico('scan-search',15)+' '+esc(etapaLabel)+'</div>'+
+        (subLabel?'<div class="idcod-scan-sub">'+esc(subLabel)+'</div>':'')+
+      '</div>'+
+    '</div>';
+  }
+
   async function processarIdCodigo(wrap){
     if(_idCodState.processando) return;
     if(!window.getIaCfg || !window.callIAComSistemaEAnexo){ toast('Módulo de IA não inicializado. Recarregue a página.','err'); return; }
@@ -1324,7 +1343,7 @@
     var btnId=$('#idcodBtnIdentificar'), resWrap=$('#idcodResultado');
     _idCodState.processando=true;
     btnId.disabled=true; btnId.innerHTML=ico('loader',14)+' Lendo documento…'; lcIcons();
-    resWrap.innerHTML='<div class="idcod-loading">'+ico('loader',16)+' Extraindo dados da solicitação…</div>'; lcIcons();
+    resWrap.innerHTML=_idcodTelaAnalise('Analisando a solicitação…','Extraindo dados administrativos e serviços solicitados'); lcIcons();
 
     try{
       var sistemaExtracao='Você é um assistente de extração de documentos médicos-administrativos. Responda SOMENTE com o JSON solicitado.';
@@ -1341,13 +1360,14 @@
       }
 
       btnId.innerHTML=ico('loader',14)+' Buscando códigos TUSS…'; lcIcons();
-      resWrap.innerHTML='<div class="idcod-loading">'+ico('loader',16)+' Comparando com a base TUSS ('+((window.TUSS_TABELA||[]).length)+' códigos)…</div>'; lcIcons();
+      resWrap.innerHTML=_idcodTelaAnalise('Comparando com a base TUSS…',((window.TUSS_TABELA||[]).length)+' códigos na base oficial da ANS'); lcIcons();
 
       var comCandidatos=dados.procedimentos.map(function(p){
         return {qtd:p.qtd, periodicidade:p.periodicidade, descricao:p.descricao, candidatos:(MOCK.buscarTussCandidatos?MOCK.buscarTussCandidatos(p.descricao,15):[])};
       });
 
       btnId.innerHTML=ico('loader',14)+' Classificando confiança…'; lcIcons();
+      resWrap.innerHTML=_idcodTelaAnalise('Classificando a confiança dos códigos…','Validando '+comCandidatos.length+' procedimento(s) identificado(s)'); lcIcons();
       var sistemaMatch='Você é um especialista em codificação TUSS para auditoria de saúde suplementar. Responda SOMENTE com o JSON solicitado.';
       var respMatch=await window.callIAComSistemaEAnexo(cfg, sistemaMatch, _idcodPromptMatching(comCandidatos), {mime:mime, base64:base64, nome:_idCodState.arquivo.name});
       if(!respMatch.ok) throw new Error(respMatch.text||'Falha na classificação dos códigos.');
