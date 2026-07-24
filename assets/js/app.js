@@ -1397,25 +1397,36 @@
 
   function _idcodLinhaProc(p, i){
     var opcoes=p.opcoes||[];
+    var temMultiplas=opcoes.length>1;
     var codCell;
-    if(opcoes.length>1){
+    if(temMultiplas){
+      var posAtual=opcoes.map(function(o){return o.cod;}).indexOf(p.codSelecionado);
+      if(posAtual<0) posAtual=0;
       codCell='<select class="idcod-cod-sel" data-idx="'+i+'">'+opcoes.map(function(o){
         return '<option value="'+esc(o.cod)+'"'+(o.cod===p.codSelecionado?' selected':'')+'>'+esc(o.cod)+'</option>';
-      }).join('')+'</select>';
+      }).join('')+'</select>'+
+      '<span class="idcod-opcoes-cnt" title="'+opcoes.length+' códigos possíveis — selecione o correto no campo acima">'+ico('list-checks',11)+' '+(posAtual+1)+' de '+opcoes.length+'</span>';
     } else {
       codCell='<input type="text" class="idcod-cod-input" data-idx="'+i+'" value="'+esc(p.codSelecionado||'')+'" placeholder="—">';
     }
     var descOpcao=(opcoes.filter(function(o){return o.cod===p.codSelecionado;})[0]||{}).desc||'';
+    var descAtual=descOpcao||p.descricaoOriginal||'';
     var confCls=IDCOD_CONF_CLS[p.confianca]||'critico';
     var confLbl=IDCOD_CONF_LBL[p.confianca]||'Não identificado';
-    var tip = opcoes.length>1
+    var tip = temMultiplas
       ? 'Até '+opcoes.length+' opções possíveis — selecione a correta.'
       : (p.confianca==='incerto' ? 'Nenhum código correspondente encontrado na base TUSS — preencha manualmente.' : 'Confiança da identificação automática.');
+    var temDut = !!(p.codSelecionado && MOCK.buscarDutPorProcedimento && MOCK.buscarDutPorProcedimento(descAtual));
+    var dutBadge = p.codSelecionado
+      ? (temDut
+          ? '<span class="idcod-dut-badge tem-dut" title="Este procedimento possui Diretriz de Utilização (DUT) — clique no código para ver">'+ico('file-check',11)+' Com DUT</span>'
+          : '<span class="idcod-dut-badge sem-dut" title="Nenhuma Diretriz de Utilização (DUT) encontrada para este procedimento">'+ico('file-x',11)+' Sem DUT</span>')
+      : '';
     return '<tr data-idx="'+i+'">'+
       '<td><input type="number" min="1" class="idcod-qtd" data-idx="'+i+'" value="'+(p.qtd||1)+'" style="width:52px;text-align:center;border:1.5px solid var(--g-200);border-radius:6px;padding:4px 5px"></td>'+
-      '<td>'+codCell+'</td>'+
+      '<td><div class="idcod-cod-wrap">'+codCell+'</div>'+dutBadge+'</td>'+
       '<td><input type="text" class="idcod-periodicidade" data-idx="'+i+'" value="'+esc(p.periodicidade||'Não especificado')+'" placeholder="Não especificado"></td>'+
-      '<td><input type="text" class="idcod-desc" data-idx="'+i+'" value="'+esc(descOpcao||p.descricaoOriginal||'')+'" placeholder="Descrição do procedimento"></td>'+
+      '<td><input type="text" class="idcod-desc" data-idx="'+i+'" value="'+esc(descAtual)+'" placeholder="Descrição do procedimento"></td>'+
       '<td><span class="risk '+confCls+' idcod-conf-pill" title="'+esc(tip)+'">'+confLbl+'</span></td>'+
       '<td style="text-align:center"><button class="idcod-del-row" data-idx="'+i+'" title="Remover" aria-label="Remover procedimento">'+ico('trash-2',14)+'</button></td>'+
     '</tr>';
@@ -1426,13 +1437,24 @@
       $('#idcodTbody').innerHTML=dados.procedimentos.map(_idcodLinhaProc).join('');
       lcIcons();
       ligarEventosLinhas();
+      resWrapDutBind(wrap, dados); // religa o clique de consulta à DUT nos campos recriados
     }
     function ligarEventosLinhas(){
       $$('.idcod-qtd',wrap).forEach(function(inp){ inp.onchange=function(){ dados.procedimentos[+this.getAttribute('data-idx')].qtd=+this.value||1; }; });
       $$('.idcod-periodicidade',wrap).forEach(function(inp){ inp.onchange=function(){ dados.procedimentos[+this.getAttribute('data-idx')].periodicidade=this.value.trim()||'Não especificado'; }; });
       $$('.idcod-desc',wrap).forEach(function(inp){ inp.onchange=function(){ dados.procedimentos[+this.getAttribute('data-idx')].descricaoOriginal=this.value; }; });
-      $$('.idcod-cod-input',wrap).forEach(function(inp){ inp.onchange=function(){ dados.procedimentos[+this.getAttribute('data-idx')].codSelecionado=this.value.trim(); }; });
-      $$('.idcod-cod-sel',wrap).forEach(function(sel){ sel.onchange=function(){ dados.procedimentos[+this.getAttribute('data-idx')].codSelecionado=this.value; }; });
+      $$('.idcod-cod-input',wrap).forEach(function(inp){
+        inp.onchange=function(){
+          dados.procedimentos[+this.getAttribute('data-idx')].codSelecionado=this.value.trim();
+          _reRenderTbody(); // atualiza o selo de DUT conforme o novo código digitado
+        };
+      });
+      $$('.idcod-cod-sel',wrap).forEach(function(sel){
+        sel.onchange=function(){
+          dados.procedimentos[+this.getAttribute('data-idx')].codSelecionado=this.value;
+          _reRenderTbody(); // atualiza o contador "X de N" e o selo de DUT conforme a opção escolhida
+        };
+      });
       $$('.idcod-del-row',wrap).forEach(function(btn){
         btn.onclick=function(){
           dados.procedimentos.splice(+this.getAttribute('data-idx'),1);
@@ -1549,11 +1571,16 @@
         '<th style="width:60px">Qtd</th><th style="width:150px">Código TUSS</th><th style="width:130px">Periodicidade</th><th>Descrição do procedimento</th><th style="width:150px">Confiança</th>'+
       '</tr></thead><tbody>'+procs.map(function(p){
         var descOpcao=(p.opcoes||[]).filter(function(o){return o.cod===p.codSelecionado;})[0]||{};
+        var descAtual=descOpcao.desc||p.descricaoOriginal||'';
         var confCls=IDCOD_CONF_CLS[p.confianca]||'critico';
         var confLbl=IDCOD_CONF_LBL[p.confianca]||'Não identificado';
-        return '<tr><td style="text-align:center">'+(p.qtd||1)+'</td><td style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px">'+esc(p.codSelecionado||'—')+'</td>'+
+        var temDut=!!(p.codSelecionado && MOCK.buscarDutPorProcedimento && MOCK.buscarDutPorProcedimento(descAtual));
+        var dutBadge=p.codSelecionado
+          ? (temDut?'<span class="idcod-dut-badge tem-dut">'+ico('file-check',11)+' Com DUT</span>':'<span class="idcod-dut-badge sem-dut">'+ico('file-x',11)+' Sem DUT</span>')
+          : '';
+        return '<tr><td style="text-align:center">'+(p.qtd||1)+'</td><td style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px">'+esc(p.codSelecionado||'—')+dutBadge+'</td>'+
           '<td>'+esc(p.periodicidade||'Não especificado')+'</td>'+
-          '<td>'+esc(descOpcao.desc||p.descricaoOriginal||'')+'</td>'+
+          '<td>'+esc(descAtual)+'</td>'+
           '<td><span class="risk '+confCls+'">'+confLbl+'</span></td></tr>';
       }).join('')+'</tbody></table></div>';
     var m=modal(ico('scan-search',16)+' ID Código — histórico', esc(h.arquivoNome||''), body, '<button class="btn ghost" id="idcodHistClose">Fechar</button>');
