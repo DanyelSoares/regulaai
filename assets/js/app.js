@@ -1145,6 +1145,272 @@
     });
   }
 
+  // ── ID Código — "tradutor" de solicitação médica para código TUSS via IA ──────────
+  var _idCodState={ arquivo:null, dataURL:null, resultado:null, processando:false };
+  var IDCOD_CONF_LBL={certo:'Identificado',revisar:'Revisar',multipla:'Múltiplas opções',incerto:'Não identificado'};
+  var IDCOD_CONF_CLS={certo:'baixo',revisar:'medio',multipla:'alto',incerto:'critico'}; // reaproveita paleta .risk
+
+  function viewIdCodigo(){
+    var wrap=el('div');
+    wrap.appendChild(el('div',{class:'page-title'},'<div><h1>'+ico('scan-search',20)+' ID Código</h1><p>Anexe uma solicitação médica e identifique os códigos TUSS correspondentes com apoio de IA.</p></div>'));
+
+    var panel=el('div',{class:'panel',style:'padding:20px'});
+    panel.innerHTML=
+      '<div class="idcod-upload" id="idcodUpload">'+
+        '<input type="file" id="idcodFile" accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none">'+
+        '<div class="idcod-upload-box" id="idcodDropArea">'+
+          ico('upload-cloud',26)+
+          '<div class="idcod-upload-tt">Anexar solicitação médica</div>'+
+          '<div class="idcod-upload-sub" id="idcodFileInfo">PDF, JPG ou PNG — até 8 MB</div>'+
+          '<button class="btn ghost sm" id="idcodBtnEscolher" type="button">'+ico('paperclip',13)+' Escolher arquivo</button>'+
+        '</div>'+
+      '</div>'+
+      '<div style="display:flex;justify-content:flex-end;margin-top:14px">'+
+        '<button class="btn" id="idcodBtnIdentificar" disabled>'+ico('sparkles',14)+' Identificar códigos</button>'+
+      '</div>'+
+      '<div id="idcodResultado" style="margin-top:18px"></div>';
+    wrap.appendChild(panel);
+
+    setTimeout(function(){
+      var fileEl=$('#idcodFile'), infoEl=$('#idcodFileInfo'), btnId=$('#idcodBtnIdentificar');
+      $('#idcodBtnEscolher').onclick=function(){ fileEl.click(); };
+      $('#idcodDropArea').onclick=function(e){ if(e.target.closest('#idcodBtnEscolher')) return; fileEl.click(); };
+      fileEl.onchange=function(){
+        var arquivo=fileEl.files&&fileEl.files[0]||null;
+        if(!arquivo) return;
+        if(arquivo.size/1048576>8){ toast('Arquivo acima de 8 MB — reduza o tamanho.','warn'); return; }
+        var ext=(arquivo.name.split('.').pop()||'').toLowerCase();
+        if(!/(pdf|jpg|jpeg|png|webp)/.test(ext)){ toast('Formato não suportado. Use PDF, JPG, PNG ou WEBP.','warn'); return; }
+        var reader=new FileReader();
+        reader.onload=function(){
+          _idCodState.arquivo=arquivo; _idCodState.dataURL=reader.result;
+          infoEl.innerHTML=ico('file-check-2',13)+' '+esc(arquivo.name)+' · '+(arquivo.size/1048576).toFixed(2)+' MB';
+          btnId.disabled=false;
+        };
+        reader.onerror=function(){ toast('Falha ao ler o arquivo.','err'); };
+        reader.readAsDataURL(arquivo);
+      };
+      btnId.onclick=function(){ processarIdCodigo(wrap); };
+    },0);
+
+    return wrap;
+  }
+
+  // Prompt da 1ª passada: lê o documento e extrai dados administrativos + procedimentos em texto livre (sem código ainda)
+  function _idcodPromptExtracao(){
+    return 'Leia esta solicitação/guia médica (pedido de exames ou procedimentos) e extraia as informações a seguir. '+
+      'Responda SOMENTE com JSON válido, sem markdown, exatamente neste formato:\n'+
+      '{"solicitante":"<nome do médico solicitante>","especialidade":"<especialidade do solicitante, se constar>",'+
+      '"crm":"<número do CRM>","crmUf":"<UF do CRM, 2 letras>","paciente":"<nome do paciente>",'+
+      '"procedimentos":[{"qtd":<número inteiro, padrão 1>,"descricao":"<nome do procedimento/exame exatamente como escrito no documento>"}]}\n'+
+      'Liste TODOS os procedimentos/exames/itens solicitados no documento, um por objeto. Se algum dado não constar, use string vazia "".';
+  }
+  // Prompt da 2ª passada: para cada procedimento, recebe candidatos TUSS pré-filtrados e escolhe/classifica a confiança
+  function _idcodPromptMatching(procedimentos){
+    var linhas=procedimentos.map(function(p,i){
+      var cands=p.candidatos.map(function(c){ return '    - '+c.cod+' | '+c.desc; }).join('\n');
+      return '['+i+'] Procedimento solicitado: "'+p.descricao+'" (Qtd: '+p.qtd+')\n  Candidatos TUSS encontrados na base:\n'+(cands||'    (nenhum candidato encontrado na base local)');
+    }).join('\n\n');
+    return 'Você é um especialista em codificação TUSS (Terminologia Unificada da Saúde Suplementar, tabela 22 da ANS). '+
+      'Para cada procedimento solicitado abaixo, escolha o(s) código(s) TUSS mais adequado(s) dentre os candidatos listados (não invente códigos fora da lista de candidatos). '+
+      'Classifique sua confiança como: "certo" (um único candidato claramente correto), "multipla" (até 3 candidatos plausíveis, sem certeza de qual é o correto), '+
+      '"revisar" (um candidato provável mas com dúvida razoável) ou "incerto" (nenhum candidato faz sentido ou não há candidatos).\n\n'+
+      linhas+'\n\n'+
+      'Responda SOMENTE com JSON válido (array), sem markdown, exatamente neste formato:\n'+
+      '[{"indice":0,"confianca":"certo|multipla|revisar|incerto","opcoes":[{"cod":"...","desc":"..."}]}]\n'+
+      '"opcoes" deve ter no máximo 3 itens, escolhidos apenas entre os candidatos fornecidos para aquele procedimento, ordenados do mais provável ao menos provável. Se confianca for "incerto", "opcoes" pode ser um array vazio.';
+  }
+
+  function _idcodParseJson(texto){
+    var t=(texto||'').trim().replace(/^```json/i,'').replace(/^```/,'').replace(/```$/,'').trim();
+    return JSON.parse(t);
+  }
+
+  async function processarIdCodigo(wrap){
+    if(_idCodState.processando) return;
+    if(!window.getIaCfg || !window.callIAComSistemaEAnexo){ toast('Módulo de IA não inicializado. Recarregue a página.','err'); return; }
+    var cfg=window.getIaCfg();
+    if(!cfg.key){ toast('Configure uma chave de IA em Configurações → Assistente IA (o Gemini tem camada gratuita).','warn'); return; }
+    var m=_idCodState.dataURL.match(/^data:([^;]+);base64,(.*)$/);
+    if(!m){ toast('Não foi possível ler o arquivo anexado.','err'); return; }
+    var mime=m[1], base64=m[2];
+
+    var btnId=$('#idcodBtnIdentificar'), resWrap=$('#idcodResultado');
+    _idCodState.processando=true;
+    btnId.disabled=true; btnId.innerHTML=ico('loader',14)+' Lendo documento…'; lcIcons();
+    resWrap.innerHTML='<div class="idcod-loading">'+ico('loader',16)+' Extraindo dados da solicitação…</div>'; lcIcons();
+
+    try{
+      var sistemaExtracao='Você é um assistente de extração de documentos médicos-administrativos. Responda SOMENTE com o JSON solicitado.';
+      var respExtracao=await window.callIAComSistemaEAnexo(cfg, sistemaExtracao, _idcodPromptExtracao(), {mime:mime, base64:base64, nome:_idCodState.arquivo.name});
+      if(!respExtracao.ok) throw new Error(respExtracao.text||'Falha na leitura do documento.');
+      var dados=_idcodParseJson(respExtracao.text);
+      dados.procedimentos=(dados.procedimentos||[]).map(function(p){ return {qtd:p.qtd||1, descricao:p.descricao||''}; });
+
+      if(!dados.procedimentos.length){
+        _idCodState.resultado=dados;
+        renderIdCodigoResultado(wrap, dados);
+        toast('Nenhum procedimento identificado no documento.','warn');
+        return;
+      }
+
+      btnId.innerHTML=ico('loader',14)+' Buscando códigos TUSS…'; lcIcons();
+      resWrap.innerHTML='<div class="idcod-loading">'+ico('loader',16)+' Comparando com a base TUSS ('+((window.TUSS_TABELA||[]).length)+' códigos)…</div>'; lcIcons();
+
+      var comCandidatos=dados.procedimentos.map(function(p){
+        return {qtd:p.qtd, descricao:p.descricao, candidatos:(MOCK.buscarTussCandidatos?MOCK.buscarTussCandidatos(p.descricao,15):[])};
+      });
+
+      btnId.innerHTML=ico('loader',14)+' Classificando confiança…'; lcIcons();
+      var sistemaMatch='Você é um especialista em codificação TUSS para auditoria de saúde suplementar. Responda SOMENTE com o JSON solicitado.';
+      var respMatch=await window.callIAComSistemaEAnexo(cfg, sistemaMatch, _idcodPromptMatching(comCandidatos), {mime:mime, base64:base64, nome:_idCodState.arquivo.name});
+      if(!respMatch.ok) throw new Error(respMatch.text||'Falha na classificação dos códigos.');
+      var classificacoes=_idcodParseJson(respMatch.text);
+
+      dados.procedimentos=comCandidatos.map(function(p,i){
+        var c=classificacoes.filter(function(x){return x.indice===i;})[0]||{confianca:'incerto',opcoes:[]};
+        var opcoes=(c.opcoes||[]).slice(0,3);
+        return {
+          qtd:p.qtd, descricaoOriginal:p.descricao,
+          confianca:IDCOD_CONF_LBL[c.confianca]?c.confianca:'incerto',
+          opcoes:opcoes,
+          codSelecionado: opcoes.length? opcoes[0].cod : ''
+        };
+      });
+
+      _idCodState.resultado=dados;
+      renderIdCodigoResultado(wrap, dados);
+      logAcao('ID Código — solicitação processada', (_idCodState.arquivo&&_idCodState.arquivo.name)||'');
+      toast('Identificação concluída: '+dados.procedimentos.length+' procedimento(s).','ok');
+    }catch(e){
+      resWrap.innerHTML='<div class="ai-warn">'+ico('alert-triangle',14)+' Erro ao processar: '+esc(e.message||String(e))+'</div>';
+      toast('Erro ao identificar códigos.','err');
+    }finally{
+      _idCodState.processando=false;
+      btnId.disabled=false; btnId.innerHTML=ico('sparkles',14)+' Identificar códigos'; lcIcons();
+    }
+  }
+
+  function renderIdCodigoResultado(wrap, dados){
+    var resWrap=wrap.querySelector('#idcodResultado');
+    var procs=dados.procedimentos||[];
+    resWrap.innerHTML=
+      '<div class="idcod-admin">'+
+        '<h3>Informações da guia</h3>'+
+        '<div class="g2">'+
+          '<div class="field"><label>Solicitante</label><input type="text" id="idcodSolic" value="'+esc(dados.solicitante||'')+'"></div>'+
+          '<div class="field"><label>Especialidade</label><input type="text" id="idcodEspec" value="'+esc(dados.especialidade||'')+'"></div>'+
+        '</div>'+
+        '<div class="g2">'+
+          '<div class="field"><label>CRM</label><input type="text" id="idcodCrm" value="'+esc(dados.crm||'')+'"></div>'+
+          '<div class="field"><label>UF do CRM</label><input type="text" id="idcodCrmUf" maxlength="2" style="text-transform:uppercase" value="'+esc(dados.crmUf||'')+'"></div>'+
+        '</div>'+
+        '<div class="field"><label>Nome do paciente</label><input type="text" id="idcodPaciente" value="'+esc(dados.paciente||'')+'"></div>'+
+      '</div>'+
+      '<div class="idcod-procs">'+
+        '<div class="idcod-procs-hd"><h3>Procedimentos identificados <span class="resumo-mini-cnt">'+procs.length+'</span></h3></div>'+
+        '<div class="table-wrap"><table class="cfg-table idcod-tbl"><thead><tr>'+
+          '<th style="width:60px">Qtd</th><th style="width:150px">Código TUSS</th><th>Descrição do procedimento</th><th style="width:150px">Confiança</th><th style="width:40px"></th>'+
+        '</tr></thead><tbody id="idcodTbody">'+procs.map(_idcodLinhaProc).join('')+'</tbody></table></div>'+
+        '<button class="btn ghost sm" id="idcodAddLinha" type="button" style="margin-top:10px">'+ico('plus',13)+' Adicionar procedimento</button>'+
+      '</div>'+
+      '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">'+
+        '<button class="btn ghost" id="idcodNovaSolic" type="button">'+ico('rotate-ccw',13)+' Nova solicitação</button>'+
+      '</div>';
+    lcIcons();
+    ligarEventosIdCodigo(wrap, dados);
+  }
+
+  function _idcodLinhaProc(p, i){
+    var opcoes=p.opcoes||[];
+    var codCell;
+    if(opcoes.length>1){
+      codCell='<select class="idcod-cod-sel" data-idx="'+i+'">'+opcoes.map(function(o){
+        return '<option value="'+esc(o.cod)+'"'+(o.cod===p.codSelecionado?' selected':'')+'>'+esc(o.cod)+'</option>';
+      }).join('')+'</select>';
+    } else {
+      codCell='<input type="text" class="idcod-cod-input" data-idx="'+i+'" value="'+esc(p.codSelecionado||'')+'" placeholder="—">';
+    }
+    var descOpcao=(opcoes.filter(function(o){return o.cod===p.codSelecionado;})[0]||{}).desc||'';
+    var confCls=IDCOD_CONF_CLS[p.confianca]||'critico';
+    var confLbl=IDCOD_CONF_LBL[p.confianca]||'Não identificado';
+    var tip = opcoes.length>1
+      ? 'Até '+opcoes.length+' opções possíveis — selecione a correta.'
+      : (p.confianca==='incerto' ? 'Nenhum código correspondente encontrado na base TUSS — preencha manualmente.' : 'Confiança da identificação automática.');
+    return '<tr data-idx="'+i+'">'+
+      '<td><input type="number" min="1" class="idcod-qtd" data-idx="'+i+'" value="'+(p.qtd||1)+'" style="width:52px;text-align:center;border:1.5px solid var(--g-200);border-radius:6px;padding:4px 5px"></td>'+
+      '<td>'+codCell+'</td>'+
+      '<td><input type="text" class="idcod-desc" data-idx="'+i+'" value="'+esc(descOpcao||p.descricaoOriginal||'')+'" placeholder="Descrição do procedimento"></td>'+
+      '<td><span class="risk '+confCls+' idcod-conf-pill" title="'+esc(tip)+'">'+confLbl+'</span></td>'+
+      '<td style="text-align:center"><button class="idcod-del-row" data-idx="'+i+'" title="Remover" aria-label="Remover procedimento">'+ico('trash-2',14)+'</button></td>'+
+    '</tr>';
+  }
+
+  function ligarEventosIdCodigo(wrap, dados){
+    function _reRenderTbody(){
+      $('#idcodTbody').innerHTML=dados.procedimentos.map(_idcodLinhaProc).join('');
+      lcIcons();
+      ligarEventosLinhas();
+    }
+    function ligarEventosLinhas(){
+      $$('.idcod-qtd',wrap).forEach(function(inp){ inp.onchange=function(){ dados.procedimentos[+this.getAttribute('data-idx')].qtd=+this.value||1; }; });
+      $$('.idcod-desc',wrap).forEach(function(inp){ inp.onchange=function(){ dados.procedimentos[+this.getAttribute('data-idx')].descricaoOriginal=this.value; }; });
+      $$('.idcod-cod-input',wrap).forEach(function(inp){ inp.onchange=function(){ dados.procedimentos[+this.getAttribute('data-idx')].codSelecionado=this.value.trim(); }; });
+      $$('.idcod-cod-sel',wrap).forEach(function(sel){ sel.onchange=function(){ dados.procedimentos[+this.getAttribute('data-idx')].codSelecionado=this.value; }; });
+      $$('.idcod-del-row',wrap).forEach(function(btn){
+        btn.onclick=function(){
+          dados.procedimentos.splice(+this.getAttribute('data-idx'),1);
+          _reRenderTbody();
+          wrap.querySelector('.resumo-mini-cnt').textContent=dados.procedimentos.length;
+        };
+      });
+    }
+    ligarEventosLinhas();
+
+    $('#idcodAddLinha').onclick=function(){
+      dados.procedimentos.push({qtd:1, descricaoOriginal:'', confianca:'incerto', opcoes:[], codSelecionado:''});
+      _reRenderTbody();
+      wrap.querySelector('.resumo-mini-cnt').textContent=dados.procedimentos.length;
+    };
+    $('#idcodSolic').onchange=function(){ dados.solicitante=this.value; };
+    $('#idcodEspec').onchange=function(){ dados.especialidade=this.value; };
+    $('#idcodCrm').onchange=function(){ dados.crm=this.value; };
+    $('#idcodCrmUf').onchange=function(){ dados.crmUf=this.value.toUpperCase(); };
+    $('#idcodPaciente').onchange=function(){ dados.paciente=this.value; };
+    $('#idcodNovaSolic').onclick=function(){
+      _idCodState={ arquivo:null, dataURL:null, resultado:null, processando:false };
+      State.route='idcodigo'; render();
+    };
+
+    // Clique no código exibe a DUT correspondente, quando houver
+    resWrapDutBind(wrap, dados);
+  }
+
+  function resWrapDutBind(wrap, dados){
+    $$('.idcod-cod-input, .idcod-cod-sel',wrap).forEach(function(campo){
+      campo.title='Clique para ver a DUT (Diretriz de Utilização), se houver, deste procedimento';
+      campo.style.cursor='pointer';
+      campo.addEventListener('click',function(e){
+        if(this.tagName==='INPUT') e.preventDefault(); // não abre o teclado/foco em cima do clique de consulta
+        var idx=+this.getAttribute('data-idx');
+        var p=dados.procedimentos[idx];
+        var descBusca=(p.opcoes.filter(function(o){return o.cod===p.codSelecionado;})[0]||{}).desc || p.descricaoOriginal;
+        var dut=MOCK.buscarDutPorProcedimento?MOCK.buscarDutPorProcedimento(descBusca):null;
+        showDutModal(p.codSelecionado, descBusca, dut);
+      });
+    });
+  }
+
+  function showDutModal(cod, desc, dut){
+    var body = dut
+      ? '<div style="font-size:12.5px;color:var(--muted);margin-bottom:10px">DUT nº '+dut.num+' — Anexo II, RN 465/2021 (ANS)</div>'+
+        '<div style="font-weight:700;margin-bottom:8px">'+esc(dut.titulo)+'</div>'+
+        '<div style="font-size:13px;line-height:1.65;white-space:pre-wrap;background:#f6fdf8;border:1.5px solid var(--g-100);border-radius:8px;padding:14px 16px;max-height:400px;overflow-y:auto">'+esc(dut.texto)+'</div>'
+      : '<div class="resumo-mini-empty">Este procedimento não possui Diretriz de Utilização (DUT) cadastrada na base, ou nenhuma DUT foi identificada para "'+esc(desc||'')+'".</div>';
+    var m=modal(ico('file-text',16)+' Diretriz de Utilização'+(cod?' · '+esc(cod):''), esc(desc||''), body, '<button class="btn ghost" id="dutIdCodClose">Fechar</button>');
+    m.querySelector('#dutIdCodClose').onclick=function(){ m.parentNode.remove(); };
+  }
+
   /* === Views === */
   function render(){
     var v=$('#view'); v.innerHTML='';
@@ -1157,6 +1423,7 @@
     else if(State.route==='guias') v.appendChild(viewGuias());
     else if(State.route==='kanban') v.appendChild(viewKanban());
     else if(State.route==='relatorios') v.appendChild(viewRelatorios());
+    else if(State.route==='idcodigo') v.appendChild(viewIdCodigo());
     else if(State.route==='param') v.appendChild(viewParam());
     else if(State.route==='logs'){ if(can('logs')) v.appendChild(viewLogs()); else { State.route='dashboard'; v.appendChild(viewDashboard()); } }
     else if(State.route==='config') v.appendChild(viewConfig());
@@ -7164,7 +7431,7 @@
   setInterval(atualizarRelogio,1000);
 
   /* === Breadcrumb === */
-  var ROUTE_LABELS={dashboard:'Dashboard',guias:'Guias',kanban:'Kanban',relatorios:'Relatórios',param:'Parametrização',logs:'Logs',config:'Configurações',manual:'Manual do Usuário'};
+  var ROUTE_LABELS={dashboard:'Dashboard',guias:'Guias',kanban:'Kanban',relatorios:'Relatórios',idcodigo:'ID Código',param:'Parametrização',logs:'Logs',config:'Configurações',manual:'Manual do Usuário'};
   function atualizarBreadcrumb(){
     var el=$('#topbarRoute'); if(!el) return;
     el.textContent=ROUTE_LABELS[State.route]||State.route;

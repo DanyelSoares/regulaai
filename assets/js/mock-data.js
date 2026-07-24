@@ -784,6 +784,48 @@
     return { inclusao:ben.dataInclusao||'—', permanencia:permanencia, itens:itens, cpt:cpt };
   }
 
+  // ── Tabela TUSS (Terminologia Unificada da Saúde Suplementar) — base de comparação do módulo "ID Código" ──
+  // Os dados reais (5.960 códigos, fonte ANS — Tabela de Correlação TUSS x Rol RN 465/2021) ficam em
+  // assets/js/tuss-data.js, carregado antes deste arquivo, expondo window.TUSS_TABELA.
+  // Busca local por palavras-chave (case/acento-insensível) — retorna até `limite` candidatos ordenados por relevância.
+  function _normTexto(s){ return (''+s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); }
+  function buscarTussCandidatos(nomeBusca, limite){
+    limite=limite||15;
+    var tabela=global.TUSS_TABELA||[];
+    var termo=_normTexto(nomeBusca);
+    var palavras=termo.split(/\s+/).filter(function(p){ return p.length>2; });
+    if(!palavras.length) return [];
+    var pontuados=tabela.map(function(t){
+      var alvo=_normTexto(t.desc);
+      var pts=0;
+      palavras.forEach(function(p){ if(alvo.indexOf(p)>=0) pts++; });
+      if(alvo===termo) pts+=10; // match exato pesa mais
+      return {item:t, pts:pts};
+    }).filter(function(x){ return x.pts>0; });
+    pontuados.sort(function(a,b){ return b.pts-a.pts; });
+    return pontuados.slice(0,limite).map(function(x){ return x.item; });
+  }
+
+  // Busca a Diretriz de Utilização (DUT) cujo título mais se aproxima do nome do procedimento/descrição TUSS.
+  // Retorna o item {num,titulo,texto} de maior pontuação, ou null se nenhuma palavra relevante bater.
+  function buscarDutPorProcedimento(nomeBusca){
+    var tabela=global.DUT_TABELA||[];
+    if(!tabela.length) return null;
+    var termo=_normTexto(nomeBusca);
+    var palavras=termo.split(/\s+/).filter(function(p){ return p.length>3; });
+    if(!palavras.length) return null;
+    var melhor=null, melhorPts=0;
+    tabela.forEach(function(d){
+      var alvo=_normTexto(d.titulo);
+      var pts=0;
+      palavras.forEach(function(p){ if(alvo.indexOf(p)>=0) pts++; });
+      if(pts>melhorPts){ melhorPts=pts; melhor=d; }
+    });
+    // exige pelo menos 2 palavras batendo (ou 1 se a busca só tinha 1 palavra relevante) para evitar falso positivo
+    var minimo=Math.min(2,palavras.length);
+    return melhorPts>=minimo ? melhor : null;
+  }
+
   global.MOCK = {
     FLUXOS:FLUXOS, IA_POR_ETAPA:IA_POR_ETAPA, ESPEC_MAP:ESPEC_MAP, especialidadeDaGuia:especialidadeDaGuia,
     PROCEDIMENTOS:PROCEDIMENTOS, PACOTES:PACOTES, MATMED:MATMED, DIARIAS_TAXAS:DIARIAS_TAXAS,
@@ -794,6 +836,7 @@
     LOGS:LOGS, buildGuias: hydrate, matmedDetalhe: matmedDetalhe, opmeDetalhe: opmeDetalhe, procDetalhe: procDetalhe, observacoesGuia: observacoesGuia,
     calcIdade: calcIdade, anosContrato: anosContrato, cidGuia: cidGuia, carenciasGuia: carenciasGuia, mensalidadesGuia: mensalidadesGuia, historicoAtendimentos: historicoAtendimentos,
     naturezaDaGuia: naturezaDaGuia, naturezaDetalhada: naturezaDetalhada, SUB_INTERNACAO: SUB_INTERNACAO,
-    naturezaSelectHTML: naturezaSelectHTML
+    naturezaSelectHTML: naturezaSelectHTML,
+    buscarTussCandidatos: buscarTussCandidatos, buscarDutPorProcedimento: buscarDutPorProcedimento
   };
 })(window);
