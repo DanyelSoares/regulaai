@@ -481,7 +481,7 @@
   function isoParaBR(iso){ if(!iso) return ''; var p=String(iso).split('-'); return p.length===3?(p[2]+'/'+p[1]+'/'+p[0]):String(iso); }
   function fmtDataEmissao(g){ var d=isoParaBR(g.dataEmissao); return g.horaEmissao ? d+' '+g.horaEmissao : d; }
   function mask(v){ if(ehGestor()) return v; if(!v) return ''; return v.replace(/\d(?=\d{2})/g,'•'); }
-  function toast(msg,kind){ var t=el('div',{class:'toast '+(kind||'')},esc(msg)); $('#toastRoot').appendChild(t); setTimeout(function(){t.style.opacity=0; setTimeout(function(){t.remove()},300)},2800); }
+  function toast(msg,kind){ var t=el('div',{class:'toast '+(kind||''),role:'status','aria-live':'polite'},esc(msg)); $('#toastRoot').appendChild(t); setTimeout(function(){t.style.opacity=0; setTimeout(function(){t.remove()},300)},2800); }
   function ico(name,size){ size=size||14; return '<i data-lucide="'+name+'" width="'+size+'" height="'+size+'" style="vertical-align:middle"></i>'; }
   function icoLg(name){ return '<i data-lucide="'+name+'" width="40" height="40"></i>'; }
   function lcIcons(){ if(typeof lucide!=='undefined') lucide.createIcons(); }
@@ -839,39 +839,74 @@
   }
 
   /* === Custom select === */
+  var _cselSeq=0;
   function makeCustomSelect(sel){
+    var uid='csel'+(_cselSeq++);
     var wrap=el('div',{class:'csel'});
-    var trigger=el('div',{class:'csel-trigger'});
-    var drop=el('div',{class:'csel-drop'});
+    var trigger=el('div',{class:'csel-trigger',tabindex:'0',role:'button','aria-haspopup':'listbox','aria-expanded':'false',id:uid+'-trigger'});
+    var drop=el('div',{class:'csel-drop',role:'listbox',id:uid+'-drop'});
+    trigger.setAttribute('aria-controls',uid+'-drop');
 
     function refreshTrigger(){
       var cur=sel.options[sel.selectedIndex];
       trigger.innerHTML=esc(cur?cur.text:'')+'<i data-lucide="chevron-down" width="11" height="11" style="vertical-align:middle;opacity:.6"></i>';
       lcIcons();
     }
-    function closeAll(){ document.querySelectorAll('.csel.open').forEach(function(x){x.classList.remove('open')}); }
+    function closeAll(){
+      document.querySelectorAll('.csel.open').forEach(function(x){
+        x.classList.remove('open');
+        var trig=x.querySelector('.csel-trigger'); if(trig) trig.setAttribute('aria-expanded','false');
+      });
+    }
+    function abrir(){
+      closeAll();
+      wrap.classList.add('open');
+      trigger.setAttribute('aria-expanded','true');
+      var ativo=drop.querySelector('.csel-item.active')||drop.querySelector('.csel-item');
+      if(ativo) ativo.focus();
+    }
+    function fechar(devolveFoco){
+      wrap.classList.remove('open');
+      trigger.setAttribute('aria-expanded','false');
+      if(devolveFoco) trigger.focus();
+    }
 
+    var itens=[];
     Array.prototype.forEach.call(sel.options,function(o){
       var isSub=o.getAttribute&&o.getAttribute('data-sub')==='1';
-      var item=el('div',{class:'csel-item'+(o.selected?' active':'')+(isSub?' csel-sub':'')});
+      var item=el('div',{class:'csel-item'+(o.selected?' active':'')+(isSub?' csel-sub':''),role:'option',tabindex:'-1','aria-selected':o.selected?'true':'false'});
       item.textContent=o.text;
       item.setAttribute('data-v',o.value);
-      item.onclick=function(e){
-        e.stopPropagation();
+      function escolher(){
         sel.value=o.value;
-        drop.querySelectorAll('.csel-item').forEach(function(x){x.classList.toggle('active',x.getAttribute('data-v')===o.value)});
+        drop.querySelectorAll('.csel-item').forEach(function(x){
+          var ativo=x.getAttribute('data-v')===o.value;
+          x.classList.toggle('active',ativo);
+          x.setAttribute('aria-selected',ativo?'true':'false');
+        });
         refreshTrigger();
-        wrap.classList.remove('open');
+        fechar(true);
         sel.dispatchEvent(new Event('change'));
+      }
+      item.onclick=function(e){ e.stopPropagation(); escolher(); };
+      item.onkeydown=function(e){
+        if(e.key==='Enter'||e.key===' '){ e.preventDefault(); escolher(); }
+        else if(e.key==='Escape'){ e.preventDefault(); fechar(true); }
+        else if(e.key==='ArrowDown'){ e.preventDefault(); var nxt=itens[itens.indexOf(item)+1]; if(nxt) nxt.focus(); }
+        else if(e.key==='ArrowUp'){ e.preventDefault(); var prv=itens[itens.indexOf(item)-1]; if(prv) prv.focus(); }
       };
+      itens.push(item);
       drop.appendChild(item);
     });
 
     trigger.onclick=function(e){
       e.stopPropagation();
       var wasOpen=wrap.classList.contains('open');
-      closeAll();
-      if(!wasOpen) wrap.classList.add('open');
+      if(wasOpen) fechar(false); else abrir();
+    };
+    trigger.onkeydown=function(e){
+      if(e.key==='Enter'||e.key===' '||e.key==='ArrowDown'){ e.preventDefault(); abrir(); }
+      else if(e.key==='Escape'&&wrap.classList.contains('open')){ e.preventDefault(); fechar(true); }
     };
 
     refreshTrigger();
@@ -880,7 +915,12 @@
     wrap.appendChild(drop);
     wrap.appendChild(sel);
   }
-  document.addEventListener('click',function(){ document.querySelectorAll('.csel.open').forEach(function(x){x.classList.remove('open')}); });
+  document.addEventListener('click',function(){
+    document.querySelectorAll('.csel.open').forEach(function(x){
+      x.classList.remove('open');
+      var trig=x.querySelector('.csel-trigger'); if(trig) trig.setAttribute('aria-expanded','false');
+    });
+  });
   window.makeCustomSelect = makeCustomSelect; // exposto para o módulo Relatórios padronizar seus selects
   window.makeDateRangePicker = makeDateRangePicker; // exposto para o módulo Relatórios usar o filtro de período padrão
 
@@ -2047,9 +2087,9 @@
         '<td></td>'+
         '<td></td>'+
         '<td><div class="row-actions">'+
-            '<div class="btn-wrap"><button class="btn sm" data-act="abrir" title="Visualizar guia"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>'+
-            '<div class="btn-wrap"><button class="btn sm" data-act="ia" title="Análise IA">'+ico('sparkles')+'</button></div>'+
-            (can('parecer')?'<div class="btn-wrap"><button class="btn sm" data-act="par" title="Parecer">'+ico('stethoscope')+'</button></div>':'')+
+            '<div class="btn-wrap"><button class="btn sm" data-act="abrir" title="Visualizar guia" aria-label="Visualizar guia"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>'+
+            '<div class="btn-wrap"><button class="btn sm" data-act="ia" title="Análise IA" aria-label="Análise IA">'+ico('sparkles')+'</button></div>'+
+            (can('parecer')?'<div class="btn-wrap"><button class="btn sm" data-act="par" title="Parecer" aria-label="Parecer">'+ico('stethoscope')+'</button></div>':'')+
           '</div></td>';
       trSub.querySelector('[data-act="abrir"]').onclick=function(e){e.stopPropagation();openGuia(g,'resumo')};
       trSub.querySelector('[data-act="ia"]').onclick=function(e){e.stopPropagation();openGuia(g,'ia')};
@@ -2166,72 +2206,25 @@
     return wrap;
   }
 
+  // Exportação Excel real (.xlsx via ExcelJS, mesmo pipeline usado pelo módulo Relatórios — ver relatorios.js
+  // global.RELATORIOS.exportarPlanilhaMultiAba). Mantém as mesmas 2 abas/colunas da versão anterior.
   function exportXLS(rows){
     var total=rows.length||1;
-    var dt=new Date().toLocaleString('pt-BR');
-    var fname='RegulaAI_'+new Date().toISOString().slice(0,10)+'.xls';
-
-    /* ─── helpers ─── */
-    function bar(val,max,w){w=w||18;var f=max>0?Math.min(w,Math.max(0,Math.round((val/max)*w))):0;return '▓'.repeat(f)+'░'.repeat(w-f);}
     function countBy(arr,fn){var r={};arr.forEach(function(x){var k=fn(x);r[k]=(r[k]||0)+1;});return r;}
     function etapaNome(g){for(var i=0;i<g.etapas.length;i++){if(g.etapas[i].status==='em_execucao')return g.etapas[i].nome;}return g.etapas[g.etapas.length-1].nome;}
-    function riscoBadge(r){var bg={baixo:'#dcfce7',medio:'#fef9c3',alto:'#ffedd5',critico:'#fee2e2'}[r]||'#eee';var fg={baixo:'#16a34a',medio:'#a16207',alto:'#ea580c',critico:'#b91c1c'}[r]||'#333';return 'background:'+bg+';color:'+fg+';font-weight:bold';}
-    function statusStyle(s){if(s==='Liberada')return 'background:#dcfce7;color:#16a34a';if(s==='Negada')return 'background:#fee2e2;color:#b91c1c';if(s==='Em junta médica')return 'background:#f3e8ff;color:#7e22ce';if(s==='Em análise')return 'background:#e0f2fe;color:#0369a1';if(s.indexOf('Aguardando')>=0)return 'background:#fef9c3;color:#a16207';return '';}
-    function adhStyle(p){return p>=90?'color:#16a34a':p>=70?'color:#a16207':'color:#b91c1c';}
-    function td(content,style,cls){return '<td'+(style?' style="'+style+'"':'')+(cls?' class="'+cls+'"':'')+'>'+(content==null?'':content)+'</td>';}
-    function th(content){return '<td class="hdr">'+content+'</td>';}
 
-    /* ─── CSS ─── */
-    var css=[
-      'body{font-family:Calibri,Arial,sans-serif;font-size:11pt;color:#1a1a1a}',
-      'table{border-collapse:collapse}',
-      '.hdr{background:#054f27;color:#fff;font-weight:bold;padding:8px 12px;border:1px solid #033d1c;font-size:10.5pt;white-space:nowrap;vertical-align:middle}',
-      '.ra{background:#f0faf4;padding:7px 12px;border:1px solid #c8e6d4;vertical-align:top}',
-      '.rb{background:#ffffff;padding:7px 12px;border:1px solid #c8e6d4;vertical-align:top}',
-      '.title-row{background:#054f27;color:#fff;font-size:16pt;font-weight:bold;padding:14px 18px;border:none}',
-      '.sub-row{background:#066b34;color:#d1fae5;font-size:9.5pt;padding:6px 18px;border:none}',
-      '.sec{background:#0a8a43;color:#fff;font-weight:bold;font-size:10pt;padding:8px 12px;border:1px solid #066b34}',
-      '.kv{font-size:18pt;font-weight:bold;color:#054f27;text-align:center;padding:10px 8px;border:1px solid #c8e6d4}',
-      '.kl{font-size:8.5pt;color:#666;text-align:center;padding:4px 8px;background:#f5fbf7;border:1px solid #c8e6d4;font-weight:600;text-transform:uppercase;letter-spacing:.4pt}',
-      '.bar{font-family:Consolas,monospace;font-size:9.5pt;color:#0a8a43;padding:7px 12px;border:1px solid #c8e6d4;letter-spacing:1px}',
-      '.tot{background:#c7eed8;font-weight:bold;padding:7px 12px;border:1px solid #a8d8bb}',
-      '.blank{border:none;padding:6px}',
-    ].join('');
-
-    /* ─── SHEET 1: Guias ─── */
-    var hdr1=['Guia','Beneficiário','CPF','Prestador','Tipo','Fluxo','Etapa Atual','Status','Origem','Aderência','Risco','Dias','Prazo Vencido','OPME','UTI'];
     var adhs=rows.map(function(g){return guiaAderencia(g);});
     var avgAdh=Math.round(adhs.reduce(function(a,b){return a+b;},0)/total);
 
-    var dataRows=rows.map(function(g,i){
-      var cls=i%2===0?'ra':'rb', adh=guiaAderencia(g);
-      return '<tr>'+
-        td('<b>'+esc(g.numero)+'</b>',null,cls)+
-        td(esc(g.beneficiario.nome),null,cls)+
-        td(esc(mask(g.beneficiario.cpf)),'font-size:9pt;color:#888',cls)+
-        td(esc(g.prestadorSol.nome),null,cls)+
-        td(esc(g.tipo.toUpperCase()),'font-weight:500',cls)+
-        td(esc(g.fluxo.nome),'font-size:9.5pt',cls)+
-        td(esc(etapaNome(g)),'font-size:9pt',cls)+
-        td(esc(g.status),statusStyle(g.status),null)+
-        td(esc(g.origem),'font-size:9.5pt',cls)+
-        td(adh+'%','text-align:center;font-weight:bold;'+adhStyle(adh),cls)+
-        td(g.risco.charAt(0).toUpperCase()+g.risco.slice(1),riscoBadge(g.risco)+';text-align:center;padding:7px 12px;border:1px solid #c8e6d4')+
-        td(g.diasAuditoria,'text-align:center',cls)+
-        td(g.prazoVencido?'SIM':'NÃO','text-align:center;font-weight:bold;color:'+(g.prazoVencido?'#b91c1c':'#16a34a'),cls)+
-        td(g.opme?'✓':'—','text-align:center;color:'+(g.opme?'#0a8a43':'#bbb'),cls)+
-        td(g.uti?'✓':'—','text-align:center;color:'+(g.uti?'#0a8a43':'#bbb'),cls)+
-      '</tr>';
-    }).join('');
+    var head1=['Guia','Beneficiário','CPF','Prestador','Tipo','Fluxo','Etapa Atual','Status','Origem','Aderência','Risco','Dias','Prazo Vencido','OPME','UTI'];
+    var rows1=rows.map(function(g){
+      var adh=guiaAderencia(g);
+      return [g.numero, g.beneficiario.nome, mask(g.beneficiario.cpf), g.prestadorSol.nome, g.tipo.toUpperCase(),
+        g.fluxo.nome, etapaNome(g), g.status, g.origem, adh+'%',
+        g.risco.charAt(0).toUpperCase()+g.risco.slice(1), g.diasAuditoria, g.prazoVencido?'SIM':'NÃO',
+        g.opme?'Sim':'Não', g.uti?'Sim':'Não'];
+    });
 
-    var sheet1=
-      '<tr><td colspan="'+hdr1.length+'" class="title-row">RegulaAI Saúde — Relação de Guias</td></tr>'+
-      '<tr><td colspan="'+hdr1.length+'" class="sub-row">Exportado em: '+dt+'   |   Total de guias: '+rows.length+'   |   Aderência média: '+avgAdh+'%</td></tr>'+
-      '<tr>'+hdr1.map(th).join('')+'</tr>'+
-      dataRows+
-      '<tr>'+td('TOTAL','font-weight:bold','tot')+td('','','tot')+td('','','tot')+td('','','tot')+td('','','tot')+td('','','tot')+td('','','tot')+td('','','tot')+td('','','tot')+td(avgAdh+'%','text-align:center;font-weight:bold','tot')+td('','','tot')+td('','','tot')+td(rows.filter(function(g){return g.prazoVencido;}).length+' c/ prazo','text-align:center;font-size:9pt','tot')+td(rows.filter(function(g){return g.opme;}).length+' c/ OPME','text-align:center;font-size:9pt','tot')+td(rows.filter(function(g){return g.uti;}).length+' c/ UTI','text-align:center;font-size:9pt','tot')+'</tr>';
-
-    /* ─── SHEET 2: Indicadores ─── */
     var byStatus=countBy(rows,function(g){return g.status;});
     var byRisco=countBy(rows,function(g){return g.risco;});
     var byFluxo=countBy(rows,function(g){return g.fluxo.nome;});
@@ -2240,129 +2233,30 @@
     var adhBaixa=adhs.filter(function(a){return a>=50&&a<70;}).length;
     var adhCrit=adhs.filter(function(a){return a<50;}).length;
 
-    var COLS2=27; // 1 label + 24 bar segments + count + pct
+    var kpis2=[
+      ['Total de Guias',rows.length],
+      ['Em Análise',byStatus['Em análise']||0],
+      ['Junta Médica',byStatus['Em junta médica']||0],
+      ['Com OPME',rows.filter(function(g){return g.opme;}).length],
+      ['Prazo Vencido',rows.filter(function(g){return g.prazoVencido;}).length],
+      ['Negadas',byStatus['Negada']||0],
+      ['Aderência média',avgAdh+'%']
+    ];
+    var tabStatus={titulo:'Distribuição por Status', head:['Status','Qtd','%'],
+      rows:MOCK.STATUS.filter(function(s){return byStatus[s];}).map(function(s){return [s, byStatus[s], Math.round(byStatus[s]/total*100)+'%'];})};
+    var tabRisco={titulo:'Distribuição por Risco', head:['Risco','Qtd','%'],
+      rows:['baixo','medio','alto','critico'].filter(function(r){return byRisco[r];}).map(function(r){return [r.charAt(0).toUpperCase()+r.slice(1), byRisco[r], Math.round(byRisco[r]/total*100)+'%'];})};
+    var tabAdh={titulo:'Distribuição por Aderência', head:['Faixa','Qtd','%'],
+      rows:[['Alta ≥ 90%',adhAlta,Math.round(adhAlta/total*100)+'%'],['Moderada 70–89%',adhMod,Math.round(adhMod/total*100)+'%'],
+        ['Baixa 50–69%',adhBaixa,Math.round(adhBaixa/total*100)+'%'],['Crítica < 50%',adhCrit,Math.round(adhCrit/total*100)+'%']]};
+    var tabFluxo={titulo:'Ranking de Fluxos', head:['Fluxo','Qtd','%'],
+      rows:Object.keys(byFluxo).sort(function(a,b){return byFluxo[b]-byFluxo[a];}).map(function(k){return [k, byFluxo[k], Math.round(byFluxo[k]/total*100)+'%'];})};
 
-    function statusColor(s){
-      if(s==='Liberada') return '#16a34a';
-      if(s==='Negada') return '#b91c1c';
-      if(s==='Em junta médica') return '#7e22ce';
-      if(s==='Em análise') return '#0369a1';
-      if(s.indexOf('Aguardando')>=0||s.indexOf('Correção')>=0||s.indexOf('Solicitado')>=0) return '#a16207';
-      return '#4b7a59';
-    }
-    function vizBar(val,tot2,color){
-      var W=24,f=tot2>0?Math.min(W,Math.max(0,Math.round(val/tot2*W))):0,h='';
-      for(var i=0;i<W;i++) h+='<td style="background:'+(i<f?color:'#eef2ef')+';width:12px;height:22px;border:1px solid #fff;padding:0;font-size:1pt"> </td>';
-      return h;
-    }
-    function secHdr2(title){
-      return '<tr><td class="blank" colspan="'+COLS2+'"></td></tr>'+
-             '<tr><td colspan="'+COLS2+'" class="sec">'+title+'</td></tr>'+
-             '<tr>'+th('Categoria')+'<td colspan="24" class="hdr" style="text-align:center;letter-spacing:.4pt">Proporção visual</td>'+th('Qtd')+th('%')+'</tr>';
-    }
-    function totRow2(n){
-      return '<tr>'+td('TOTAL','font-weight:bold;padding:6px 10px','tot')+
-             '<td colspan="24" class="tot"></td>'+
-             td(n,'text-align:center;font-weight:bold','tot')+td('100%','text-align:center','tot')+'</tr>';
-    }
-
-    // KPIs
-    var kpiLbls=['Total de Guias','Em Análise','Junta Médica','Com OPME','Prazo Vencido','Negadas'];
-    var kpiVals=[rows.length,byStatus['Em análise']||0,byStatus['Em junta médica']||0,
-      rows.filter(function(g){return g.opme;}).length,
-      rows.filter(function(g){return g.prazoVencido;}).length,
-      byStatus['Negada']||0];
-    var kpiSection=
-      '<tr><td class="blank" colspan="'+COLS2+'"></td></tr>'+
-      '<tr><td colspan="'+COLS2+'" class="sec">▶ INDICADORES EXECUTIVOS</td></tr>'+
-      '<tr>'+kpiLbls.map(function(l){return td(l,'','kl');}).join('')+'</tr>'+
-      '<tr>'+kpiVals.map(function(v){return td(v,'','kv');}).join('')+'</tr>';
-
-    // Por Status
-    var statusSection=
-      secHdr2('▶ GRÁFICO — DISTRIBUIÇÃO POR STATUS')+
-      MOCK.STATUS.filter(function(s){return byStatus[s];}).map(function(s){
-        var c=byStatus[s],p=Math.round(c/total*100);
-        return '<tr>'+td(esc(s),(statusStyle(s)||'padding:6px 10px')+';border:1px solid #c8e6d4')+
-          vizBar(c,total,statusColor(s))+
-          td(c,'text-align:center;font-weight:700;border:1px solid #c8e6d4')+
-          td(p+'%','text-align:center;border:1px solid #c8e6d4')+'</tr>';
-      }).join('')+totRow2(rows.length);
-
-    // Por Risco
-    var riscoSection=
-      secHdr2('▶ GRÁFICO — RISCO REGULATÓRIO')+
-      [{key:'baixo',lbl:'Baixo',  color:'#16a34a',bg:'#dcfce7',fg:'#16a34a'},
-       {key:'medio',lbl:'Médio',  color:'#a16207',bg:'#fef9c3',fg:'#a16207'},
-       {key:'alto', lbl:'Alto',   color:'#ea580c',bg:'#ffedd5',fg:'#ea580c'},
-       {key:'critico',lbl:'Crítico',color:'#b91c1c',bg:'#fee2e2',fg:'#b91c1c'}
-      ].map(function(r){
-        var c=byRisco[r.key]||0,p=Math.round(c/total*100);
-        return '<tr>'+td(r.lbl,'background:'+r.bg+';color:'+r.fg+';font-weight:bold;padding:6px 10px;border:1px solid #c8e6d4')+
-          vizBar(c,total,r.color)+
-          td(c,'text-align:center;font-weight:700;border:1px solid #c8e6d4')+
-          td(p+'%','text-align:center;border:1px solid #c8e6d4')+'</tr>';
-      }).join('')+totRow2(rows.length);
-
-    // Aderência
-    var adhSection=
-      secHdr2('▶ GRÁFICO — ADERÊNCIA REGULATÓRIA')+
-      [{lbl:'Alta ≥ 90%',     cnt:adhAlta, color:'#16a34a',bg:'#dcfce7',fg:'#16a34a'},
-       {lbl:'Moderada 70–89%',cnt:adhMod,  color:'#a16207',bg:'#fef9c3',fg:'#a16207'},
-       {lbl:'Baixa 50–69%',   cnt:adhBaixa,color:'#ea580c',bg:'#ffedd5',fg:'#ea580c'},
-       {lbl:'Crítica < 50%',  cnt:adhCrit, color:'#b91c1c',bg:'#fee2e2',fg:'#b91c1c'}
-      ].map(function(r){
-        var p=Math.round(r.cnt/total*100);
-        return '<tr>'+td(r.lbl,'background:'+r.bg+';color:'+r.fg+';font-weight:bold;padding:6px 10px;border:1px solid #c8e6d4')+
-          vizBar(r.cnt,total,r.color)+
-          td(r.cnt,'text-align:center;font-weight:700;border:1px solid #c8e6d4')+
-          td(p+'%','text-align:center;border:1px solid #c8e6d4')+'</tr>';
-      }).join('')+
-      '<tr>'+td('Média geral: '+avgAdh+'%','font-weight:bold;padding:6px 10px;color:'+(avgAdh>=90?'#16a34a':avgAdh>=70?'#a16207':'#b91c1c'),'tot')+
-      '<td colspan="24" class="tot"></td>'+
-      td(avgAdh+'%','text-align:center;font-size:14pt;font-weight:bold;color:'+(avgAdh>=90?'#16a34a':avgAdh>=70?'#a16207':'#b91c1c'),'tot')+
-      td('','','tot')+'</tr>';
-
-    // Por Fluxo
-    var fluxoColors=['#0a8a43','#0369a1','#7e22ce','#a16207','#ea580c','#b91c1c','#066b34','#1d4ed8'];
-    var fluxoSection=
-      secHdr2('▶ GRÁFICO — RANKING DE FLUXOS')+
-      Object.keys(byFluxo).sort(function(a,b){return byFluxo[b]-byFluxo[a];}).map(function(k,i){
-        var c=byFluxo[k],p=Math.round(c/total*100);
-        return '<tr>'+td(esc(k),'font-size:9.5pt;padding:6px 10px;border:1px solid #c8e6d4')+
-          vizBar(c,total,fluxoColors[i%fluxoColors.length])+
-          td(c,'text-align:center;font-weight:700;border:1px solid #c8e6d4')+
-          td(p+'%','text-align:center;border:1px solid #c8e6d4')+'</tr>';
-      }).join('');
-
-    var sheet2=
-      '<tr><td colspan="'+COLS2+'" class="title-row">RegulaAI Saúde — Indicadores & Gráficos</td></tr>'+
-      '<tr><td colspan="'+COLS2+'" class="sub-row">Exportado em: '+dt+'   |   Base: '+rows.length+' guias   |   Aderência média: '+avgAdh+'%</td></tr>'+
-      kpiSection+statusSection+riscoSection+adhSection+fluxoSection;
-
-    /* ─── HTML Workbook ─── */
-    var xml='<!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets>'+
-      '<x:ExcelWorksheet><x:Name>Guias</x:Name><x:WorksheetOptions><x:Selected/></x:WorksheetOptions></x:ExcelWorksheet>'+
-      '<x:ExcelWorksheet><x:Name>Indicadores</x:Name><x:WorksheetOptions></x:WorksheetOptions></x:ExcelWorksheet>'+
-      '</x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->';
-
-    var html='<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">'+
-      '<head><meta charset="UTF-8"><meta name="ProgId" content="Excel.Sheet">'+xml+
-      '<style>'+css+'</style></head>'+
-      '<body>'+
-        '<table x:Name="Guias">'+sheet1+'</table>'+
-        '<br style="mso-break-type:excel-sheet-break; page-break-before:always">'+
-        '<table x:Name="Indicadores">'+sheet2+'</table>'+
-      '</body></html>';
-
-    var bom='﻿';
-    var blob=new Blob([bom+html],{type:'application/vnd.ms-excel;charset=utf-8'});
-    var a=document.createElement('a');
-    a.href=URL.createObjectURL(blob);
-    a.download=fname;
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(a.href); }, 200);
+    if(!window.RELATORIOS || !window.RELATORIOS.exportarPlanilhaMultiAba){ toast('Módulo de exportação não carregado.','err'); return; }
+    window.RELATORIOS.exportarPlanilhaMultiAba('RegulaAI_'+new Date().toISOString().slice(0,10), [
+      {nome:'Guias', kpis:[], tabelas:[{titulo:'Relação de Guias', head:head1, rows:rows1}]},
+      {nome:'Indicadores', kpis:kpis2, tabelas:[tabStatus, tabRisco, tabAdh, tabFluxo]}
+    ]);
     toast('Excel gerado: '+rows.length+' guias em 2 abas','ok');
   }
 
@@ -3582,26 +3476,15 @@
 
         btnExp.onclick=function(){
           var allData=MOCK.REGRAS_DUT.concat(State.customDutRules);
-          var css2='table{border-collapse:collapse;font-family:Calibri,sans-serif;font-size:11pt}'+
-            'th{background:#0a8a43;color:#fff;padding:8px 12px;border:1px solid #066b34;font-weight:700;text-align:left}'+
-            'td{padding:7px 12px;border:1px solid #c8e6d4;vertical-align:top}'+
-            'tr:nth-child(even) td{background:#f2faf6}';
-          var rows2='<tr><th>Código</th><th>Descrição DUT</th><th>DUT</th><th>Evidência exigida</th><th>Instrução IA</th></tr>';
-          allData.forEach(function(r){
+          var head2=['Código','Descrição DUT','DUT','Evidência exigida','Instrução IA'];
+          var rows2=allData.map(function(r){
             var cod=String(r.cod);
             var dutTxt=(State.vincConfig['duttext|'+cod]&&State.vincConfig['duttext|'+cod].text)||'';
             var instr=(State.vincConfig['dut|'+cod]&&State.vincConfig['dut|'+cod].instr)||'';
-            rows2+='<tr><td>'+esc(cod)+'</td><td>'+esc(r.desc||'')+'</td><td>'+esc(dutTxt)+'</td><td>'+esc(r.evidencia||'')+'</td><td>'+esc(instr)+'</td></tr>';
+            return [cod, r.desc||'', dutTxt, r.evidencia||'', instr];
           });
-          var html2='<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">'+
-            '<head><meta charset="UTF-8"><style>'+css2+'</style></head>'+
-            '<body><table x:Name="Regras DUT">'+rows2+'</table></body></html>';
-          var blob2=new Blob(['﻿'+html2],{type:'application/vnd.ms-excel;charset=utf-8'});
-          var a2=document.createElement('a');
-          a2.href=URL.createObjectURL(blob2);
-          a2.download='regras_dut.xls';
-          document.body.appendChild(a2); a2.click();
-          setTimeout(function(){ document.body.removeChild(a2); URL.revokeObjectURL(a2.href); },200);
+          if(!window.RELATORIOS || !window.RELATORIOS.exportarPlanilhaEstilizada){ toast('Módulo de exportação não carregado.','err'); return; }
+          window.RELATORIOS.exportarPlanilhaEstilizada('Regras DUT', head2, rows2, 'regras_dut');
         };
       }
 
@@ -4846,8 +4729,8 @@
             '<td><span class="'+(perfilCls[u.perfil]||'badge')+'">'+(perfilLabel[u.perfil]||u.perfil)+'</span></td>'+
             '<td><span class="usr-sit '+(ativo?'on':'off')+'">'+ico(ativo?'check-circle-2':'x-circle',12)+' '+(ativo?'Ativo':'Inativo')+'</span></td>'+
             '<td style="text-align:right;white-space:nowrap">'+
-              '<button class="usr-act" data-edit="'+i+'" title="Editar">'+ico('pencil',14)+'</button>'+
-              '<button class="usr-act usr-act-del" data-del="'+i+'" title="Excluir">'+ico('trash-2',14)+'</button>'+
+              '<button class="usr-act" data-edit="'+i+'" title="Editar" aria-label="Editar usuário">'+ico('pencil',14)+'</button>'+
+              '<button class="usr-act usr-act-del" data-del="'+i+'" title="Excluir" aria-label="Excluir usuário">'+ico('trash-2',14)+'</button>'+
             '</td>'+
           '</tr>';
         }).join('');
@@ -4896,35 +4779,55 @@
   }
 
   /* === Modais === */
+  var _modalSeq=0;
   function modal(title, sub, bodyHTML, footHTML){
+    var titleId='modalTitle'+(_modalSeq++);
     var bd=el('div',{class:'modal-backdrop'});
-    var m=el('div',{class:'modal'});
+    var m=el('div',{class:'modal',role:'dialog','aria-modal':'true','aria-labelledby':titleId,tabindex:'-1'});
     m.innerHTML=
       '<div class="modal-header">'+
         '<div class="modal-header-brand">'+
           '<div class="modal-brand-mark">R<span>AI</span></div>'+
           '<div style="min-width:0">'+
-            '<h2>'+title+'</h2>'+
+            '<h2 id="'+titleId+'">'+title+'</h2>'+
             (sub?'<div class="sub">'+sub+'</div>':'')+
           '</div>'+
         '</div>'+
-        '<button class="modal-close" title="Fechar">'+ico('x')+'</button>'+
+        '<button class="modal-close" title="Fechar" aria-label="Fechar">'+ico('x')+'</button>'+
       '</div>'+
       '<div class="modal-body">'+bodyHTML+'</div>'+
       (footHTML?'<div class="modal-foot">'+footHTML+'</div>':'');
     bd.appendChild(m); $('#modalRoot').appendChild(bd);
     document.body.style.overflow='hidden';
     document.body.classList.add('modal-aberto');
+    var _focoAnterior=document.activeElement;
     function closeModal(){
       bd.remove();
       if(!document.querySelector('.modal-backdrop')){
         document.body.style.overflow='';
         document.body.classList.remove('modal-aberto');
       }
+      document.removeEventListener('keydown',onKeydown,true);
+      if(_focoAnterior && _focoAnterior.focus) _focoAnterior.focus();
     }
+    function focaveis(){
+      return $$('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])',m)
+        .filter(function(el2){ return el2.offsetParent!==null; });
+    }
+    function onKeydown(e){
+      if(e.key==='Escape'){ e.stopPropagation(); closeModal(); return; }
+      if(e.key==='Tab'){
+        var itens=focaveis(); if(!itens.length) return;
+        var primeiro=itens[0], ultimo=itens[itens.length-1];
+        if(e.shiftKey && document.activeElement===primeiro){ e.preventDefault(); ultimo.focus(); }
+        else if(!e.shiftKey && document.activeElement===ultimo){ e.preventDefault(); primeiro.focus(); }
+      }
+    }
+    document.addEventListener('keydown',onKeydown,true);
     bd.querySelector('.modal-close').onclick=function(){ closeModal(); };
     bd.onclick=function(e){ if(e.target===bd) closeModal(); };
     lcIcons();
+    setTimeout(function(){ var alvo=focaveis()[0]||m; alvo.focus(); },0);
     return m;
   }
 
@@ -8553,10 +8456,10 @@
     chatHd.innerHTML=
       RAI_AVATAR+
       '<div class="rai-hd-info"><span class="rai-hd-name">RAI</span><span class="rai-hd-sub">Assistente AI</span></div>'+
-      '<button class="manual-chat-maxbtn chat-hd-btn" id="chatHistBtn" title="Conversas anteriores">'+ico('history',14)+'</button>'+
-      '<button class="manual-chat-maxbtn chat-hd-btn" id="chatMaxBtn" title="Expandir" style="margin-left:2px">'+ico('maximize-2',14)+'</button>'+
-      '<button class="manual-chat-maxbtn chat-hd-btn" id="chatMinBtn" title="Minimizar" style="margin-left:2px">'+ico('chevron-down',14)+'</button>'+
-      '<button class="manual-chat-maxbtn chat-hd-btn" id="chatCloseBtn" title="Fechar" style="margin-left:2px">'+ico('x',14)+'</button>';
+      '<button class="manual-chat-maxbtn chat-hd-btn" id="chatHistBtn" title="Conversas anteriores" aria-label="Conversas anteriores">'+ico('history',14)+'</button>'+
+      '<button class="manual-chat-maxbtn chat-hd-btn" id="chatMaxBtn" title="Expandir" aria-label="Expandir" style="margin-left:2px">'+ico('maximize-2',14)+'</button>'+
+      '<button class="manual-chat-maxbtn chat-hd-btn" id="chatMinBtn" title="Minimizar" aria-label="Minimizar" style="margin-left:2px">'+ico('chevron-down',14)+'</button>'+
+      '<button class="manual-chat-maxbtn chat-hd-btn" id="chatCloseBtn" title="Fechar" aria-label="Fechar assistente" style="margin-left:2px">'+ico('x',14)+'</button>';
     chatRoot.appendChild(chatHd);
     lcIcons();
 

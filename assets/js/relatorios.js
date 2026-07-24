@@ -1665,6 +1665,20 @@
     };
   }
 
-  global.RELATORIOS = { view: view, getFiltros: getFiltros };
+  global.RELATORIOS = { view: view, getFiltros: getFiltros,
+    exportarPlanilhaEstilizada: exportarPlanilhaEstilizada, // (nomeAba, head, rows, arq) — 1 aba simples, .xlsx real via ExcelJS, cai para CSV se a lib não estiver carregada
+    exportarPlanilhaMultiAba: function(nomeArq, abas){ // abas: [{nome, kpis:[[label,valor],...], tabelas:[{titulo,head,rows},...]}]
+      if(window.ExcelJS){
+        var wb=new ExcelJS.Workbook(); wb.creator='RegulaAI Saúde'; wb.created=new Date();
+        abas.forEach(function(ab){ _montarWorksheet(wb, ab); });
+        _salvarWorkbook(wb, nomeArq);
+      } else {
+        // fallback: concatena todas as tabelas num único CSV
+        var head=[], rows=[];
+        abas.forEach(function(ab){ (ab.tabelas||[]).forEach(function(t){ if(!head.length) head=t.head; rows=rows.concat(t.rows); }); });
+        baixarCSV(nomeArq, {head:head, rows:rows});
+      }
+    }
+  };
 
 })(window);

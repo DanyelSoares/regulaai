@@ -15,6 +15,9 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:v
 a{color:inherit;text-decoration:none;cursor:pointer}
 button{font-family:inherit;cursor:pointer}
 input,select,textarea{font-family:inherit;font-size:14px}
+/* Indicador de foco genérico — só aparece na navegação por teclado (:focus-visible),
+   nunca no clique do mouse. Componentes com foco próprio (inputs, .btn, .csel-*) sobrescrevem isto. */
+a:focus-visible,button:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--info);outline-offset:2px}
 
 #app{display:grid;grid-template-columns:196px 1fr;min-height:100vh;transition:grid-template-columns .35s cubic-bezier(0.4,0,0.2,1)}
 /* Com modal aberto, oculta o conteúdo da página atrás — evita ver o reflow brusco
@@ -224,7 +227,7 @@ body.pl--blurring .pl--blur-target{filter:blur(5px)}
   color:#fff;font-size:12.5px;width:220px;
 }
 .topbar-search input::placeholder{color:rgba(255,255,255,.5)}
-.topbar-search:focus-within{background:rgba(255,255,255,.2);border-color:rgba(255,255,255,.4)}
+.topbar-search:focus-within{background:rgba(255,255,255,.2);border-color:rgba(255,255,255,.4);box-shadow:0 0 0 2px rgba(255,255,255,.5)}
 /* Usuário */
 .topbar-user{display:flex;align-items:center;gap:9px;padding:5px 10px;border-left:1px solid rgba(255,255,255,.15);min-width:140px;max-width:220px}
 .topbar-avatar{
@@ -254,6 +257,7 @@ body.pl--blurring .pl--blur-target{filter:blur(5px)}
 .btn.warn{background:var(--warn);border-color:var(--warn)}
 .btn.sm{padding:5px 10px;font-size:12px;border-radius:6px}
 .btn[disabled]{opacity:.5;cursor:not-allowed}
+.btn:focus-visible{outline:2px solid var(--info);outline-offset:2px}
 
 /* View */
 .view{padding:22px;max-width:1500px;width:100%}
@@ -639,6 +643,7 @@ body.pl--blurring .pl--blur-target{filter:blur(5px)}
   transition:border-color .2s,box-shadow .2s,background-color .2s;
 }
 .csel-trigger:hover{border-color:var(--g-400);background-color:var(--g-50);box-shadow:0 0 0 3px rgba(47,170,102,.10)}
+.csel-trigger:focus-visible{outline:none;border-color:var(--g-500);box-shadow:0 0 0 3px rgba(47,170,102,.25)}
 .csel.open .csel-trigger{border-color:var(--g-500);box-shadow:0 0 0 3px rgba(47,170,102,.15)}
 .csel-drop{
   display:none;
@@ -660,6 +665,7 @@ body.pl--blurring .pl--blur-target{filter:blur(5px)}
   white-space:nowrap;
 }
 .csel-item:hover{background:var(--g-50);color:var(--g-800)}
+.csel-item:focus-visible{outline:none;background:var(--g-100);color:var(--g-800)}
 .csel-item.active{background:var(--g-100);color:var(--g-700);font-weight:600}
 /* subitem (ex.: subtipos de Internação) — recuo com marcador de árvore */
 .csel-item.csel-sub{padding-left:26px;position:relative;color:var(--g-600);font-size:12px}
@@ -773,6 +779,7 @@ tbody tr:hover{background:#f7fbf8;cursor:pointer}
 .modal-backdrop{position:fixed;top:80px;left:196px;right:0;bottom:0;background:rgba(2,31,16,.6);display:flex;align-items:stretch;justify-content:stretch;padding:0;z-index:50;overflow:hidden;transition:left .35s cubic-bezier(0.4,0,0.2,1)}
 body.sidebar-collapsed .modal-backdrop{left:66px}
 .modal{background:#fff;border-radius:0;width:100%;max-width:none;box-shadow:none;overflow:hidden;border:none;display:flex;flex-direction:column;height:100%;max-height:100%}
+.modal:focus{outline:none}
 .modal-header{flex-shrink:0;display:flex;justify-content:space-between;align-items:center;padding:0 20px;border-bottom:2px solid var(--g-200);background:linear-gradient(135deg,var(--g-700) 0%,var(--g-600) 60%,var(--g-500) 100%);min-height:66px;gap:12px}
 .modal-header-brand{display:flex;align-items:center;gap:10px;flex:1;min-width:0}
 .modal-header-brand .modal-brand-mark{width:32px;height:32px;background:rgba(255,255,255,.18);border-radius:8px;display:flex;align-items:center;justify-content:center;position:relative;font-weight:900;font-size:15px;color:#fff;letter-spacing:-1px;flex-shrink:0;border:1.5px solid rgba(255,255,255,.3)}
@@ -1474,6 +1481,7 @@ body.sidebar-collapsed .modal-backdrop{left:66px}
   .topbar-breadcrumb .tbc-sep{display:none}
   .topbar-breadcrumb .tbc-current{color:#fff;font-weight:800;font-size:17px}
   .topbar-user-info{display:none}
+  .topbar-search{display:none}
   #userAvatar{width:28px!important;height:28px!important;font-size:11px!important}
 
   /* Marca R AI no topbar mobile */

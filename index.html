@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>RegulaAI Saúde — Auditoria Assistencial</title>
-<link rel="stylesheet" href="assets/css/style.css?v=99" />
+<link rel="stylesheet" href="assets/css/style.css?v=100" />
 </head>
 <body>
 <div id="app" class="pl--blur-target">
@@ -75,7 +75,10 @@
         </div>
       </div>
       <div class="topbar-right">
-        <input id="globalSearch" type="text" style="display:none" />
+        <div class="topbar-search">
+          <i data-lucide="search" width="14" height="14"></i>
+          <input id="globalSearch" type="text" placeholder="Buscar guia, beneficiário, prestador…" aria-label="Buscar guias" />
+        </div>
 <div class="topbar-user">
           <div id="userAvatar" style="display:none"></div>
 <div class="topbar-user-info">
@@ -134,7 +137,7 @@
 <script src="assets/js/mock-data.js?v=35"></script>
 <script src="assets/js/solus-adapter.js?v=8"></script>
 <script src="assets/js/ai-engine.js?v=8"></script>
-<script src="assets/js/relatorios.js?v=64"></script>
-<script src="assets/js/app.js?v=145"></script>
+<script src="assets/js/relatorios.js?v=65"></script>
+<script src="assets/js/app.js?v=146"></script>
 </body>
 </html>
