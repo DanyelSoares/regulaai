@@ -1248,6 +1248,11 @@
       '- Exemplo: "Fonoaudiologia especializada, 2x por semana" → qtd:2, periodicidade:"Semanal", descricao:"Fonoaudiologia especializada". '+
       '"Terapia Ocupacional em ABA, 2x por semana" → qtd:2, periodicidade:"Semanal". "Plano terapêutico a cada 4 meses" → qtd:1, periodicidade:"A cada 4 meses". '+
       'Se não houver NENHUMA indicação de frequência no documento para aquele item, use periodicidade:"Não especificado" (nunca deixe vazio, nunca invente um valor).\n\n'+
+      'ATENÇÃO — expanda abreviações e siglas médicas/laboratoriais antes de preencher "descricao":\n'+
+      '- Documentos médicos costumam trazer o procedimento abreviado (ex.: "GA", "ECG", "TC crânio c/ contraste", "USG abd. total", "RM", "TGO", "TSH", "Hemograma c/ plaquetas"). '+
+      'Use seu conhecimento médico para reconhecer a sigla e escrever "descricao" por EXTENSO (nome completo do exame/procedimento), pois é isso que será comparado com a tabela oficial de códigos — a sigla sozinha raramente casa com o nome oficial. '+
+      'Exemplo: "GA" → descricao:"Gasometria arterial"; "ECG" → descricao:"Eletrocardiograma"; "TC crânio c/ contraste" → descricao:"Tomografia computadorizada de crânio com contraste"; "USG abd. total" → descricao:"Ultrassonografia de abdome total".\n'+
+      '- Se a sigla for ambígua ou você não tiver certeza do significado, mantenha o texto original do documento em "descricao" em vez de arriscar uma expansão errada.\n\n'+
       'Liste em "procedimentos" TODOS os itens que serão de fato executados/realizados, um por objeto. Se algum dado não constar, use string vazia "". '+
       'Se o documento trouxer SOMENTE indicação clínica (sem CID) ou SOMENTE o código CID (sem texto de indicação), preencha apenas o campo correspondente e deixe o outro vazio — nunca invente um a partir do outro.';
   }
