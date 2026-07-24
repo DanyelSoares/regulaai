@@ -824,15 +824,24 @@
     // sigla/termo curto exige token isolado (evita "tc" casar dentro de outra palavra); termos maiores usam substring.
     return p.length<=3 ? new RegExp('(^|[^a-z0-9])'+p+'([^a-z0-9]|$)').test(alvo) : alvo.indexOf(p)>=0;
   }
+  var _SIGLAS_CONHECIDAS=['tc','rm','rx','us'];
   function buscarTussCandidatos(nomeBusca, limite){
     limite=limite||15;
     var tabela=global.TUSS_TABELA||[];
     var termo=_normTexto(nomeBusca);
-    var palavras=termo.split(/\s+/).filter(function(p){ return p.length>2 && !_STOPWORDS_PT[p]; });
+    // Tokeniza SEM o filtro de tamanho mínimo primeiro, para não perder siglas de 2 letras (ex.: "tc","rm","rx","us")
+    // que o pedido já traga abreviadas — só depois aplica o filtro de tamanho às palavras que não são sigla conhecida.
+    var todasPalavras=termo.split(/\s+/).filter(function(p){ return p.length>0 && !_STOPWORDS_PT[p]; });
+    var palavras=todasPalavras.filter(function(p){ return p.length>2 || _SIGLAS_CONHECIDAS.indexOf(p)>=0; });
     if(!palavras.length) return [];
     var conceitos=_conceitosBusca(termo, palavras);
-    // Siglas de exame de imagem/diagnóstico presentes no texto buscado (ex.: "tc","rm") — usadas para o bônus de prefixo abaixo.
-    var siglasNoTermo=[]; _SIGLAS_RADIOLOGICAS.forEach(function(par){ if(termo.indexOf(par[0])>=0 && siglasNoTermo.indexOf(par[1])<0) siglasNoTermo.push(par[1]); });
+    // Siglas de exame de imagem/diagnóstico associadas ao texto buscado (ex.: "tc","rm") — usadas no bônus de prefixo abaixo.
+    // Cobre 2 casos: (a) a forma por extenso aparece no termo (ex.: "tomografia computadorizada" → "tc"), e
+    // (b) a própria sigla já vem pronta no pedido (ex.: usuário/IA escreveu "TC TORAX" direto) — sem isso, uma
+    // guia que já chega abreviada ("TC", "RM") nunca ativava o bônus, porque só a forma por extenso disparava.
+    var siglasNoTermo=[];
+    _SIGLAS_RADIOLOGICAS.forEach(function(par){ if(termo.indexOf(par[0])>=0 && siglasNoTermo.indexOf(par[1])<0) siglasNoTermo.push(par[1]); });
+    palavras.forEach(function(p){ if(_SIGLAS_CONHECIDAS.indexOf(p)>=0 && siglasNoTermo.indexOf(p)<0) siglasNoTermo.push(p); });
     var palavrasNaoSigla=palavras.filter(function(p){ return siglasNoTermo.indexOf(p)<0; }); // palavras "de conteúdo" (região anatômica etc.), excluindo a própria sigla
     var pontuados=tabela.map(function(t){
       var alvo=_normTexto(t.desc);
