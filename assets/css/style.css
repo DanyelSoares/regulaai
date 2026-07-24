@@ -2131,4 +2131,6 @@ body.sidebar-collapsed .modal-backdrop{left:66px}
 .idcod-conf-pill{cursor:default}
 .idcod-del-row{background:none;border:none;color:var(--muted);cursor:pointer;padding:4px;border-radius:6px}
 .idcod-del-row:hover{background:var(--danger-soft,#fdecea);color:var(--danger)}
+.idcod-hist-row{cursor:pointer}
+.idcod-hist-row:hover td{background:var(--g-50)}
 .chip-rm:hover{color:var(--danger);background:rgba(220,50,50,.08)}

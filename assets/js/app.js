@@ -1146,13 +1146,44 @@
   }
 
   // ── ID Código — "tradutor" de solicitação médica para código TUSS via IA ──────────
-  var _idCodState={ arquivo:null, dataURL:null, resultado:null, processando:false };
+  var _idCodState={ arquivo:null, dataURL:null, resultado:null, processando:false, aba:'nova' };
   var IDCOD_CONF_LBL={certo:'Identificado',revisar:'Revisar',multipla:'Múltiplas opções',incerto:'Não identificado'};
   var IDCOD_CONF_CLS={certo:'baixo',revisar:'medio',multipla:'alto',incerto:'critico'}; // reaproveita paleta .risk
+
+  // Histórico de solicitações já processadas — permite reconsultar sem reprocessar pela IA.
+  function getIdCodigoHistorico(){
+    try{ return JSON.parse(localStorage.getItem('regula_idcodigo_historico')||'[]'); }catch(e){ return []; }
+  }
+  function salvarIdCodigoHistorico(entrada){
+    var lista=getIdCodigoHistorico();
+    lista.unshift(entrada);
+    if(lista.length>200) lista=lista.slice(0,200); // teto de segurança para o localStorage
+    try{ localStorage.setItem('regula_idcodigo_historico', JSON.stringify(lista)); }catch(e){}
+  }
+  function removerIdCodigoHistorico(id){
+    var lista=getIdCodigoHistorico().filter(function(x){return x.id!==id;});
+    try{ localStorage.setItem('regula_idcodigo_historico', JSON.stringify(lista)); }catch(e){}
+  }
 
   function viewIdCodigo(){
     var wrap=el('div');
     wrap.appendChild(el('div',{class:'page-title'},'<div><h1>'+ico('scan-search',20)+' ID Código</h1><p>Anexe uma solicitação médica e identifique os códigos TUSS correspondentes com apoio de IA.</p></div>'));
+
+    var tabsWrap=el('div',{style:'display:flex;gap:0;margin-bottom:-1px;position:relative;z-index:2'});
+    [['nova',ico('sparkles',13)+' Nova solicitação'],['historico',ico('history',13)+' Histórico']].forEach(function(pair){
+      var btn=el('button',{style:'padding:8px 18px;font-size:13px;font-weight:600;border:1.5px solid var(--g-100);border-bottom:'+(_idCodState.aba===pair[0]?'1.5px solid var(--g-50)':'none')+';border-radius:8px 8px 0 0;background:'+(_idCodState.aba===pair[0]?'var(--g-50)':'#fff')+';color:'+(_idCodState.aba===pair[0]?'var(--g-700)':'var(--muted)')+';cursor:pointer;margin-right:3px;display:flex;align-items:center;gap:6px'},pair[1]);
+      btn.onclick=function(){ _idCodState.aba=pair[0]; render(); };
+      tabsWrap.appendChild(btn);
+    });
+    wrap.appendChild(tabsWrap);
+
+    var box=el('div',{style:'border-radius:0 8px 8px 8px'});
+    wrap.appendChild(box);
+
+    if(_idCodState.aba==='historico'){
+      box.appendChild(renderIdCodigoHistorico());
+      return wrap;
+    }
 
     var panel=el('div',{class:'panel',style:'padding:20px'});
     panel.innerHTML=
@@ -1169,7 +1200,7 @@
         '<button class="btn" id="idcodBtnIdentificar" disabled>'+ico('sparkles',14)+' Identificar códigos</button>'+
       '</div>'+
       '<div id="idcodResultado" style="margin-top:18px"></div>';
-    wrap.appendChild(panel);
+    box.appendChild(panel);
 
     setTimeout(function(){
       var fileEl=$('#idcodFile'), infoEl=$('#idcodFileInfo'), btnId=$('#idcodBtnIdentificar');
@@ -1190,7 +1221,7 @@
         reader.onerror=function(){ toast('Falha ao ler o arquivo.','err'); };
         reader.readAsDataURL(arquivo);
       };
-      btnId.onclick=function(){ processarIdCodigo(wrap); };
+      btnId.onclick=function(){ processarIdCodigo(box); };
     },0);
 
     return wrap;
@@ -1202,8 +1233,12 @@
       'Responda SOMENTE com JSON válido, sem markdown, exatamente neste formato:\n'+
       '{"solicitante":"<nome do médico solicitante>","especialidade":"<especialidade do solicitante, se constar>",'+
       '"crm":"<número do CRM>","crmUf":"<UF do CRM, 2 letras>","paciente":"<nome do paciente>",'+
+      '"indicacaoClinica":"<texto da indicação clínica/hipótese diagnóstica descrita no documento, se houver — apenas o texto descritivo, SEM o código CID>",'+
+      '"cid":"<código CID-10 encontrado no documento, ex. \'J18.9\' — string vazia se não houver nenhum CID>",'+
+      '"cidDescricao":"<significado/descrição oficial do código CID-10 informado em cid, mesmo que o documento não traga a descrição — você já conhece a tabela CID-10; string vazia se cid estiver vazio>",'+
       '"procedimentos":[{"qtd":<número inteiro, padrão 1>,"descricao":"<nome do procedimento/exame exatamente como escrito no documento>"}]}\n'+
-      'Liste TODOS os procedimentos/exames/itens solicitados no documento, um por objeto. Se algum dado não constar, use string vazia "".';
+      'Liste TODOS os procedimentos/exames/itens solicitados no documento, um por objeto. Se algum dado não constar, use string vazia "". '+
+      'Se o documento trouxer SOMENTE indicação clínica (sem CID) ou SOMENTE o código CID (sem texto de indicação), preencha apenas o campo correspondente e deixe o outro vazio — nunca invente um a partir do outro.';
   }
   // Prompt da 2ª passada: para cada procedimento, recebe candidatos TUSS pré-filtrados e escolhe/classifica a confiança
   function _idcodPromptMatching(procedimentos){
@@ -1224,6 +1259,20 @@
   function _idcodParseJson(texto){
     var t=(texto||'').trim().replace(/^```json/i,'').replace(/^```/,'').replace(/```$/,'').trim();
     return JSON.parse(t);
+  }
+
+  // Resolve o significado de um código CID-10 via IA (sem anexo) — usado quando o usuário digita/edita o CID manualmente.
+  async function resolverSignificadoCid(cid){
+    if(!window.getIaCfg || !window.callIAComSistema) return '';
+    var cfg=window.getIaCfg();
+    if(!cfg.key) return '';
+    try{
+      var resp=await window.callIAComSistema(cfg,
+        'Você responde apenas com o significado oficial (descrição) de códigos CID-10, em português, sem explicações adicionais.',
+        'Qual é o significado do código CID-10 "'+cid+'"? Responda APENAS com a descrição oficial, sem repetir o código, sem pontuação final, em uma linha.');
+      if(!resp || !resp.ok) return '';
+      return resp.text.trim().replace(/^["']|["']$/g,'').split('\n')[0];
+    }catch(e){ return ''; }
   }
 
   async function processarIdCodigo(wrap){
@@ -1280,6 +1329,11 @@
 
       _idCodState.resultado=dados;
       renderIdCodigoResultado(wrap, dados);
+      salvarIdCodigoHistorico({
+        id:'idc-'+Date.now(), ts:new Date().toISOString().slice(0,16).replace('T',' '),
+        arquivoNome:(_idCodState.arquivo&&_idCodState.arquivo.name)||'', user:perfilDef[State.perfil].nome,
+        dados: dados
+      });
       logAcao('ID Código — solicitação processada', (_idCodState.arquivo&&_idCodState.arquivo.name)||'');
       toast('Identificação concluída: '+dados.procedimentos.length+' procedimento(s).','ok');
     }catch(e){
@@ -1306,6 +1360,11 @@
           '<div class="field"><label>UF do CRM</label><input type="text" id="idcodCrmUf" maxlength="2" style="text-transform:uppercase" value="'+esc(dados.crmUf||'')+'"></div>'+
         '</div>'+
         '<div class="field"><label>Nome do paciente</label><input type="text" id="idcodPaciente" value="'+esc(dados.paciente||'')+'"></div>'+
+        '<div class="field"><label>Indicação clínica</label><textarea id="idcodIndicacao" rows="2" style="resize:vertical">'+esc(dados.indicacaoClinica||'')+'</textarea></div>'+
+        '<div class="g2">'+
+          '<div class="field"><label>CID</label><input type="text" id="idcodCid" style="text-transform:uppercase" value="'+esc(dados.cid||'')+'"></div>'+
+          '<div class="field"><label>Significado do CID</label><input type="text" id="idcodCidDesc" value="'+esc(dados.cidDescricao||'')+'" placeholder="Preenchido automaticamente ao informar o CID"></div>'+
+        '</div>'+
       '</div>'+
       '<div class="idcod-procs">'+
         '<div class="idcod-procs-hd"><h3>Procedimentos identificados <span class="resumo-mini-cnt">'+procs.length+'</span></h3></div>'+
@@ -1377,6 +1436,19 @@
     $('#idcodCrm').onchange=function(){ dados.crm=this.value; };
     $('#idcodCrmUf').onchange=function(){ dados.crmUf=this.value.toUpperCase(); };
     $('#idcodPaciente').onchange=function(){ dados.paciente=this.value; };
+    $('#idcodIndicacao').onchange=function(){ dados.indicacaoClinica=this.value; };
+    $('#idcodCidDesc').onchange=function(){ dados.cidDescricao=this.value; };
+    var cidInp=$('#idcodCid'), cidDescInp=$('#idcodCidDesc');
+    cidInp.onchange=async function(){
+      var novoCid=this.value.trim().toUpperCase();
+      dados.cid=novoCid;
+      if(!novoCid){ dados.cidDescricao=''; cidDescInp.value=''; return; }
+      cidDescInp.placeholder='Buscando significado…';
+      var desc=await resolverSignificadoCid(novoCid);
+      dados.cidDescricao=desc||'';
+      cidDescInp.value=dados.cidDescricao;
+      cidDescInp.placeholder='Preenchido automaticamente ao informar o CID';
+    };
     $('#idcodNovaSolic').onclick=function(){
       _idCodState={ arquivo:null, dataURL:null, resultado:null, processando:false };
       State.route='idcodigo'; render();
@@ -1399,6 +1471,75 @@
         showDutModal(p.codSelecionado, descBusca, dut);
       });
     });
+  }
+
+  // Histórico de solicitações do ID Código — lista consultável sem reprocessar pela IA
+  function renderIdCodigoHistorico(){
+    var box=el('div',{class:'panel',style:'padding:0'});
+    var lista=getIdCodigoHistorico();
+    if(!lista.length){
+      box.innerHTML='<div class="resumo-mini-empty" style="padding:28px">Nenhuma solicitação processada ainda. Vá em "Nova solicitação" para identificar os códigos de uma guia médica.</div>';
+      return box;
+    }
+    var linhas=lista.map(function(h){
+      var d=h.dados||{};
+      var nProc=(d.procedimentos||[]).length;
+      return '<tr class="idcod-hist-row" data-id="'+esc(h.id)+'">'+
+        '<td>'+esc(h.ts)+'</td>'+
+        '<td>'+esc(h.arquivoNome||'—')+'</td>'+
+        '<td>'+esc(d.paciente||'—')+'</td>'+
+        '<td style="text-align:center">'+nProc+'</td>'+
+        '<td>'+esc(h.user||'—')+'</td>'+
+        '<td style="text-align:center"><button class="idcod-del-row" data-id="'+esc(h.id)+'" title="Remover do histórico" aria-label="Remover do histórico">'+ico('trash-2',14)+'</button></td>'+
+      '</tr>';
+    }).join('');
+    box.innerHTML='<div class="table-wrap"><table class="cfg-table idcod-hist-tbl"><thead><tr>'+
+      '<th>Data</th><th>Arquivo</th><th>Paciente</th><th style="text-align:center">Procedimentos</th><th>Processado por</th><th style="width:40px"></th>'+
+    '</tr></thead><tbody>'+linhas+'</tbody></table></div>';
+    setTimeout(function(){
+      $$('.idcod-hist-row',box).forEach(function(tr){
+        tr.onclick=function(e){
+          if(e.target.closest('.idcod-del-row')) return;
+          var h=getIdCodigoHistorico().filter(function(x){return x.id===tr.getAttribute('data-id');})[0];
+          if(h) showIdCodigoHistoricoModal(h);
+        };
+      });
+      $$('.idcod-del-row',box).forEach(function(btn){
+        btn.onclick=function(e){
+          e.stopPropagation();
+          removerIdCodigoHistorico(btn.getAttribute('data-id'));
+          render();
+        };
+      });
+    },0);
+    return box;
+  }
+
+  function showIdCodigoHistoricoModal(h){
+    var d=JSON.parse(JSON.stringify(h.dados||{})); // cópia local — edições no modal não alteram o histórico salvo
+    var procs=d.procedimentos||[];
+    var body=
+      '<div style="font-size:12px;color:var(--muted);margin-bottom:14px">'+ico('history',12)+' Consulta ao histórico — processado em '+esc(h.ts)+' por '+esc(h.user||'—')+'. Dados abaixo não são reprocessados pela IA.</div>'+
+      '<dl class="kv">'+
+        '<dt>Solicitante</dt><dd>'+esc(d.solicitante||'—')+'</dd>'+
+        '<dt>Especialidade</dt><dd>'+esc(d.especialidade||'—')+'</dd>'+
+        '<dt>CRM/UF</dt><dd>'+esc(d.crm||'—')+(d.crmUf?'/'+esc(d.crmUf):'')+'</dd>'+
+        '<dt>Paciente</dt><dd>'+esc(d.paciente||'—')+'</dd>'+
+        '<dt>Indicação clínica</dt><dd>'+esc(d.indicacaoClinica||'—')+'</dd>'+
+        '<dt>CID</dt><dd>'+(d.cid?esc(d.cid)+' — '+esc(d.cidDescricao||'significado não registrado'):'—')+'</dd>'+
+      '</dl>'+
+      '<div class="table-wrap" style="margin-top:12px"><table class="cfg-table idcod-tbl"><thead><tr>'+
+        '<th style="width:60px">Qtd</th><th style="width:150px">Código TUSS</th><th>Descrição do procedimento</th><th style="width:150px">Confiança</th>'+
+      '</tr></thead><tbody>'+procs.map(function(p){
+        var descOpcao=(p.opcoes||[]).filter(function(o){return o.cod===p.codSelecionado;})[0]||{};
+        var confCls=IDCOD_CONF_CLS[p.confianca]||'critico';
+        var confLbl=IDCOD_CONF_LBL[p.confianca]||'Não identificado';
+        return '<tr><td style="text-align:center">'+(p.qtd||1)+'</td><td style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px">'+esc(p.codSelecionado||'—')+'</td>'+
+          '<td>'+esc(descOpcao.desc||p.descricaoOriginal||'')+'</td>'+
+          '<td><span class="risk '+confCls+'">'+confLbl+'</span></td></tr>';
+      }).join('')+'</tbody></table></div>';
+    var m=modal(ico('scan-search',16)+' ID Código — histórico', esc(h.arquivoNome||''), body, '<button class="btn ghost" id="idcodHistClose">Fechar</button>');
+    m.querySelector('#idcodHistClose').onclick=function(){ m.parentNode.remove(); };
   }
 
   function showDutModal(cod, desc, dut){
