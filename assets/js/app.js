@@ -1192,7 +1192,7 @@
         '<div class="idcod-upload-box" id="idcodDropArea">'+
           ico('upload-cloud',26)+
           '<div class="idcod-upload-tt">Anexar solicitação médica</div>'+
-          '<div class="idcod-upload-sub" id="idcodFileInfo">PDF, JPG ou PNG — até 8 MB</div>'+
+          '<div class="idcod-upload-sub" id="idcodFileInfo">Arraste o arquivo aqui ou clique para escolher — PDF, JPG ou PNG, até 8 MB</div>'+
           '<button class="btn ghost sm" id="idcodBtnEscolher" type="button">'+ico('paperclip',13)+' Escolher arquivo</button>'+
         '</div>'+
       '</div>'+
@@ -1203,11 +1203,9 @@
     box.appendChild(panel);
 
     setTimeout(function(){
-      var fileEl=$('#idcodFile'), infoEl=$('#idcodFileInfo'), btnId=$('#idcodBtnIdentificar');
-      $('#idcodBtnEscolher').onclick=function(){ fileEl.click(); };
-      $('#idcodDropArea').onclick=function(e){ if(e.target.closest('#idcodBtnEscolher')) return; fileEl.click(); };
-      fileEl.onchange=function(){
-        var arquivo=fileEl.files&&fileEl.files[0]||null;
+      var fileEl=$('#idcodFile'), infoEl=$('#idcodFileInfo'), btnId=$('#idcodBtnIdentificar'), dropArea=$('#idcodDropArea');
+
+      function aceitarArquivo(arquivo){
         if(!arquivo) return;
         if(arquivo.size/1048576>8){ toast('Arquivo acima de 8 MB — reduza o tamanho.','warn'); return; }
         var ext=(arquivo.name.split('.').pop()||'').toLowerCase();
@@ -1217,10 +1215,29 @@
           _idCodState.arquivo=arquivo; _idCodState.dataURL=reader.result;
           infoEl.innerHTML=ico('file-check-2',13)+' '+esc(arquivo.name)+' · '+(arquivo.size/1048576).toFixed(2)+' MB';
           btnId.disabled=false;
+          lcIcons();
         };
         reader.onerror=function(){ toast('Falha ao ler o arquivo.','err'); };
         reader.readAsDataURL(arquivo);
-      };
+      }
+
+      $('#idcodBtnEscolher').onclick=function(){ fileEl.click(); };
+      dropArea.onclick=function(e){ if(e.target.closest('#idcodBtnEscolher')) return; fileEl.click(); };
+      fileEl.onchange=function(){ aceitarArquivo(fileEl.files&&fileEl.files[0]||null); };
+
+      // Arrastar e soltar
+      var dragCounter=0; // conta enter/leave para não perder o destaque ao passar por cima de elementos filhos
+      dropArea.addEventListener('dragover',function(e){ e.preventDefault(); e.dataTransfer.dropEffect='copy'; });
+      dropArea.addEventListener('dragenter',function(e){ e.preventDefault(); dragCounter++; dropArea.classList.add('idcod-dragover'); });
+      dropArea.addEventListener('dragleave',function(e){ e.preventDefault(); dragCounter=Math.max(0,dragCounter-1); if(dragCounter===0) dropArea.classList.remove('idcod-dragover'); });
+      dropArea.addEventListener('drop',function(e){
+        e.preventDefault();
+        dragCounter=0; dropArea.classList.remove('idcod-dragover');
+        var arquivo=e.dataTransfer.files&&e.dataTransfer.files[0]||null;
+        if(!arquivo){ toast('Não foi possível ler o arquivo arrastado.','err'); return; }
+        aceitarArquivo(arquivo);
+      });
+
       btnId.onclick=function(){ processarIdCodigo(box); };
     },0);
 
