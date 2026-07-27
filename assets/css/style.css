@@ -2124,8 +2124,10 @@ body.sidebar-collapsed .modal-backdrop{left:66px}
 @keyframes idcod-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 
 /* Layout em 2 colunas: resultado à esquerda, pré-visualização do pedido à direita (fixa, sem precisar rolar) */
-.idcod-split{display:flex;gap:16px;align-items:flex-start}
-.idcod-panel-main{flex:1 1 0;min-width:0}
+.idcod-split{display:flex;gap:16px;align-items:stretch}
+.idcod-panel-main{flex:1 1 0;min-width:0;display:flex;flex-direction:column}
+.idcod-panel-main .idcod-upload{display:flex;flex-direction:column;flex:1 1 auto}
+.idcod-panel-main .idcod-upload-box{flex:1 1 auto;justify-content:center}
 .idcod-panel-doc{
   flex:0 0 480px;position:sticky;top:16px;
   display:flex;align-items:center;justify-content:center;min-height:320px;
