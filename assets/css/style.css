@@ -2177,6 +2177,17 @@ body.sidebar-collapsed .modal-backdrop{left:66px}
   .idcod-scan-line,.idcod-scan-glow,.idcod-scan-tt svg,.idcod-scan-tt i{animation:none}
   .idcod-scan-line{top:50%}
 }
+
+/* Checklist ao vivo dos dados identificados no documento durante a análise (extração) */
+.idcod-checklist{list-style:none;margin:0;padding:0;text-align:left;display:flex;flex-direction:column;gap:7px;max-width:320px;margin:0 auto}
+.idcod-chk-item{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;padding:6px 10px;border-radius:8px;transition:background-color .2s,color .2s}
+.idcod-chk-item.ok{color:var(--g-700);background:var(--g-50)}
+.idcod-chk-item.ok svg,.idcod-chk-item.ok i{color:var(--g-500)}
+.idcod-chk-item.falta{color:#8a1f1f;background:#fdf1f1}
+.idcod-chk-item.falta svg,.idcod-chk-item.falta i{color:#d33}
+.idcod-chk-item.pendente{color:var(--muted);background:#f7f7f8}
+.idcod-chk-item.pendente svg,.idcod-chk-item.pendente i{color:var(--g-200);animation:idcod-spin 1.8s linear infinite}
+@media (prefers-reduced-motion: reduce){ .idcod-chk-item.pendente svg,.idcod-chk-item.pendente i{animation:none} }
 .idcod-admin{background:#fff;border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px 20px;margin-bottom:16px}
 .idcod-admin h3{margin:0 0 12px;font-size:14px}
 .idcod-procs-hd h3{margin:0 0 10px;font-size:14px;display:flex;align-items:center;gap:8px}

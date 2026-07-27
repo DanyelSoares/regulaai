@@ -1255,6 +1255,7 @@
       'Responda SOMENTE com JSON válido, sem markdown, exatamente neste formato:\n'+
       '{"solicitante":"<nome do médico solicitante>","especialidade":"<especialidade do solicitante, se constar>",'+
       '"crm":"<número do CRM>","crmUf":"<UF do CRM, 2 letras>","paciente":"<nome do paciente>",'+
+      '"dataSolicitacao":"<data em que a solicitação/guia foi emitida, no formato DD/MM/AAAA, exatamente como escrita no documento — string vazia se não houver data>",'+
       '"indicacaoClinica":"<texto da indicação clínica/hipótese diagnóstica/motivo do pedido descrito no documento, se houver — apenas o texto descritivo, SEM o código CID>",'+
       '"cid":"<código CID-10 encontrado no documento, ex. \'J18.9\' — string vazia se não houver nenhum CID>",'+
       '"cidDescricao":"<significado/descrição oficial do código CID-10 informado em cid, mesmo que o documento não traga a descrição — você já conhece a tabela CID-10; string vazia se cid estiver vazio>",'+
@@ -1338,6 +1339,53 @@
       (subLabel?'<div class="idcod-scan-sub">'+esc(subLabel)+'</div>':'')+
     '</div>';
   }
+  // Campos do checklist de extração: [rótulo, chave em "dados"]. "Procedimento" é tratado à parte (mostra a contagem).
+  var IDCOD_CHECKLIST_CAMPOS=[
+    ['Nome do paciente','paciente'],
+    ['Indicação clínica','indicacaoClinica'],
+    ['CID','cid'],
+    ['Solicitante','solicitante'],
+    ['Especialidade','especialidade'],
+    ['CRM','crm'],
+    ['UF','crmUf'],
+    ['Data da solicitação','dataSolicitacao']
+  ];
+  // Monta os itens do checklist. Sem "dados" (ou campo ausente do objeto "revelados"), o item fica "pendente" (neutro) —
+  // usado para a animação de revelação em tempo real durante o processamento.
+  function _idcodChecklistItens(dados, revelados){
+    var qtdProc=dados?(dados.procedimentos||[]).length:0;
+    var campos=IDCOD_CHECKLIST_CAMPOS.map(function(c){ return {label:c[1], valor:dados?dados[c[1]]:undefined}; })
+      .concat([{label:'procedimentos', valor:dados?(qtdProc>0?'1':''):undefined, rotuloFixo:'Procedimento ('+qtdProc+')'}]);
+    return campos.map(function(c){
+      var pendente = !dados || (revelados && !revelados[c.label]);
+      var rotulo = c.rotuloFixo || IDCOD_CHECKLIST_CAMPOS.filter(function(x){return x[1]===c.label;})[0][0];
+      var cls = pendente ? 'pendente' : ((c.valor&&String(c.valor).trim())?'ok':'falta');
+      var iconeNome = pendente ? 'circle-dashed' : (cls==='ok'?'check-circle-2':'x-circle');
+      return '<li class="idcod-chk-item '+cls+'" data-campo="'+esc(c.label)+'">'+ico(iconeNome,15)+' '+esc(rotulo)+'</li>';
+    }).join('');
+  }
+  // Checklist ao vivo do que foi identificado no documento, exibido logo após a extração e mantido
+  // visível durante as etapas seguintes (busca TUSS/classificação), com o rótulo da etapa atual embaixo.
+  function _idcodChecklist(dados, etapaLabel, subLabel, revelados){
+    return '<div class="idcod-scan-status">'+
+      '<ul class="idcod-checklist" id="idcodChecklist">'+_idcodChecklistItens(dados, revelados)+'</ul>'+
+      (etapaLabel?'<div class="idcod-scan-tt" style="margin-top:14px">'+ico('scan-search',15)+' '+esc(etapaLabel)+'</div>':'')+
+      (subLabel?'<div class="idcod-scan-sub">'+esc(subLabel)+'</div>':'')+
+    '</div>';
+  }
+  // Revela os itens do checklist um a um (efeito de verificação em tempo real), chamando cb() ao final.
+  function _idcodRevelarChecklist(dados, cb){
+    var campos=IDCOD_CHECKLIST_CAMPOS.map(function(c){return c[1];}).concat(['procedimentos']);
+    var revelados={};
+    campos.forEach(function(nome, idx){
+      setTimeout(function(){
+        revelados[nome]=true;
+        var ul=$('#idcodChecklist');
+        if(ul) ul.outerHTML='<ul class="idcod-checklist" id="idcodChecklist">'+_idcodChecklistItens(dados, revelados)+'</ul>';
+        if(idx===campos.length-1 && cb) cb();
+      }, 130*(idx+1));
+    });
+  }
 
   async function processarIdCodigo(wrap){
     if(_idCodState.processando) return;
@@ -1352,7 +1400,7 @@
     _idCodState.processando=true;
     btnId.disabled=true; btnId.innerHTML=ico('loader',14)+' Lendo documento…'; lcIcons();
     _idcodAtualizarPreview(true); // ativa a linha de scanner no preview (coluna direita)
-    resWrap.innerHTML=_idcodTelaAnalise('Analisando a solicitação…','Extraindo dados administrativos e serviços solicitados'); lcIcons();
+    resWrap.innerHTML=_idcodChecklist(null,'Analisando a solicitação…','Extraindo dados administrativos e serviços solicitados'); lcIcons();
 
     try{
       var sistemaExtracao='Você é um assistente de extração de documentos médicos-administrativos. Responda SOMENTE com o JSON solicitado.';
@@ -1361,22 +1409,26 @@
       var dados=_idcodParseJson(respExtracao.text);
       dados.procedimentos=(dados.procedimentos||[]).map(function(p){ return {qtd:p.qtd||1, periodicidade:p.periodicidade||'Não especificado', descricao:p.descricao||''}; });
 
+      // Revela o checklist campo a campo (efeito de verificação em tempo real) antes de seguir para a busca TUSS.
+      resWrap.innerHTML=_idcodChecklist(dados,'Analisando a solicitação…','Conferindo os dados extraídos do documento', {}); lcIcons();
+      await new Promise(function(resolve){ _idcodRevelarChecklist(dados, resolve); });
+
       if(!dados.procedimentos.length){
+        toast('Nenhum procedimento identificado no documento.','warn');
         _idCodState.resultado=dados;
         renderIdCodigoResultado(wrap, dados);
-        toast('Nenhum procedimento identificado no documento.','warn');
         return;
       }
 
       btnId.innerHTML=ico('loader',14)+' Buscando códigos TUSS…'; lcIcons();
-      resWrap.innerHTML=_idcodTelaAnalise('Comparando com a base TUSS…',((window.TUSS_TABELA||[]).length)+' códigos na base oficial da ANS'); lcIcons();
+      resWrap.innerHTML=_idcodChecklist(dados,'Comparando com a base TUSS…',((window.TUSS_TABELA||[]).length)+' códigos na base oficial da ANS'); lcIcons();
 
       var comCandidatos=dados.procedimentos.map(function(p){
         return {qtd:p.qtd, periodicidade:p.periodicidade, descricao:p.descricao, candidatos:(MOCK.buscarTussCandidatos?MOCK.buscarTussCandidatos(p.descricao,15):[])};
       });
 
       btnId.innerHTML=ico('loader',14)+' Classificando confiança…'; lcIcons();
-      resWrap.innerHTML=_idcodTelaAnalise('Classificando a confiança dos códigos…','Validando '+comCandidatos.length+' procedimento(s) identificado(s)'); lcIcons();
+      resWrap.innerHTML=_idcodChecklist(dados,'Classificando a confiança dos códigos…','Validando '+comCandidatos.length+' procedimento(s) identificado(s)'); lcIcons();
       var sistemaMatch='Você é um especialista em codificação TUSS para auditoria de saúde suplementar. Responda SOMENTE com o JSON solicitado.';
       var respMatch=await window.callIAComSistemaEAnexo(cfg, sistemaMatch, _idcodPromptMatching(comCandidatos), {mime:mime, base64:base64, nome:_idCodState.arquivo.name});
       if(!respMatch.ok) throw new Error(respMatch.text||'Falha na classificação dos códigos.');
@@ -1426,7 +1478,10 @@
           '<div class="field"><label>CRM</label><input type="text" id="idcodCrm" value="'+esc(dados.crm||'')+'"></div>'+
           '<div class="field"><label>UF do CRM</label><input type="text" id="idcodCrmUf" maxlength="2" style="text-transform:uppercase" value="'+esc(dados.crmUf||'')+'"></div>'+
         '</div>'+
-        '<div class="field"><label>Nome do paciente</label><input type="text" id="idcodPaciente" value="'+esc(dados.paciente||'')+'"></div>'+
+        '<div class="g2">'+
+          '<div class="field"><label>Nome do paciente</label><input type="text" id="idcodPaciente" value="'+esc(dados.paciente||'')+'"></div>'+
+          '<div class="field"><label>Data da solicitação</label><input type="text" id="idcodDataSolic" placeholder="DD/MM/AAAA" value="'+esc(dados.dataSolicitacao||'')+'"></div>'+
+        '</div>'+
         '<div class="field"><label>Indicação clínica</label><textarea id="idcodIndicacao" rows="2" style="resize:vertical">'+esc(dados.indicacaoClinica||'')+'</textarea></div>'+
         '<div class="g2">'+
           '<div class="field"><label>CID</label><input type="text" id="idcodCid" style="text-transform:uppercase" value="'+esc(dados.cid||'')+'"></div>'+
@@ -1522,6 +1577,7 @@
     $('#idcodCrm').onchange=function(){ dados.crm=this.value; };
     $('#idcodCrmUf').onchange=function(){ dados.crmUf=this.value.toUpperCase(); };
     $('#idcodPaciente').onchange=function(){ dados.paciente=this.value; };
+    $('#idcodDataSolic').onchange=function(){ dados.dataSolicitacao=this.value; };
     $('#idcodIndicacao').onchange=function(){ dados.indicacaoClinica=this.value; };
     $('#idcodCidDesc').onchange=function(){ dados.cidDescricao=this.value; };
     var cidInp=$('#idcodCid'), cidDescInp=$('#idcodCidDesc');
@@ -1611,6 +1667,7 @@
         '<dt>Especialidade</dt><dd>'+esc(d.especialidade||'—')+'</dd>'+
         '<dt>CRM/UF</dt><dd>'+esc(d.crm||'—')+(d.crmUf?'/'+esc(d.crmUf):'')+'</dd>'+
         '<dt>Paciente</dt><dd>'+esc(d.paciente||'—')+'</dd>'+
+        '<dt>Data da solicitação</dt><dd>'+esc(d.dataSolicitacao||'—')+'</dd>'+
         '<dt>Indicação clínica</dt><dd>'+esc(d.indicacaoClinica||'—')+'</dd>'+
         '<dt>CID</dt><dd>'+(d.cid?esc(d.cid)+' — '+esc(d.cidDescricao||'significado não registrado'):'—')+'</dd>'+
       '</dl>'+
