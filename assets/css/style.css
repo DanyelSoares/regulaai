@@ -2127,26 +2127,27 @@ body.sidebar-collapsed .modal-backdrop{left:66px}
 .idcod-split{display:flex;gap:16px;align-items:flex-start}
 .idcod-panel-main{flex:1 1 0;min-width:0}
 .idcod-panel-doc{
-  flex:0 0 340px;position:sticky;top:16px;
-  display:flex;align-items:center;justify-content:center;min-height:200px;
+  flex:0 0 480px;position:sticky;top:16px;
+  display:flex;align-items:center;justify-content:center;min-height:320px;
   background:#fff;border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
-  padding:20px;
+  padding:24px;
+  max-height:calc(100vh - 32px);overflow:auto;
 }
-.idcod-panel-doc-vazio{text-align:center;color:var(--muted);font-size:12px;padding:20px}
-.idcod-panel-doc-vazio svg,.idcod-panel-doc-vazio i{color:var(--g-300);margin-bottom:6px}
-@media (max-width:960px){
+.idcod-panel-doc-vazio{text-align:center;color:var(--muted);font-size:13px;padding:40px 20px}
+.idcod-panel-doc-vazio svg,.idcod-panel-doc-vazio i{color:var(--g-300);margin-bottom:8px}
+@media (max-width:1180px){
   .idcod-split{flex-direction:column}
-  .idcod-panel-doc{position:static;flex:1 1 auto;width:100%}
+  .idcod-panel-doc{position:static;flex:1 1 auto;width:100%;max-height:none}
 }
 
 /* Tela de análise: pré-visualização do documento anexado com efeito de scanner enquanto a IA processa */
 .idcod-scan-doc{
   position:relative;overflow:hidden;border-radius:10px;
   border:1.5px solid var(--g-200);box-shadow:0 6px 24px rgba(4,54,27,.12);
-  max-width:360px;width:100%;background:#fff;
+  max-width:100%;width:100%;background:#fff;
 }
-.idcod-scan-doc img{display:block;width:100%;height:auto;max-height:460px;object-fit:contain;background:#f5f8f6}
-.idcod-scan-doc iframe{display:block;width:100%;height:460px;border:0;pointer-events:none}
+.idcod-scan-doc img{display:block;width:100%;height:auto;max-height:780px;object-fit:contain;background:#f5f8f6}
+.idcod-scan-doc iframe{display:block;width:100%;height:780px;border:0;pointer-events:none}
 .idcod-scan-line{
   position:absolute;left:0;right:0;top:0;height:3px;
   background:linear-gradient(90deg,transparent,var(--g-500) 20%,#7be0a8 50%,var(--g-500) 80%,transparent);
