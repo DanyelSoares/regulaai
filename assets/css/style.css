@@ -2123,8 +2123,23 @@ body.sidebar-collapsed .modal-backdrop{left:66px}
 .idcod-loading svg{animation:idcod-spin 1s linear infinite}
 @keyframes idcod-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 
+/* Layout em 2 colunas: resultado à esquerda, pré-visualização do pedido à direita (fixa, sem precisar rolar) */
+.idcod-split{display:flex;gap:16px;align-items:flex-start}
+.idcod-panel-main{flex:1 1 0;min-width:0}
+.idcod-panel-doc{
+  flex:0 0 340px;position:sticky;top:16px;
+  display:flex;align-items:center;justify-content:center;min-height:200px;
+  background:#fff;border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
+  padding:20px;
+}
+.idcod-panel-doc-vazio{text-align:center;color:var(--muted);font-size:12px;padding:20px}
+.idcod-panel-doc-vazio svg,.idcod-panel-doc-vazio i{color:var(--g-300);margin-bottom:6px}
+@media (max-width:960px){
+  .idcod-split{flex-direction:column}
+  .idcod-panel-doc{position:static;flex:1 1 auto;width:100%}
+}
+
 /* Tela de análise: pré-visualização do documento anexado com efeito de scanner enquanto a IA processa */
-.idcod-scan-wrap{display:flex;flex-direction:column;align-items:center;gap:18px;padding:28px 20px}
 .idcod-scan-doc{
   position:relative;overflow:hidden;border-radius:10px;
   border:1.5px solid var(--g-200);box-shadow:0 6px 24px rgba(4,54,27,.12);

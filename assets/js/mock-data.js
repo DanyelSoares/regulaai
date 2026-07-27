@@ -820,9 +820,11 @@
       return siglaDe[p] ? [p, siglaDe[p]] : [p];
     });
   }
+  function _escapeRegex(s){ return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); }
   function _bateForma(alvo, p){
     // sigla/termo curto exige token isolado (evita "tc" casar dentro de outra palavra); termos maiores usam substring.
-    return p.length<=3 ? new RegExp('(^|[^a-z0-9])'+p+'([^a-z0-9]|$)').test(alvo) : alvo.indexOf(p)>=0;
+    // Escapa caracteres especiais de regex (ex.: parênteses vindos de tokens como "(at)" partidos por pontuação do texto original).
+    return p.length<=3 ? new RegExp('(^|[^a-z0-9])'+_escapeRegex(p)+'([^a-z0-9]|$)').test(alvo) : alvo.indexOf(p)>=0;
   }
   var _SIGLAS_CONHECIDAS=['tc','rm','rx','us'];
   function buscarTussCandidatos(nomeBusca, limite){

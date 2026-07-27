@@ -1185,7 +1185,8 @@
       return wrap;
     }
 
-    var panel=el('div',{class:'panel',style:'padding:20px'});
+    var split=el('div',{class:'idcod-split'});
+    var panel=el('div',{class:'panel idcod-panel-main',style:'padding:20px'});
     panel.innerHTML=
       '<div class="idcod-upload" id="idcodUpload">'+
         '<input type="file" id="idcodFile" accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none">'+
@@ -1200,7 +1201,10 @@
         '<button class="btn" id="idcodBtnIdentificar" disabled>'+ico('sparkles',14)+' Identificar códigos</button>'+
       '</div>'+
       '<div id="idcodResultado" style="margin-top:18px"></div>';
-    box.appendChild(panel);
+    var painelDoc=el('div',{class:'panel idcod-panel-doc',id:'idcodPreviewSlot'});
+    painelDoc.innerHTML=_idcodPreviewAnexo(false);
+    split.appendChild(panel); split.appendChild(painelDoc);
+    box.appendChild(split);
 
     setTimeout(function(){
       var fileEl=$('#idcodFile'), infoEl=$('#idcodFileInfo'), btnId=$('#idcodBtnIdentificar'), dropArea=$('#idcodDropArea');
@@ -1215,6 +1219,7 @@
           _idCodState.arquivo=arquivo; _idCodState.dataURL=reader.result;
           infoEl.innerHTML=ico('file-check-2',13)+' '+esc(arquivo.name)+' · '+(arquivo.size/1048576).toFixed(2)+' MB';
           btnId.disabled=false;
+          _idcodAtualizarPreview(false);
           lcIcons();
         };
         reader.onerror=function(){ toast('Falha ao ler o arquivo.','err'); };
@@ -1312,22 +1317,25 @@
     }catch(e){ return ''; }
   }
 
-  // Preview do documento anexado com efeito de "scanner" (linha animada) por cima, exibido durante o processamento.
+  // Preview do documento anexado — coluna direita fixa, sempre visível (não precisa rolar para ver o pedido).
   // Imagem: <img> direto do dataURL. PDF: <iframe> (renderização nativa do navegador) — mais fiel que um ícone genérico.
-  function _idcodPreviewAnexo(){
+  // scanAtivo=true acrescenta a linha de scanner animada por cima (só enquanto a IA está processando).
+  function _idcodPreviewAnexo(scanAtivo){
+    if(!_idCodState.dataURL) return '<div class="idcod-panel-doc-vazio">'+ico('file-search-2',26)+'<div>A pré-visualização do pedido aparece aqui após anexar o arquivo.</div></div>';
     var dataURL=_idCodState.dataURL, mime=(dataURL.match(/^data:([^;]+);/)||[])[1]||'';
     var conteudo = /^image\//.test(mime)
       ? '<img src="'+dataURL+'" alt="Pré-visualização da solicitação anexada">'
       : '<iframe src="'+dataURL+'" title="Pré-visualização da solicitação anexada"></iframe>';
-    return '<div class="idcod-scan-doc">'+conteudo+'<div class="idcod-scan-line"></div><div class="idcod-scan-glow"></div></div>';
+    return '<div class="idcod-scan-doc">'+conteudo+(scanAtivo?'<div class="idcod-scan-line"></div><div class="idcod-scan-glow"></div>':'')+'</div>';
+  }
+  // Atualiza só a coluna direita (chamado quando um novo arquivo é anexado, sem precisar re-renderizar tudo).
+  function _idcodAtualizarPreview(scanAtivo){
+    var alvo=$('#idcodPreviewSlot'); if(alvo) alvo.innerHTML=_idcodPreviewAnexo(scanAtivo);
   }
   function _idcodTelaAnalise(etapaLabel, subLabel){
-    return '<div class="idcod-scan-wrap">'+
-      _idcodPreviewAnexo()+
-      '<div class="idcod-scan-status">'+
-        '<div class="idcod-scan-tt">'+ico('scan-search',15)+' '+esc(etapaLabel)+'</div>'+
-        (subLabel?'<div class="idcod-scan-sub">'+esc(subLabel)+'</div>':'')+
-      '</div>'+
+    return '<div class="idcod-scan-status">'+
+      '<div class="idcod-scan-tt">'+ico('scan-search',15)+' '+esc(etapaLabel)+'</div>'+
+      (subLabel?'<div class="idcod-scan-sub">'+esc(subLabel)+'</div>':'')+
     '</div>';
   }
 
@@ -1343,6 +1351,7 @@
     var btnId=$('#idcodBtnIdentificar'), resWrap=$('#idcodResultado');
     _idCodState.processando=true;
     btnId.disabled=true; btnId.innerHTML=ico('loader',14)+' Lendo documento…'; lcIcons();
+    _idcodAtualizarPreview(true); // ativa a linha de scanner no preview (coluna direita)
     resWrap.innerHTML=_idcodTelaAnalise('Analisando a solicitação…','Extraindo dados administrativos e serviços solicitados'); lcIcons();
 
     try{
@@ -1398,6 +1407,7 @@
       toast('Erro ao identificar códigos.','err');
     }finally{
       _idCodState.processando=false;
+      _idcodAtualizarPreview(false); // desliga a linha de scanner ao concluir/errar
       btnId.disabled=false; btnId.innerHTML=ico('sparkles',14)+' Identificar códigos'; lcIcons();
     }
   }
