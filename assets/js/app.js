@@ -1452,12 +1452,9 @@
     var temMultiplas=opcoes.length>1;
     var codCell;
     if(temMultiplas){
-      var posAtual=opcoes.map(function(o){return o.cod;}).indexOf(p.codSelecionado);
-      if(posAtual<0) posAtual=0;
       codCell='<select class="idcod-cod-sel" data-idx="'+i+'">'+opcoes.map(function(o){
         return '<option value="'+esc(o.cod)+'"'+(o.cod===p.codSelecionado?' selected':'')+'>'+esc(o.cod)+'</option>';
-      }).join('')+'</select>'+
-      '<span class="idcod-opcoes-cnt" title="'+opcoes.length+' códigos possíveis — selecione o correto no campo acima">'+ico('list-checks',11)+' '+(posAtual+1)+' de '+opcoes.length+'</span>';
+      }).join('')+'</select>';
     } else {
       codCell='<input type="text" class="idcod-cod-input" data-idx="'+i+'" value="'+esc(p.codSelecionado||'')+'" placeholder="—">';
     }
