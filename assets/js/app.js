@@ -9045,7 +9045,7 @@
     chatHd.innerHTML=
       RAI_AVATAR+
       '<div class="rai-hd-info"><span class="rai-hd-name">RAI</span><span class="rai-hd-sub">Assistente AI</span></div>'+
-      (vozDisponivel()?'<button class="manual-chat-maxbtn chat-hd-btn" id="chatVozBtn" title="Respostas em voz: desligado" aria-label="Alternar respostas em voz" aria-pressed="false">'+ico('volume-x',14)+'</button>':'')+
+      (vozDisponivel()?'<button class="manual-chat-maxbtn chat-hd-btn" id="chatVozBtn" title="Conversa por voz" aria-label="Abrir conversa por voz">'+ico('audio-lines',14)+'</button>':'')+
       '<button class="manual-chat-maxbtn chat-hd-btn" id="chatHistBtn" title="Conversas anteriores" aria-label="Conversas anteriores">'+ico('history',14)+'</button>'+
       '<button class="manual-chat-maxbtn chat-hd-btn" id="chatMaxBtn" title="Expandir" aria-label="Expandir" style="margin-left:2px">'+ico('maximize-2',14)+'</button>'+
       '<button class="manual-chat-maxbtn chat-hd-btn" id="chatMinBtn" title="Minimizar" aria-label="Minimizar" style="margin-left:2px">'+ico('chevron-down',14)+'</button>'+
@@ -9062,12 +9062,6 @@
 
     var chatFoot=el('div',{class:'manual-chat-foot'});
     var chatInp=el('textarea',{class:'manual-chat-inp',placeholder:'Digite sua mensagem...',rows:'1'});
-    var chatMicBtn=null;
-    if(vozDisponivel() && SpeechRec){
-      chatMicBtn=el('button',{class:'manual-chat-mic',title:'Falar com a RAI'});
-      chatMicBtn.innerHTML=ico('mic',15);
-      chatFoot.appendChild(chatMicBtn);
-    }
     var chatSend=el('button',{class:'manual-chat-send',title:'Enviar'});
     chatSend.innerHTML=ico('send',15);
     chatFoot.appendChild(chatInp);
@@ -9282,11 +9276,12 @@
     var _elAudioAtual=null;
     function pararFala(){ if(_elAudioAtual){ _elAudioAtual.pause(); _elAudioAtual=null; } }
     // Converte texto em áudio via ElevenLabs TTS e toca. Remove markdown básico antes de enviar (não deve ser falado literalmente).
+    // Retorna o elemento <audio> em reprodução (ou null em falha) — a sala de voz usa a referência para ligar o analisador de amplitude.
     async function falarTexto(texto){
       var cfg=getElCfg();
-      if(!cfg.key || !cfg.voice) return;
+      if(!cfg.key || !cfg.voice) return null;
       var limpo=String(texto||'').replace(/<<<[\s\S]*?>>>/g,'').replace(/[*_`#]/g,'').trim();
-      if(!limpo) return;
+      if(!limpo) return null;
       try{
         pararFala();
         var r=await fetch('https://api.elevenlabs.io/v1/text-to-speech/'+encodeURIComponent(cfg.voice),{
@@ -9294,12 +9289,13 @@
           headers:{'Content-Type':'application/json','xi-api-key':cfg.key,'Accept':'audio/mpeg'},
           body:JSON.stringify({text:limpo, model_id:'eleven_multilingual_v2', voice_settings:{stability:0.5, similarity_boost:0.75}})
         });
-        if(!r.ok) return;
+        if(!r.ok) return null;
         var blob=await r.blob();
         var url=URL.createObjectURL(blob);
         _elAudioAtual=new Audio(url);
         _elAudioAtual.play().catch(function(){});
-      }catch(e){}
+        return _elAudioAtual;
+      }catch(e){ return null; }
     }
 
     // Reconhecimento de fala (Web Speech API, nativa do navegador — Chrome/Edge). Sem chave, sem custo.
@@ -9313,6 +9309,11 @@
       rec.onend=function(){ if(onEnd) onEnd(); };
       return rec;
     }
+
+    window.vozDisponivel=vozDisponivel;
+    window.falarTexto=falarTexto;
+    window.pararFala=pararFala;
+    window.criarReconhecimento=criarReconhecimento;
 
     // Chama a API do provedor selecionado; history no formato canônico Gemini
     // ({role:'user'|'model', parts:[{text} | {media:{mime,base64}}]}). Suporta anexos (imagem/PDF) via visão.
@@ -9456,6 +9457,7 @@
     window.callIAComSistemaEAnexo=callIAComSistemaEAnexo;
     window.resumoGuiaTexto=resumoGuiaTexto;
     window.ctxTecnico=ctxTecnico;
+    window.ctxSistemaVoz=CTX_SISTEMA;
 
     // Executa um turno de conversa: monta a mensagem (anexando o conteúdo dos anexos na 1ª vez), chama a IA e mostra a resposta.
     // baseText: texto da mensagem. mostrarUser: se true, ecoa a mensagem no chat. opts.reusarSalvos: reprocessar sem reler anexos já lidos.
@@ -9530,7 +9532,6 @@
           }
           chatHistory.push({role:'model',parts:[{text:textoExibir}]});
           addMsg('bot',textoExibir);
-          if(vozAtiva && vozDisponivel()) falarTexto(textoExibir);
           if(anexosEnviadosAgora.length && chatGuia){ marcarAnexosAnalisados(chatGuia, anexosEnviadosAgora); }
         } else {
           addMsg('bot','❌ '+res.text);
@@ -9593,45 +9594,12 @@
       chatInp.focus();
     };
 
-    // Toggle "responder em voz" — só existe no DOM quando vozDisponivel() (Gestor/Administrador + chave ElevenLabs configurada)
-    var vozAtiva=localStorage.getItem('regula_voz_ativa')==='1';
+    // Botão "Conversa por voz" no header — abre a sala de voz separada (persistente, minimizável, com a esfera reativa)
     var chatVozBtn=chatHd.querySelector('#chatVozBtn');
     if(chatVozBtn){
-      function syncVozBtn(){
-        chatVozBtn.classList.toggle('active',vozAtiva);
-        chatVozBtn.innerHTML=ico(vozAtiva?'volume-2':'volume-x',14);
-        chatVozBtn.title='Respostas em voz: '+(vozAtiva?'ligado':'desligado');
-        chatVozBtn.setAttribute('aria-pressed',vozAtiva?'true':'false');
-        lcIcons();
-      }
-      syncVozBtn();
       chatVozBtn.onclick=function(e){
         e.stopPropagation();
-        vozAtiva=!vozAtiva;
-        localStorage.setItem('regula_voz_ativa',vozAtiva?'1':'0');
-        if(!vozAtiva) pararFala();
-        syncVozBtn();
-      };
-    }
-
-    // Botão de microfone — grava a fala, transcreve (Web Speech API) e envia como mensagem normal
-    if(chatMicBtn){
-      var reconhecendo=false;
-      var recAtivo=criarReconhecimento(function(transcricao){
-        chatInp.value=transcricao;
-        sendChat();
-      }, function(){
-        reconhecendo=false;
-        chatMicBtn.classList.remove('gravando');
-        chatMicBtn.innerHTML=ico('mic',15); lcIcons();
-      });
-      chatMicBtn.onclick=function(){
-        if(!recAtivo) return;
-        if(reconhecendo){ recAtivo.stop(); return; }
-        reconhecendo=true;
-        chatMicBtn.classList.add('gravando');
-        chatMicBtn.innerHTML=ico('mic',15); lcIcons();
-        try{ recAtivo.start(); }catch(e){ reconhecendo=false; chatMicBtn.classList.remove('gravando'); }
+        if(window.abrirSalaVoz) window.abrirSalaVoz();
       };
     }
 
@@ -9710,6 +9678,286 @@
       chatRoot.classList.add('chat-open');
       syncBodyState();
     }
+  })();
+
+  // ── Sala de voz — painel persistente separado do chat de texto, com esfera reativa ao áudio ──
+  // Exclusiva de Gestor/Administrador com chave ElevenLabs configurada (window.vozDisponivel()).
+  (function initSalaVoz(){
+    var vozRoot=$('#vozRoot');
+    if(!vozRoot || !window.vozDisponivel || !window.vozDisponivel()) return;
+
+    vozRoot.className='voz-room';
+    var RAI_AVATAR='<div class="rai-avatar-wrap"><img class="rai-avatar-img" src="img/rai-avatar.png" alt="RAI" /></div>';
+
+    var hd=el('div',{class:'voz-hd'});
+    hd.innerHTML=
+      RAI_AVATAR+
+      '<div class="rai-hd-info"><span class="rai-hd-name">RAI</span><span class="rai-hd-sub">Conversa por voz</span></div>'+
+      '<button class="manual-chat-maxbtn voz-hd-btn" id="vozMinBtn" title="Minimizar" aria-label="Minimizar" style="margin-left:2px">'+ico('chevron-down',14)+'</button>'+
+      '<button class="manual-chat-maxbtn voz-hd-btn" id="vozCloseBtn" title="Fechar" aria-label="Fechar sala de voz" style="margin-left:2px">'+ico('x',14)+'</button>';
+    vozRoot.appendChild(hd);
+
+    var body=el('div',{class:'voz-body'});
+    body.innerHTML=
+      '<div class="voz-esfera-wrap"><canvas id="vozCanvas" width="220" height="220"></canvas></div>'+
+      '<div class="voz-status" id="vozStatus">Toque no microfone para falar</div>'+
+      '<div class="voz-transcricao" id="vozTranscricao"></div>';
+    vozRoot.appendChild(body);
+
+    var foot=el('div',{class:'voz-foot',style:'flex-direction:column;gap:10px'});
+    var micRow=el('div',{style:'display:flex;justify-content:center'});
+    var micBtn=el('button',{class:'voz-mic-btn',id:'vozMicBtn',title:'Falar com a RAI'});
+    micBtn.innerHTML=ico('mic',24);
+    micRow.appendChild(micBtn);
+    foot.appendChild(micRow);
+    var continuaRow=el('label',{class:'voz-continua-toggle'});
+    continuaRow.innerHTML='<input type="checkbox" id="vozContinuaChk"> <span>Conversa contínua (mãos-livres)</span>';
+    foot.appendChild(continuaRow);
+    vozRoot.appendChild(foot);
+    lcIcons();
+
+    // ── Desenho da esfera reativa (canvas 2D, pontos distribuídos numa esfera, deslocados pela amplitude do áudio) ──
+    var canvas=$('#vozCanvas',vozRoot), ctx2d=canvas.getContext('2d');
+    var DPR=Math.min(window.devicePixelRatio||1,2);
+    canvas.width=220*DPR; canvas.height=220*DPR;
+    var pontos=(function(){
+      // Distribuição em espiral de Fibonacci sobre uma esfera — visual uniforme sem acúmulo nos polos.
+      var n=340, arr=[], golden=Math.PI*(3-Math.sqrt(5));
+      for(var i=0;i<n;i++){
+        var y=1-(i/(n-1))*2, r=Math.sqrt(1-y*y), theta=golden*i;
+        arr.push({x:Math.cos(theta)*r, y:y, z:Math.sin(theta)*r});
+      }
+      return arr;
+    })();
+    var rotY=0, nivelAtual=0, corAtual='verde'; // 'verde'=usuário falando, 'ciano'=RAI respondendo
+    function corDoPonto(alpha, tom){
+      return tom==='ciano' ? 'rgba(110,231,240,'+alpha+')' : 'rgba(74,222,128,'+alpha+')';
+    }
+    function desenharEsfera(){
+      var W=canvas.width, H=canvas.height, cx=W/2, cy=H/2, raioBase=W*0.34;
+      ctx2d.clearRect(0,0,W,H);
+      rotY+=0.006;
+      var nivel=nivelAtual; // 0..1, suavizado por quem chama
+      var lista=pontos.map(function(p){
+        var cosA=Math.cos(rotY), sinA=Math.sin(rotY);
+        var x=p.x*cosA - p.z*sinA, z=p.x*sinA + p.z*cosA;
+        var desloc=1 + nivel*0.55*Math.abs(Math.sin(p.y*6 + rotY*3));
+        var raio=raioBase*desloc;
+        var persp=1/(1.6 - z*0.5);
+        return {sx:cx + x*raio*persp, sy:cy + p.y*raio*persp, z:z, persp:persp};
+      }).sort(function(a,b){ return a.z-b.z; });
+      lista.forEach(function(p){
+        var alpha=0.25 + 0.55*((p.z+1)/2);
+        var tam=(1.1 + nivel*1.6) * p.persp * DPR;
+        ctx2d.beginPath();
+        ctx2d.arc(p.sx,p.sy,Math.max(tam,0.6),0,Math.PI*2);
+        ctx2d.fillStyle=corDoPonto(alpha.toFixed(2), corAtual);
+        ctx2d.fill();
+      });
+      // brilho central, mais intenso quanto maior o nível de áudio
+      var grad=ctx2d.createRadialGradient(cx,cy,0,cx,cy,raioBase*(1+nivel*0.6));
+      grad.addColorStop(0, corDoPonto(0.10+nivel*0.18,corAtual));
+      grad.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx2d.fillStyle=grad;
+      ctx2d.fillRect(0,0,W,H);
+      _rafId=requestAnimationFrame(desenharEsfera);
+    }
+    var _rafId=null;
+    function iniciarDesenho(){ if(!_rafId) desenharEsfera(); }
+    function pararDesenho(){ if(_rafId){ cancelAnimationFrame(_rafId); _rafId=null; } nivelAtual=0; }
+
+    // ── Web Audio API: mede a amplitude do áudio (microfone OU resposta da RAI) e alimenta "nivelAtual" ──
+    var audioCtx=null;
+    function getAudioCtx(){
+      if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+      return audioCtx;
+    }
+    var _micStream=null, _micAnalyser=null, _micRaf=null;
+    function medirNivel(analyser, dataArr, tom){
+      corAtual=tom;
+      analyser.getByteFrequencyData(dataArr);
+      var soma=0; for(var i=0;i<dataArr.length;i++) soma+=dataArr[i];
+      var media=soma/dataArr.length/255; // 0..1
+      nivelAtual += (media-nivelAtual)*0.35; // suaviza (evita "tremida" abrupta)
+    }
+    function ligarAnalyserNoMic(stream){
+      var ac=getAudioCtx();
+      var src=ac.createMediaStreamSource(stream);
+      var analyser=ac.createAnalyser();
+      analyser.fftSize=128;
+      src.connect(analyser);
+      var dataArr=new Uint8Array(analyser.frequencyBinCount);
+      _micAnalyser={analyser:analyser, src:src};
+      (function loop(){
+        if(!_micAnalyser) return;
+        medirNivel(analyser,dataArr,'verde');
+        _micRaf=requestAnimationFrame(loop);
+      })();
+    }
+    function desligarAnalyserDoMic(){
+      if(_micRaf){ cancelAnimationFrame(_micRaf); _micRaf=null; }
+      _micAnalyser=null;
+    }
+    function ligarAnalyserNoAudio(audioEl){
+      try{
+        var ac=getAudioCtx();
+        var src=ac.createMediaElementSource(audioEl);
+        var analyser=ac.createAnalyser();
+        analyser.fftSize=128;
+        src.connect(analyser); analyser.connect(ac.destination);
+        var dataArr=new Uint8Array(analyser.frequencyBinCount);
+        var raf=null;
+        (function loop(){
+          if(audioEl.paused || audioEl.ended){ nivelAtual=0; return; }
+          medirNivel(analyser,dataArr,'ciano');
+          raf=requestAnimationFrame(loop);
+        })();
+        audioEl.addEventListener('ended',function(){ if(raf) cancelAnimationFrame(raf); nivelAtual=0; },{once:true});
+      }catch(e){ /* alguns navegadores não permitem reconectar a mesma <audio> a dois grafos — falha silenciosa, esfera fica neutra */ }
+    }
+
+    // ── Fluxo de conversa: push-to-talk (clique inicia, clique de novo encerra e envia) ──
+    var statusEl=$('#vozStatus',vozRoot), transcEl=$('#vozTranscricao',vozRoot);
+    var historicoVoz=[]; // {role:'user'|'model', text}
+    var gravando=false, processando=false;
+    var rec=window.criarReconhecimento(function(transcricao){
+      transcEl.textContent='"'+transcricao+'"';
+      enviarMensagemVoz(transcricao);
+    }, function(){
+      gravando=false;
+      micBtn.classList.remove('gravando');
+      desligarAnalyserDoMic();
+      if(_micStream){ _micStream.getTracks().forEach(function(t){t.stop();}); _micStream=null; }
+      if(!processando){
+        // O reconhecimento pode encerrar sozinho por silêncio (sem transcrição) — no modo mãos-livres,
+        // reabre a escuta automaticamente em vez de deixar a conversa "travada" esperando um clique.
+        if(conversaContinua){ statusEl.textContent='Ouvindo de novo…'; setTimeout(function(){ if(conversaContinua && !gravando && !processando) iniciarGravacao(); },400); }
+        else statusEl.textContent='Toque no microfone para falar';
+      }
+    });
+
+    async function enviarMensagemVoz(texto){
+      if(!texto || !texto.trim()) return;
+      processando=true;
+      statusEl.textContent='Pensando…';
+      historicoVoz.push({role:'user',text:texto});
+      var contexto=(window.ctxSistemaVoz||'')+'\n\nMODO: CONVERSA POR VOZ. Responda de forma curta e natural para ser OUVIDA em áudio — frases diretas, sem listas, sem markdown, sem emojis.';
+      var cfg=window.getIaCfg();
+      var historicoTxt=historicoVoz.slice(-8).map(function(h){ return (h.role==='user'?'Usuário: ':'RAI: ')+h.text; }).join('\n');
+      try{
+        var res=await window.callIAComSistema(cfg, contexto, historicoTxt);
+        if(res && res.ok){
+          historicoVoz.push({role:'model',text:res.text});
+          statusEl.textContent='Respondendo…';
+          transcEl.textContent=res.text;
+          var audioEl=await window.falarTexto(res.text);
+          if(audioEl){
+            ligarAnalyserNoAudio(audioEl);
+            audioEl.addEventListener('ended',function(){
+              processando=false;
+              statusEl.textContent='Toque no microfone para falar';
+            },{once:true});
+          } else {
+            processando=false;
+            statusEl.textContent=conversaContinua?'Ouvindo de novo…':'Toque no microfone para falar';
+            if(conversaContinua) iniciarGravacao();
+          }
+        } else {
+          processando=false;
+          statusEl.textContent='Erro ao responder — toque para tentar de novo';
+        }
+      }catch(e){
+        processando=false;
+        statusEl.textContent='Erro de conexão — toque para tentar de novo';
+      }
+    }
+
+    function iniciarGravacao(){
+      if(!rec || processando || gravando) return;
+      window.pararFala();
+      navigator.mediaDevices.getUserMedia({audio:true}).then(function(stream){
+        _micStream=stream;
+        gravando=true;
+        micBtn.classList.add('gravando');
+        statusEl.textContent='Ouvindo…'; transcEl.textContent='';
+        ligarAnalyserNoMic(stream);
+        try{ rec.start(); }catch(e){}
+      }).catch(function(){
+        toast('Não foi possível acessar o microfone. Verifique a permissão do navegador.','err');
+        if(conversaContinua){ conversaContinua=false; continuaChk.checked=false; }
+      });
+    }
+
+    micBtn.onclick=function(){
+      if(!rec){ toast('Reconhecimento de voz não suportado neste navegador (use Chrome/Edge).','warn'); return; }
+      if(processando) return;
+      if(gravando){ rec.stop(); return; }
+      iniciarGravacao();
+    };
+
+    // ── Conversa contínua (mãos-livres): reabre o microfone sozinha após cada resposta da RAI ──
+    // Exige confirmação explícita do risco (capta ruído/fala do ambiente continuamente) antes de ativar.
+    var conversaContinua=false;
+    var continuaChk=$('#vozContinuaChk',vozRoot);
+    continuaChk.onchange=function(){
+      if(!continuaChk.checked){ conversaContinua=false; return; }
+      continuaChk.checked=false; // só marca de fato após a confirmação no modal
+      modal('Ativar conversa contínua?',
+        'Modo mãos-livres — leia antes de ativar',
+        '<p style="font-size:13px;line-height:1.6;color:var(--ink);margin:0">No modo mãos-livres, a RAI reabre o microfone automaticamente após cada resposta, sem você precisar tocar em nada. '+
+        'Isso significa que o navegador ficará captando o áudio do ambiente continuamente enquanto a sala de voz estiver aberta. '+
+        'Você pode desativar a qualquer momento desmarcando esta opção, ou tocando no microfone para interromper a escuta.</p>',
+        '<button class="btn ghost" id="vozContCancel">Cancelar</button><button class="btn-primary" id="vozContConfirm">'+ico('mic',13)+' Ativar mesmo assim</button>'
+      );
+      $('#vozContCancel').onclick=function(){ fecharModais(); };
+      $('#vozContConfirm').onclick=function(){
+        conversaContinua=true; continuaChk.checked=true;
+        fecharModais();
+        if(!gravando && !processando) iniciarGravacao();
+      };
+    };
+
+    // ── Abrir/minimizar/fechar (mesmo padrão do chat de texto) ──
+    function persistVozUI(){
+      var st='closed';
+      if(vozRoot.classList.contains('voz-open')) st=vozRoot.classList.contains('voz-minimized')?'minimized':'open';
+      localStorage.setItem('regula_voz_ui',st);
+    }
+    function pararConversaContinua(){
+      if(conversaContinua){ conversaContinua=false; continuaChk.checked=false; }
+    }
+    function vozMinimize(){
+      if(gravando && rec) rec.stop();
+      pararConversaContinua();
+      vozRoot.classList.add('voz-open','voz-minimized');
+      pararDesenho();
+      persistVozUI();
+    }
+    function vozRestore(){
+      vozRoot.classList.add('voz-open');
+      vozRoot.classList.remove('voz-minimized');
+      iniciarDesenho();
+      persistVozUI();
+    }
+    function vozFechar(){
+      if(gravando && rec) rec.stop();
+      pararConversaContinua();
+      window.pararFala();
+      vozRoot.classList.remove('voz-open','voz-minimized');
+      pararDesenho();
+      persistVozUI();
+    }
+    hd.querySelector('#vozMinBtn').onclick=function(e){ e.stopPropagation(); vozMinimize(); };
+    hd.querySelector('#vozCloseBtn').onclick=function(e){ e.stopPropagation(); vozFechar(); };
+    hd.onclick=function(){ if(vozRoot.classList.contains('voz-minimized')) vozRestore(); };
+
+    window.abrirSalaVoz=function(){
+      if(!vozRoot.classList.contains('voz-open') || vozRoot.classList.contains('voz-minimized')) vozRestore();
+    };
+
+    var savedVozUI=localStorage.getItem('regula_voz_ui');
+    if(savedVozUI==='minimized'){ vozRoot.classList.add('voz-open','voz-minimized'); }
+    else if(savedVozUI==='open'){ vozRoot.classList.add('voz-open'); iniciarDesenho(); }
   })();
 
   /* === Init === */
