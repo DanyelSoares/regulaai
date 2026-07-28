@@ -9300,12 +9300,14 @@
 
     // Reconhecimento de fala (Web Speech API, nativa do navegador — Chrome/Edge). Sem chave, sem custo.
     var SpeechRec=window.SpeechRecognition||window.webkitSpeechRecognition;
-    function criarReconhecimento(onResult, onEnd){
+    function criarReconhecimento(onResult, onEnd, onError){
       if(!SpeechRec) return null;
       var rec=new SpeechRec();
       rec.lang='pt-BR'; rec.interimResults=false; rec.maxAlternatives=1;
       rec.onresult=function(ev){ var t=ev.results[0][0].transcript; onResult(t); };
-      rec.onerror=function(){ if(onEnd) onEnd(); };
+      // Reporta o motivo real (ex.: "no-speech", "not-allowed", "network", "audio-capture") em vez de engolir o erro —
+      // sem isso, qualquer falha do reconhecimento aparecia só como "trava em Ouvindo..." sem pista nenhuma.
+      rec.onerror=function(ev){ console.warn('[RAI voz] erro no reconhecimento de fala:', ev.error); if(onError) onError(ev.error); if(onEnd) onEnd(); };
       rec.onend=function(){ if(onEnd) onEnd(); };
       return rec;
     }
@@ -9861,6 +9863,14 @@
     var statusEl=$('#vozStatus',vozRoot), transcEl=$('#vozTranscricao',vozRoot);
     var historicoVoz=[]; // {role:'user'|'model', text}
     var gravando=false, processando=false;
+    var ERRO_RECONHECIMENTO_LBL={
+      'no-speech':'Nenhuma fala detectada — tente falar mais perto do microfone.',
+      'not-allowed':'Permissão de microfone negada pelo navegador.',
+      'audio-capture':'Nenhum microfone encontrado.',
+      'network':'Falha de rede no reconhecimento de fala (exige internet ativa).',
+      'aborted':''
+    };
+    var _ultimoErroRec=null;
     var rec=window.criarReconhecimento(function(transcricao){
       transcEl.textContent='"'+transcricao+'"';
       enviarMensagemVoz(transcricao);
@@ -9870,12 +9880,14 @@
       desligarAnalyserDoMic();
       if(_micStream){ _micStream.getTracks().forEach(function(t){t.stop();}); _micStream=null; }
       if(!processando){
+        var msgErro=_ultimoErroRec?ERRO_RECONHECIMENTO_LBL[_ultimoErroRec]:null;
+        _ultimoErroRec=null;
         // O reconhecimento pode encerrar sozinho por silêncio (sem transcrição) — no modo mãos-livres,
         // reabre a escuta automaticamente em vez de deixar a conversa "travada" esperando um clique.
         if(conversaContinua){ statusEl.textContent='Ouvindo de novo…'; setTimeout(function(){ if(conversaContinua && !gravando && !processando) iniciarGravacao(); },400); }
-        else statusEl.textContent='Toque no microfone para falar';
+        else statusEl.textContent=msgErro || 'Toque no microfone para falar';
       }
-    });
+    }, function(erro){ _ultimoErroRec=erro; });
 
     async function enviarMensagemVoz(texto){
       if(!texto || !texto.trim()) return;
