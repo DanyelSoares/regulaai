@@ -5075,7 +5075,7 @@
         gemini:[
           {v:'gemini-2.5-flash',  t:'gemini-2.5-flash (Recomendado)'},
           {v:'gemini-2.5-pro',    t:'gemini-2.5-pro (mais detalhado)'},
-          {v:'gemini-2.0-flash-lite', t:'gemini-2.0-flash-lite (mais rápido)'}
+          {v:'gemini-2.5-flash-lite', t:'gemini-2.5-flash-lite (mais rápido)'}
         ],
         claude:[
           {v:'claude-sonnet-4-6',  t:'claude-sonnet-4-6 (Recomendado)'},
@@ -8719,6 +8719,12 @@
         var antigoModel=localStorage.getItem('regula_gemini_model')||'gemini-2.5-flash';
         localStorage.setItem('regula_ia_model_gemini',antigoModel);
         if(!localStorage.getItem('regula_ia_provider')) localStorage.setItem('regula_ia_provider','gemini');
+      }
+      // Migração: modelos do Gemini descontinuados pela Google → substitutos vigentes
+      var MODELOS_DESCONTINUADOS_GEMINI={'gemini-2.0-flash-lite':'gemini-2.5-flash-lite','gemini-1.5-flash':'gemini-2.5-flash','gemini-1.5-pro':'gemini-2.5-pro'};
+      var modeloAtualGemini=localStorage.getItem('regula_ia_model_gemini');
+      if(modeloAtualGemini && MODELOS_DESCONTINUADOS_GEMINI[modeloAtualGemini]){
+        localStorage.setItem('regula_ia_model_gemini',MODELOS_DESCONTINUADOS_GEMINI[modeloAtualGemini]);
       }
     })();
 
