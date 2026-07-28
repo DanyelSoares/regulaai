@@ -9699,7 +9699,7 @@
 
     var body=el('div',{class:'voz-body'});
     body.innerHTML=
-      '<div class="voz-esfera-wrap"><canvas id="vozCanvas" width="220" height="220"></canvas></div>'+
+      '<div class="voz-esfera-wrap"><div class="voz-anel"></div><div class="voz-anel voz-anel-2"></div><canvas id="vozCanvas" width="280" height="280"></canvas></div>'+
       '<div class="voz-status" id="vozStatus">Toque no microfone para falar</div>'+
       '<div class="voz-transcricao" id="vozTranscricao"></div>';
     vozRoot.appendChild(body);
@@ -9713,53 +9713,94 @@
     var continuaRow=el('label',{class:'voz-continua-toggle'});
     continuaRow.innerHTML='<input type="checkbox" id="vozContinuaChk"> <span>Conversa contínua (mãos-livres)</span>';
     foot.appendChild(continuaRow);
+    var continuaAviso=el('div',{class:'voz-continua-aviso',id:'vozContinuaAviso'});
+    continuaAviso.innerHTML=ico('alert-triangle',12)+' No modo mãos-livres, o microfone reabre sozinho após cada resposta e o navegador fica captando o áudio do ambiente continuamente enquanto a sala estiver aberta.';
+    continuaAviso.style.display='none';
+    foot.appendChild(continuaAviso);
     vozRoot.appendChild(foot);
     lcIcons();
 
     // ── Desenho da esfera reativa (canvas 2D, pontos distribuídos numa esfera, deslocados pela amplitude do áudio) ──
     var canvas=$('#vozCanvas',vozRoot), ctx2d=canvas.getContext('2d');
     var DPR=Math.min(window.devicePixelRatio||1,2);
-    canvas.width=220*DPR; canvas.height=220*DPR;
+    var CANVAS_PX=280;
+    canvas.width=CANVAS_PX*DPR; canvas.height=CANVAS_PX*DPR;
     var pontos=(function(){
       // Distribuição em espiral de Fibonacci sobre uma esfera — visual uniforme sem acúmulo nos polos.
-      var n=340, arr=[], golden=Math.PI*(3-Math.sqrt(5));
+      var n=420, arr=[], golden=Math.PI*(3-Math.sqrt(5));
       for(var i=0;i<n;i++){
         var y=1-(i/(n-1))*2, r=Math.sqrt(1-y*y), theta=golden*i;
         arr.push({x:Math.cos(theta)*r, y:y, z:Math.sin(theta)*r});
       }
       return arr;
     })();
-    var rotY=0, nivelAtual=0, corAtual='verde'; // 'verde'=usuário falando, 'ciano'=RAI respondendo
+    var rotY=0, rotX=0, nivelAtual=0, corAtual='verde'; // 'verde'=usuário falando, 'ciano'=RAI respondendo
     function corDoPonto(alpha, tom){
-      return tom==='ciano' ? 'rgba(110,231,240,'+alpha+')' : 'rgba(74,222,128,'+alpha+')';
+      return tom==='ciano' ? 'rgba(103,232,249,'+alpha+')' : 'rgba(110,231,183,'+alpha+')';
+    }
+    function corLinha(alpha, tom){
+      return tom==='ciano' ? 'rgba(103,232,249,'+alpha+')' : 'rgba(74,222,128,'+alpha+')';
     }
     function desenharEsfera(){
-      var W=canvas.width, H=canvas.height, cx=W/2, cy=H/2, raioBase=W*0.34;
+      var W=canvas.width, H=canvas.height, cx=W/2, cy=H/2, raioBase=W*0.32;
       ctx2d.clearRect(0,0,W,H);
-      rotY+=0.006;
+      rotY+=0.005; rotX=Math.sin(rotY*0.4)*0.15;
       var nivel=nivelAtual; // 0..1, suavizado por quem chama
+      var cosY=Math.cos(rotY), sinY=Math.sin(rotY), cosX=Math.cos(rotX), sinX=Math.sin(rotX);
       var lista=pontos.map(function(p){
-        var cosA=Math.cos(rotY), sinA=Math.sin(rotY);
-        var x=p.x*cosA - p.z*sinA, z=p.x*sinA + p.z*cosA;
-        var desloc=1 + nivel*0.55*Math.abs(Math.sin(p.y*6 + rotY*3));
+        var x1=p.x*cosY - p.z*sinY, z1=p.x*sinY + p.z*cosY;
+        var y2=p.y*cosX - z1*sinX, z2=p.y*sinX + z1*cosX;
+        var desloc=1 + nivel*0.6*Math.abs(Math.sin(p.y*6 + rotY*3));
         var raio=raioBase*desloc;
-        var persp=1/(1.6 - z*0.5);
-        return {sx:cx + x*raio*persp, sy:cy + p.y*raio*persp, z:z, persp:persp};
+        var persp=1/(1.6 - z2*0.5);
+        return {sx:cx + x1*raio*persp, sy:cy + y2*raio*persp, z:z2, persp:persp};
       }).sort(function(a,b){ return a.z-b.z; });
+
+      // Halo externo (glow amplo, cresce com o nível de áudio)
+      var haloR=raioBase*(1.55+nivel*0.55);
+      var halo=ctx2d.createRadialGradient(cx,cy,raioBase*0.4,cx,cy,haloR);
+      halo.addColorStop(0, corDoPonto(0.16+nivel*0.14,corAtual));
+      halo.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx2d.fillStyle=halo;
+      ctx2d.fillRect(0,0,W,H);
+
+      // Linhas de "constelação" entre pontos próximos na face visível (z>0.15) — reforça a sensação de rede/energia
+      var TETO_AMOSTRA=60; // limita o custo O(n²) das linhas a um número fixo de pontos por frame
+      var visiveis=lista.filter(function(p){ return p.z>0.15; });
+      var passo=Math.max(1, Math.ceil(visiveis.length/TETO_AMOSTRA));
+      ctx2d.lineWidth=Math.max(0.5,0.7*DPR);
+      for(var i=0;i<visiveis.length;i+=passo){
+        for(var j=i+passo;j<visiveis.length;j+=passo){
+          var a=visiveis[i], b=visiveis[j];
+          var dx=a.sx-b.sx, dy=a.sy-b.sy, dist=Math.sqrt(dx*dx+dy*dy);
+          var limite=raioBase*0.42;
+          if(dist<limite){
+            var alphaLinha=(1-dist/limite)*0.22*((a.z+b.z)/2);
+            ctx2d.beginPath();
+            ctx2d.moveTo(a.sx,a.sy); ctx2d.lineTo(b.sx,b.sy);
+            ctx2d.strokeStyle=corLinha(Math.max(alphaLinha,0).toFixed(2),corAtual);
+            ctx2d.stroke();
+          }
+        }
+      }
+
+      // Pontos (partículas) por cima das linhas
       lista.forEach(function(p){
-        var alpha=0.25 + 0.55*((p.z+1)/2);
-        var tam=(1.1 + nivel*1.6) * p.persp * DPR;
+        var alpha=0.22 + 0.6*((p.z+1)/2);
+        var tam=(1.2 + nivel*2.1) * p.persp * DPR;
         ctx2d.beginPath();
         ctx2d.arc(p.sx,p.sy,Math.max(tam,0.6),0,Math.PI*2);
         ctx2d.fillStyle=corDoPonto(alpha.toFixed(2), corAtual);
         ctx2d.fill();
       });
-      // brilho central, mais intenso quanto maior o nível de áudio
-      var grad=ctx2d.createRadialGradient(cx,cy,0,cx,cy,raioBase*(1+nivel*0.6));
-      grad.addColorStop(0, corDoPonto(0.10+nivel*0.18,corAtual));
-      grad.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx2d.fillStyle=grad;
+
+      // Núcleo brilhante central, mais intenso e "quente" quanto maior o nível de áudio
+      var nucleo=ctx2d.createRadialGradient(cx,cy,0,cx,cy,raioBase*(0.5+nivel*0.5));
+      nucleo.addColorStop(0, corDoPonto((0.20+nivel*0.35).toFixed(2),corAtual));
+      nucleo.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx2d.fillStyle=nucleo;
       ctx2d.fillRect(0,0,W,H);
+
       _rafId=requestAnimationFrame(desenharEsfera);
     }
     var _rafId=null;
@@ -9896,25 +9937,14 @@
     };
 
     // ── Conversa contínua (mãos-livres): reabre o microfone sozinha após cada resposta da RAI ──
-    // Exige confirmação explícita do risco (capta ruído/fala do ambiente continuamente) antes de ativar.
+    // O aviso de risco (áudio do ambiente captado continuamente) fica sempre visível junto ao toggle, sem modal/bloqueio.
     var conversaContinua=false;
     var continuaChk=$('#vozContinuaChk',vozRoot);
+    var continuaAvisoEl=$('#vozContinuaAviso',vozRoot);
     continuaChk.onchange=function(){
-      if(!continuaChk.checked){ conversaContinua=false; return; }
-      continuaChk.checked=false; // só marca de fato após a confirmação no modal
-      modal('Ativar conversa contínua?',
-        'Modo mãos-livres — leia antes de ativar',
-        '<p style="font-size:13px;line-height:1.6;color:var(--ink);margin:0">No modo mãos-livres, a RAI reabre o microfone automaticamente após cada resposta, sem você precisar tocar em nada. '+
-        'Isso significa que o navegador ficará captando o áudio do ambiente continuamente enquanto a sala de voz estiver aberta. '+
-        'Você pode desativar a qualquer momento desmarcando esta opção, ou tocando no microfone para interromper a escuta.</p>',
-        '<button class="btn ghost" id="vozContCancel">Cancelar</button><button class="btn-primary" id="vozContConfirm">'+ico('mic',13)+' Ativar mesmo assim</button>'
-      );
-      $('#vozContCancel').onclick=function(){ fecharModais(); };
-      $('#vozContConfirm').onclick=function(){
-        conversaContinua=true; continuaChk.checked=true;
-        fecharModais();
-        if(!gravando && !processando) iniciarGravacao();
-      };
+      conversaContinua=continuaChk.checked;
+      continuaAvisoEl.style.display=conversaContinua?'flex':'none';
+      if(conversaContinua && !gravando && !processando) iniciarGravacao();
     };
 
     // ── Abrir/minimizar/fechar (mesmo padrão do chat de texto) ──
@@ -9924,7 +9954,7 @@
       localStorage.setItem('regula_voz_ui',st);
     }
     function pararConversaContinua(){
-      if(conversaContinua){ conversaContinua=false; continuaChk.checked=false; }
+      if(conversaContinua){ conversaContinua=false; continuaChk.checked=false; continuaAvisoEl.style.display='none'; }
     }
     function vozMinimize(){
       if(gravando && rec) rec.stop();
