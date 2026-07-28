@@ -9354,11 +9354,13 @@
     function pararFala(){ if(_elAudioAtual){ _elAudioAtual.pause(); _elAudioAtual=null; } }
     // Converte texto em áudio via ElevenLabs TTS e toca. Remove markdown básico antes de enviar (não deve ser falado literalmente).
     // Retorna o elemento <audio> em reprodução (ou null em falha) — a sala de voz usa a referência para ligar o analisador de amplitude.
+    // Retorna {audio} em sucesso, ou {erro:"motivo"} em falha — nunca falha silenciosamente, já que
+    // "a RAI simplesmente não fala" sem nenhuma pista era o sintoma mais comum de bugs nesta função.
     async function falarTexto(texto){
       var cfg=getElCfg();
-      if(!cfg.key || !cfg.voice) return null;
+      if(!cfg.key || !cfg.voice) return {erro:'Chave ou Voice ID da ElevenLabs não configurados.'};
       var limpo=String(texto||'').replace(/<<<[\s\S]*?>>>/g,'').replace(/[*_`#]/g,'').trim();
-      if(!limpo) return null;
+      if(!limpo) return {erro:'Nada para narrar (texto vazio após limpeza).'};
       try{
         pararFala();
         var r=await fetch('https://api.elevenlabs.io/v1/text-to-speech/'+encodeURIComponent(cfg.voice),{
@@ -9366,13 +9368,20 @@
           headers:{'Content-Type':'application/json','xi-api-key':cfg.key,'Accept':'audio/mpeg'},
           body:JSON.stringify({text:limpo, model_id:'eleven_multilingual_v2', voice_settings:{stability:0.5, similarity_boost:0.75}})
         });
-        if(!r.ok) return null;
+        if(!r.ok){
+          var corpoErro=await r.text().catch(function(){return '';});
+          console.warn('[RAI voz] ElevenLabs TTS falhou:', r.status, corpoErro);
+          return {erro:'ElevenLabs retornou erro '+r.status+(corpoErro?': '+corpoErro.slice(0,200):'')};
+        }
         var blob=await r.blob();
         var url=URL.createObjectURL(blob);
         _elAudioAtual=new Audio(url);
-        _elAudioAtual.play().catch(function(){});
-        return _elAudioAtual;
-      }catch(e){ return null; }
+        await _elAudioAtual.play().catch(function(e){ console.warn('[RAI voz] audio.play() falhou:', e); });
+        return {audio:_elAudioAtual};
+      }catch(e){
+        console.warn('[RAI voz] exceção em falarTexto:', e);
+        return {erro:'Exceção ao gerar áudio: '+(e&&e.message||e)};
+      }
     }
 
     // Reconhecimento de fala (Web Speech API, nativa do navegador — Chrome/Edge). Sem chave, sem custo.
@@ -10010,17 +10019,21 @@
           historicoVoz.push({role:'model',text:res.text});
           setStatus('Respondendo…');
           transcEl.textContent=res.text;
-          var audioEl=await window.falarTexto(res.text);
-          if(audioEl){
+          var falaRes=await window.falarTexto(res.text);
+          if(falaRes && falaRes.audio){
+            var audioEl=falaRes.audio;
             ligarAnalyserNoAudio(audioEl);
             audioEl.addEventListener('ended',function(){
               processando=false;
               setStatus(STATUS_OCIOSO);
             },{once:true});
           } else {
+            // Sem áudio (chave/voice não configurados, erro da ElevenLabs, etc.) — mostra o motivo real
+            // em vez de simplesmente ficar em silêncio, que era o sintoma relatado ("RAI não respondeu em áudio").
+            console.warn('[RAI voz] TTS não disponível:', falaRes && falaRes.erro);
             processando=false;
-            setStatus(conversaContinua?'Ouvindo de novo…':STATUS_OCIOSO);
-            if(conversaContinua) iniciarGravacao();
+            setStatus((falaRes && falaRes.erro) || 'Sem áudio disponível — toque para tentar de novo');
+            if(conversaContinua && (!falaRes || !falaRes.erro)) iniciarGravacao();
           }
         } else {
           processando=false;
