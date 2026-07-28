@@ -5244,37 +5244,80 @@
       };
       lcIcons();
 
-      // ── Voz (ElevenLabs) — conversa falada com a RAI, exclusiva dos perfis Gestor/Administrador ──
+      // ── Voz (ElevenLabs / Fish Audio) — conversa falada com a RAI, exclusiva dos perfis Gestor/Administrador ──
+      var VOZ_PROV_LABEL={elevenlabs:'ElevenLabs',fish:'Fish Audio'};
+      var VOZ_VOICE_HINT={
+        elevenlabs:'Ex.: 21m00Tcm4TlvDq8ikWAM',
+        fish:'Ex.: 802e3bc2b27e49c2995d23ef70e6ac89'
+      };
+      var VOZ_OBTER={
+        elevenlabs:'📌 Chave em <b>elevenlabs.io</b> → Profile → API Keys. Voice ID em <b>elevenlabs.io</b> → Voices. <b>Atenção:</b> o plano gratuito da ElevenLabs só libera vozes clonadas pelo próprio usuário via API — vozes prontas da biblioteca exigem plano pago.',
+        fish:'📌 Chave em <b>fish.audio</b> → Developer/API Keys. Voice ID (reference_id) em <b>fish.audio</b> → Voices (clone sua própria voz ou use uma pública).'
+      };
+      var vozProvedor=localStorage.getItem('regula_voz_provider')||'elevenlabs';
+
       var secVoz=el('div',{class:'panel',style:'padding:20px;margin-top:16px'});
       secVoz.innerHTML=
-        '<h3 style="margin:0 0 4px">'+ico('mic',16)+' Assistente por Voz (ElevenLabs)</h3>'+
-        '<p style="margin:0 0 18px;font-size:13px;color:var(--muted)">Chave de API da ElevenLabs para a RAI responder em áudio. Disponível apenas para os perfis <b>Gestor</b> e <b>Administrador</b>. A chave fica <b>apenas no seu navegador</b>.</p>'+
+        '<h3 style="margin:0 0 4px">'+ico('mic',16)+' Assistente por Voz</h3>'+
+        '<p style="margin:0 0 18px;font-size:13px;color:var(--muted)">Escolha o provedor de voz para a RAI responder em áudio. Disponível apenas para os perfis <b>Gestor</b> e <b>Administrador</b>. A chave fica <b>apenas no seu navegador</b>.</p>'+
+        '<div style="margin-bottom:16px">'+
+          '<label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">Provedor de voz</label>'+
+          '<div class="ia-prov-row" id="vozProvRow">'+
+            ['elevenlabs','fish'].map(function(p){
+              return '<button type="button" class="ia-prov-btn'+(p===vozProvedor?' active':'')+'" data-prov="'+p+'">'+VOZ_PROV_LABEL[p]+'</button>';
+            }).join('')+
+          '</div>'+
+        '</div>'+
         '<div style="margin-bottom:14px">'+
-          '<label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">Chave de API</label>'+
-          '<input id="cfgElKey" type="password" placeholder="Cole aqui sua chave da ElevenLabs" style="width:100%;max-width:480px;padding:9px 12px;border:1.5px solid var(--g-200);border-radius:8px;font-size:13px;font-family:monospace"/>'+
+          '<label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">Chave de API — <span id="vozKeyProvLbl">'+VOZ_PROV_LABEL[vozProvedor]+'</span></label>'+
+          '<input id="cfgVozKey" type="password" placeholder="Cole aqui sua chave" style="width:100%;max-width:480px;padding:9px 12px;border:1.5px solid var(--g-200);border-radius:8px;font-size:13px;font-family:monospace"/>'+
         '</div>'+
         '<div style="margin-bottom:18px">'+
           '<label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">Voice ID</label>'+
-          '<input id="cfgElVoice" type="text" placeholder="Ex.: 21m00Tcm4TlvDq8ikWAM" style="width:100%;max-width:320px;padding:9px 12px;border:1.5px solid var(--g-200);border-radius:8px;font-size:13px;font-family:monospace"/>'+
-          '<p style="font-size:12px;color:var(--muted);margin:6px 0 0">Encontre o Voice ID em <b>elevenlabs.io</b> → Voices — copie o ID da voz desejada.</p>'+
+          '<input id="cfgVozVoice" type="text" style="width:100%;max-width:320px;padding:9px 12px;border:1.5px solid var(--g-200);border-radius:8px;font-size:13px;font-family:monospace"/>'+
         '</div>'+
-        '<button id="cfgElSave" class="btn-primary" style="padding:9px 22px">'+ico('save',13)+' Salvar configuração</button>'+
-        '<span id="cfgElMsg" style="margin-left:12px;font-size:12.5px;color:var(--ok);opacity:0;transition:opacity .3s"></span>'+
+        '<button id="cfgVozSave" class="btn-primary" style="padding:9px 22px">'+ico('save',13)+' Salvar configuração</button>'+
+        '<span id="cfgVozMsg" style="margin-left:12px;font-size:12.5px;color:var(--ok);opacity:0;transition:opacity .3s"></span>'+
         '<div style="margin-top:22px;padding-top:18px;border-top:1px solid var(--g-100)">'+
-          '<p style="font-size:12.5px;color:var(--muted);margin:0">📌 Obtenha sua chave em <b>elevenlabs.io</b> → Profile → API Keys. A chamada é feita direto do navegador.</p>'+
+          '<p id="vozObterTxt" style="font-size:12.5px;color:var(--muted);margin:0">'+VOZ_OBTER[vozProvedor]+'</p>'+
         '</div>';
       cfgContent.appendChild(secVoz);
-      secVoz.querySelector('#cfgElKey').value=localStorage.getItem('regula_el_key')||'';
-      secVoz.querySelector('#cfgElVoice').value=localStorage.getItem('regula_el_voice')||'';
-      secVoz.querySelector('#cfgElSave').onclick=function(){
-        var k=secVoz.querySelector('#cfgElKey').value.trim();
-        var v=secVoz.querySelector('#cfgElVoice').value.trim();
-        if(k) localStorage.setItem('regula_el_key',k); else localStorage.removeItem('regula_el_key');
-        if(v) localStorage.setItem('regula_el_voice',v); else localStorage.removeItem('regula_el_voice');
-        var msg=secVoz.querySelector('#cfgElMsg');
+
+      var inpVozKey=secVoz.querySelector('#cfgVozKey');
+      var inpVozVoice=secVoz.querySelector('#cfgVozVoice');
+      var vozKeyLbl=secVoz.querySelector('#vozKeyProvLbl');
+      var vozObterTxt=secVoz.querySelector('#vozObterTxt');
+
+      function carregaProvedorVoz(p){
+        vozProvedor=p;
+        inpVozKey.value=localStorage.getItem('regula_voz_key_'+p)||'';
+        inpVozVoice.value=localStorage.getItem('regula_voz_voice_'+p)||'';
+        inpVozVoice.placeholder=VOZ_VOICE_HINT[p];
+        vozKeyLbl.textContent=VOZ_PROV_LABEL[p];
+        vozObterTxt.innerHTML=VOZ_OBTER[p];
+        $$('.ia-prov-btn',secVoz).forEach(function(b){ b.classList.toggle('active',b.getAttribute('data-prov')===p); });
+      }
+      carregaProvedorVoz(vozProvedor);
+
+      $$('.ia-prov-btn',secVoz).forEach(function(b){
+        b.onclick=function(){ carregaProvedorVoz(b.getAttribute('data-prov')); };
+      });
+
+      secVoz.querySelector('#cfgVozSave').onclick=function(){
+        var k=inpVozKey.value.trim();
+        var v=inpVozVoice.value.trim();
+        if(k) localStorage.setItem('regula_voz_key_'+vozProvedor,k); else localStorage.removeItem('regula_voz_key_'+vozProvedor);
+        if(v) localStorage.setItem('regula_voz_voice_'+vozProvedor,v); else localStorage.removeItem('regula_voz_voice_'+vozProvedor);
+        localStorage.setItem('regula_voz_provider',vozProvedor);
+        // Compatibilidade: mantém as chaves antigas (só ElevenLabs, esquema anterior ao seletor) sincronizadas
+        if(vozProvedor==='elevenlabs'){
+          if(k) localStorage.setItem('regula_el_key',k); else localStorage.removeItem('regula_el_key');
+          if(v) localStorage.setItem('regula_el_voice',v); else localStorage.removeItem('regula_el_voice');
+        }
+        var msg=secVoz.querySelector('#cfgVozMsg');
         msg.textContent='Salvo!'; msg.style.opacity='1';
         setTimeout(function(){ msg.style.opacity='0'; },2500);
-        toast('Configuração de voz (ElevenLabs) salva','ok');
+        toast('Configuração de voz salva ('+VOZ_PROV_LABEL[vozProvedor]+')','ok');
       };
       lcIcons();
     }
@@ -9345,33 +9388,49 @@
     }
 
     // ── Voz (ElevenLabs + Web Speech API) — conversa falada com a RAI, exclusiva de Gestor/Administrador ──
-    function getElCfg(){
-      return {key:localStorage.getItem('regula_el_key')||'', voice:localStorage.getItem('regula_el_voice')||''};
+    // Configuração de voz ativa (provedor + chave + voice ID), no mesmo padrão de getIaCfg() para texto.
+    function getVozCfg(){
+      var prov=localStorage.getItem('regula_voz_provider')||'elevenlabs';
+      var key=localStorage.getItem('regula_voz_key_'+prov)||'';
+      // fallback p/ chave antiga do ElevenLabs (esquema anterior ao seletor de provedor)
+      if(!key && prov==='elevenlabs') key=localStorage.getItem('regula_el_key')||'';
+      var voice=localStorage.getItem('regula_voz_voice_'+prov)||'';
+      if(!voice && prov==='elevenlabs') voice=localStorage.getItem('regula_el_voice')||'';
+      return {prov:prov, key:key, voice:voice};
     }
-    function vozDisponivel(){ return ehGestor() && !!getElCfg().key && !!getElCfg().voice; }
+    function vozDisponivel(){ return ehGestor() && !!getVozCfg().key && !!getVozCfg().voice; }
 
     var _elAudioAtual=null;
     function pararFala(){ if(_elAudioAtual){ _elAudioAtual.pause(); _elAudioAtual=null; } }
-    // Converte texto em áudio via ElevenLabs TTS e toca. Remove markdown básico antes de enviar (não deve ser falado literalmente).
-    // Retorna o elemento <audio> em reprodução (ou null em falha) — a sala de voz usa a referência para ligar o analisador de amplitude.
+    // Converte texto em áudio via ElevenLabs ou Fish Audio (conforme provedor configurado) e toca.
+    // Remove markdown básico antes de enviar (não deve ser falado literalmente).
     // Retorna {audio} em sucesso, ou {erro:"motivo"} em falha — nunca falha silenciosamente, já que
     // "a RAI simplesmente não fala" sem nenhuma pista era o sintoma mais comum de bugs nesta função.
     async function falarTexto(texto){
-      var cfg=getElCfg();
-      if(!cfg.key || !cfg.voice) return {erro:'Chave ou Voice ID da ElevenLabs não configurados.'};
+      var cfg=getVozCfg();
+      if(!cfg.key || !cfg.voice) return {erro:'Chave ou Voice ID de voz não configurados.'};
       var limpo=String(texto||'').replace(/<<<[\s\S]*?>>>/g,'').replace(/[*_`#]/g,'').trim();
       if(!limpo) return {erro:'Nada para narrar (texto vazio após limpeza).'};
       try{
         pararFala();
-        var r=await fetch('https://api.elevenlabs.io/v1/text-to-speech/'+encodeURIComponent(cfg.voice),{
-          method:'POST',
-          headers:{'Content-Type':'application/json','xi-api-key':cfg.key,'Accept':'audio/mpeg'},
-          body:JSON.stringify({text:limpo, model_id:'eleven_multilingual_v2', voice_settings:{stability:0.5, similarity_boost:0.75}})
-        });
+        var r;
+        if(cfg.prov==='fish'){
+          r=await fetch('https://api.fish.audio/v1/tts',{
+            method:'POST',
+            headers:{'Content-Type':'application/json','Authorization':'Bearer '+cfg.key},
+            body:JSON.stringify({text:limpo, reference_id:cfg.voice, format:'mp3'})
+          });
+        } else {
+          r=await fetch('https://api.elevenlabs.io/v1/text-to-speech/'+encodeURIComponent(cfg.voice),{
+            method:'POST',
+            headers:{'Content-Type':'application/json','xi-api-key':cfg.key,'Accept':'audio/mpeg'},
+            body:JSON.stringify({text:limpo, model_id:'eleven_multilingual_v2', voice_settings:{stability:0.5, similarity_boost:0.75}})
+          });
+        }
         if(!r.ok){
           var corpoErro=await r.text().catch(function(){return '';});
-          console.warn('[RAI voz] ElevenLabs TTS falhou:', r.status, corpoErro);
-          return {erro:'ElevenLabs retornou erro '+r.status+(corpoErro?': '+corpoErro.slice(0,200):'')};
+          console.warn('[RAI voz] TTS ('+cfg.prov+') falhou:', r.status, corpoErro);
+          return {erro:(cfg.prov==='fish'?'Fish Audio':'ElevenLabs')+' retornou erro '+r.status+(corpoErro?': '+corpoErro.slice(0,200):'')};
         }
         var blob=await r.blob();
         var url=URL.createObjectURL(blob);
