@@ -9379,7 +9379,10 @@
         body:JSON.stringify({system_instruction:{parts:[{text:SYS}]},contents:gcontents})
       });
       var dg=await rg.json();
-      if(dg.candidates&&dg.candidates[0]) return {ok:true,text:dg.candidates[0].content.parts[0].text};
+      var candG1=dg.candidates&&dg.candidates[0];
+      var textoG1=candG1&&candG1.content&&candG1.content.parts&&candG1.content.parts[0]&&candG1.content.parts[0].text;
+      if(textoG1) return {ok:true,text:textoG1};
+      if(candG1&&candG1.finishReason) return {ok:false,text:'A IA não retornou texto (motivo: '+candG1.finishReason+').'};
       return {ok:false,text:(dg.error&&dg.error.message)||'Sem resposta. Tente novamente.'};
     }
 
@@ -9411,7 +9414,13 @@
         body:JSON.stringify({system_instruction:{parts:[{text:sistema}]},contents:[{role:'user',parts:[{text:userText}]}]})
       });
       var dg=await rg.json();
-      if(dg.candidates&&dg.candidates[0]) return {ok:true,text:dg.candidates[0].content.parts[0].text};
+      var candG=dg.candidates&&dg.candidates[0];
+      var textoG=candG&&candG.content&&candG.content.parts&&candG.content.parts[0]&&candG.content.parts[0].text;
+      if(textoG) return {ok:true,text:textoG};
+      // candidates[0] pode existir sem content.parts quando a resposta é bloqueada (finishReason "SAFETY"/"RECITATION")
+      // ou cortada sem texto (ex.: "MAX_TOKENS") — sem essa checagem, acessar .content.parts[0].text lançava exceção
+      // e o erro real ficava escondido atrás de um genérico "Erro de conexão".
+      if(candG&&candG.finishReason) return {ok:false,text:'A IA não retornou texto (motivo: '+candG.finishReason+').'};
       return {ok:false,text:(dg.error&&dg.error.message)||'Sem resposta. Tente novamente.'};
     }
     // Igual a callIAComSistema, mas anexando um único arquivo (imagem/PDF) via visão — usado pelo OCR dedicado no upload.
@@ -9451,7 +9460,10 @@
         body:JSON.stringify({system_instruction:{parts:[{text:sistema}]},contents:[{role:'user',parts:partsG}]})
       });
       var dg2=await rg2.json();
-      if(dg2.candidates&&dg2.candidates[0]) return {ok:true,text:dg2.candidates[0].content.parts[0].text};
+      var candG2=dg2.candidates&&dg2.candidates[0];
+      var textoG2=candG2&&candG2.content&&candG2.content.parts&&candG2.content.parts[0]&&candG2.content.parts[0].text;
+      if(textoG2) return {ok:true,text:textoG2};
+      if(candG2&&candG2.finishReason) return {ok:false,text:'A IA não retornou texto (motivo: '+candG2.finishReason+').'};
       return {ok:false,text:(dg2.error&&dg2.error.message)||'Sem resposta. Tente novamente.'};
     }
     window.getIaCfg=getIaCfg;
@@ -9935,11 +9947,13 @@
           }
         } else {
           processando=false;
-          setStatus('Erro ao responder — toque para tentar de novo');
+          console.warn('[RAI voz] IA retornou erro:', res && res.text);
+          setStatus('Erro: '+((res && res.text) || 'falha desconhecida ao responder'));
         }
       }catch(e){
         processando=false;
-        setStatus('Erro de conexão — toque para tentar de novo');
+        console.warn('[RAI voz] exceção ao chamar a IA:', e);
+        setStatus('Erro de conexão: '+(e && e.message || e));
       }
     }
 
