@@ -8720,11 +8720,13 @@
         localStorage.setItem('regula_ia_model_gemini',antigoModel);
         if(!localStorage.getItem('regula_ia_provider')) localStorage.setItem('regula_ia_provider','gemini');
       }
-      // Migração: modelos do Gemini descontinuados pela Google → substitutos vigentes
-      var MODELOS_DESCONTINUADOS_GEMINI={'gemini-2.0-flash-lite':'gemini-2.5-flash-lite','gemini-1.5-flash':'gemini-2.5-flash','gemini-1.5-pro':'gemini-2.5-pro'};
+      // Migração: qualquer modelo do Gemini salvo que NÃO esteja na lista vigente (2.0/1.5/1.0, descontinuados
+      // pela Google em ondas sucessivas) é trocado pelo padrão atual — mais robusto que listar cada nome antigo
+      // um por um, já que a Google continua aposentando modelos e sempre faltaria algum caso na lista fechada.
+      var MODELOS_GEMINI_VIGENTES={'gemini-2.5-flash':1,'gemini-2.5-pro':1,'gemini-2.5-flash-lite':1};
       var modeloAtualGemini=localStorage.getItem('regula_ia_model_gemini');
-      if(modeloAtualGemini && MODELOS_DESCONTINUADOS_GEMINI[modeloAtualGemini]){
-        localStorage.setItem('regula_ia_model_gemini',MODELOS_DESCONTINUADOS_GEMINI[modeloAtualGemini]);
+      if(modeloAtualGemini && !MODELOS_GEMINI_VIGENTES[modeloAtualGemini]){
+        localStorage.setItem('regula_ia_model_gemini','gemini-2.5-flash');
       }
     })();
 
