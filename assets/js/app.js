@@ -5073,9 +5073,9 @@
       // Modelos por provedor
       var MODELOS={
         gemini:[
-          {v:'gemini-2.5-flash',  t:'gemini-2.5-flash (Recomendado)'},
-          {v:'gemini-2.5-pro',    t:'gemini-2.5-pro (mais detalhado)'},
-          {v:'gemini-2.5-flash-lite', t:'gemini-2.5-flash-lite (mais rápido)'}
+          {v:'gemini-3.6-flash',  t:'gemini-3.6-flash (Recomendado)'},
+          {v:'gemini-3.1-pro',    t:'gemini-3.1-pro (mais detalhado)'},
+          {v:'gemini-3.5-flash-lite', t:'gemini-3.5-flash-lite (mais rápido)'}
         ],
         claude:[
           {v:'claude-sonnet-4-6',  t:'claude-sonnet-4-6 (Recomendado)'},
@@ -5088,7 +5088,7 @@
           {v:'gpt-4-turbo', t:'gpt-4-turbo'}
         ]
       };
-      var DEFAULTS={gemini:'gemini-2.5-flash',claude:'claude-sonnet-4-6',openai:'gpt-4o'};
+      var DEFAULTS={gemini:'gemini-3.6-flash',claude:'claude-sonnet-4-6',openai:'gpt-4o'};
       var PROV_LABEL={gemini:'Google Gemini',claude:'Anthropic (Claude)',openai:'OpenAI'};
       var KEY_HINT={
         gemini:'Cole aqui sua chave AIza...',
@@ -8716,17 +8716,17 @@
       var antigaKey=localStorage.getItem('regula_gemini_key');
       if(antigaKey && !localStorage.getItem('regula_ia_key_gemini')){
         localStorage.setItem('regula_ia_key_gemini',antigaKey);
-        var antigoModel=localStorage.getItem('regula_gemini_model')||'gemini-2.5-flash';
+        var antigoModel=localStorage.getItem('regula_gemini_model')||'gemini-3.6-flash';
         localStorage.setItem('regula_ia_model_gemini',antigoModel);
         if(!localStorage.getItem('regula_ia_provider')) localStorage.setItem('regula_ia_provider','gemini');
       }
       // Migração: qualquer modelo do Gemini salvo que NÃO esteja na lista vigente (2.0/1.5/1.0, descontinuados
       // pela Google em ondas sucessivas) é trocado pelo padrão atual — mais robusto que listar cada nome antigo
       // um por um, já que a Google continua aposentando modelos e sempre faltaria algum caso na lista fechada.
-      var MODELOS_GEMINI_VIGENTES={'gemini-2.5-flash':1,'gemini-2.5-pro':1,'gemini-2.5-flash-lite':1};
+      var MODELOS_GEMINI_VIGENTES={'gemini-3.6-flash':1,'gemini-3.1-pro':1,'gemini-3.5-flash-lite':1};
       var modeloAtualGemini=localStorage.getItem('regula_ia_model_gemini');
       if(modeloAtualGemini && !MODELOS_GEMINI_VIGENTES[modeloAtualGemini]){
-        localStorage.setItem('regula_ia_model_gemini','gemini-2.5-flash');
+        localStorage.setItem('regula_ia_model_gemini','gemini-3.6-flash');
       }
     })();
 
@@ -9267,7 +9267,7 @@
     // Configuração de IA ativa (provedor + chave + modelo)
     function getIaCfg(){
       var prov=localStorage.getItem('regula_ia_provider')||'gemini';
-      var DEF={gemini:'gemini-2.5-flash',claude:'claude-sonnet-4-6',openai:'gpt-4o'};
+      var DEF={gemini:'gemini-3.6-flash',claude:'claude-sonnet-4-6',openai:'gpt-4o'};
       var key=localStorage.getItem('regula_ia_key_'+prov)||'';
       // fallback p/ chave antiga do Gemini
       if(!key && prov==='gemini') key=localStorage.getItem('regula_gemini_key')||'';
