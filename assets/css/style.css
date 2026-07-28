@@ -1849,7 +1849,7 @@ body.sidebar-collapsed .modal-backdrop{left:66px}
   display:none;flex-direction:column;border-left:1px solid #0a2417;
   /* Céu noturno suave: verde-escuro translúcido, mais leve e etéreo */
   background:linear-gradient(180deg,#0a2418 0%,#0c2a1d 45%,#071a12 100%);
-  z-index:55;box-shadow:-4px 0 18px rgba(0,0,0,.2);transition:width .25s;overflow:hidden;
+  z-index:64;box-shadow:-4px 0 18px rgba(0,0,0,.2);transition:width .25s;overflow:hidden;
 }
 .manual-chat-panel.chat-open{display:flex}
 
@@ -1923,7 +1923,7 @@ body.sidebar-collapsed .modal-backdrop{left:66px}
   position:fixed;top:80px;right:0;width:340px;height:calc(100vh - 80px);
   display:none;flex-direction:column;border-left:1px solid #0a2417;
   background:linear-gradient(180deg,#0a2418 0%,#0c2a1d 45%,#071a12 100%);
-  z-index:56;box-shadow:-4px 0 18px rgba(0,0,0,.2);transition:width .25s;overflow:hidden;
+  z-index:65;box-shadow:-4px 0 18px rgba(0,0,0,.2);transition:width .25s;overflow:hidden;
 }
 .voz-room.voz-open{display:flex}
 .voz-room.voz-max{width:520px}
