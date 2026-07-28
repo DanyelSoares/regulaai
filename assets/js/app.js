@@ -9888,9 +9888,11 @@
     };
     var _ultimoErroRec=null;
     var rec=window.criarReconhecimento(function(transcricao){
+      limparWatchdog();
       transcEl.textContent='"'+transcricao+'"';
       enviarMensagemVoz(transcricao);
     }, function(){
+      limparWatchdog();
       gravando=false;
       micBtn.classList.remove('gravando');
       desligarAnalyserDoMic();
@@ -9941,6 +9943,8 @@
       }
     }
 
+    var _watchdogGravacao=null;
+    function limparWatchdog(){ if(_watchdogGravacao){ clearTimeout(_watchdogGravacao); _watchdogGravacao=null; } }
     function iniciarGravacao(){
       if(!rec || processando || gravando) return;
       window.pararFala();
@@ -9950,8 +9954,31 @@
         micBtn.classList.add('gravando');
         setStatus('Ouvindo…'); transcEl.textContent='';
         ligarAnalyserNoMic(stream);
-        try{ rec.start(); }catch(e){}
-      }).catch(function(){
+        try{
+          rec.start();
+          // Watchdog: se nada acontecer (nem onresult, nem onerror, nem onend) em 12s, o reconhecimento
+          // travou silenciosamente — encerra manualmente em vez de deixar "Ouvindo…" para sempre.
+          limparWatchdog();
+          _watchdogGravacao=setTimeout(function(){
+            if(!gravando) return;
+            console.warn('[RAI voz] reconhecimento sem resposta após 12s — encerrando manualmente.');
+            try{ rec.abort(); }catch(e){}
+            gravando=false; micBtn.classList.remove('gravando');
+            desligarAnalyserDoMic();
+            if(_micStream){ _micStream.getTracks().forEach(function(t){t.stop();}); _micStream=null; }
+            setStatus('Sem resposta do reconhecimento de fala — toque para tentar de novo');
+          },12000);
+        }catch(e){
+          // rec.start() pode lançar de forma síncrona (ex.: já iniciado, ou o SpeechRecognition nativo
+          // conflitando com o getUserMedia manual acima) — sem logar isso, a UI travava em "Ouvindo…" para sempre.
+          console.warn('[RAI voz] rec.start() falhou:', e);
+          gravando=false; micBtn.classList.remove('gravando');
+          desligarAnalyserDoMic();
+          if(_micStream){ _micStream.getTracks().forEach(function(t){t.stop();}); _micStream=null; }
+          setStatus('Erro ao iniciar o microfone — toque para tentar de novo');
+        }
+      }).catch(function(err){
+        console.warn('[RAI voz] getUserMedia falhou:', err);
         toast('Não foi possível acessar o microfone. Verifique a permissão do navegador.','err');
         if(conversaContinua){ conversaContinua=false; continuaChk.checked=false; }
       });
