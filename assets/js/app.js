@@ -5174,6 +5174,40 @@
         toast('Configuração do Assistente IA salva ('+PROV_LABEL[provedor]+')','ok');
       };
       lcIcons();
+
+      // ── Voz (ElevenLabs) — conversa falada com a RAI, exclusiva dos perfis Gestor/Administrador ──
+      var secVoz=el('div',{class:'panel',style:'padding:20px;margin-top:16px'});
+      secVoz.innerHTML=
+        '<h3 style="margin:0 0 4px">'+ico('mic',16)+' Assistente por Voz (ElevenLabs)</h3>'+
+        '<p style="margin:0 0 18px;font-size:13px;color:var(--muted)">Chave de API da ElevenLabs para a RAI responder em áudio. Disponível apenas para os perfis <b>Gestor</b> e <b>Administrador</b>. A chave fica <b>apenas no seu navegador</b>.</p>'+
+        '<div style="margin-bottom:14px">'+
+          '<label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">Chave de API</label>'+
+          '<input id="cfgElKey" type="password" placeholder="Cole aqui sua chave da ElevenLabs" style="width:100%;max-width:480px;padding:9px 12px;border:1.5px solid var(--g-200);border-radius:8px;font-size:13px;font-family:monospace"/>'+
+        '</div>'+
+        '<div style="margin-bottom:18px">'+
+          '<label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">Voice ID</label>'+
+          '<input id="cfgElVoice" type="text" placeholder="Ex.: 21m00Tcm4TlvDq8ikWAM" style="width:100%;max-width:320px;padding:9px 12px;border:1.5px solid var(--g-200);border-radius:8px;font-size:13px;font-family:monospace"/>'+
+          '<p style="font-size:12px;color:var(--muted);margin:6px 0 0">Encontre o Voice ID em <b>elevenlabs.io</b> → Voices — copie o ID da voz desejada.</p>'+
+        '</div>'+
+        '<button id="cfgElSave" class="btn-primary" style="padding:9px 22px">'+ico('save',13)+' Salvar configuração</button>'+
+        '<span id="cfgElMsg" style="margin-left:12px;font-size:12.5px;color:var(--ok);opacity:0;transition:opacity .3s"></span>'+
+        '<div style="margin-top:22px;padding-top:18px;border-top:1px solid var(--g-100)">'+
+          '<p style="font-size:12.5px;color:var(--muted);margin:0">📌 Obtenha sua chave em <b>elevenlabs.io</b> → Profile → API Keys. A chamada é feita direto do navegador.</p>'+
+        '</div>';
+      cfgContent.appendChild(secVoz);
+      secVoz.querySelector('#cfgElKey').value=localStorage.getItem('regula_el_key')||'';
+      secVoz.querySelector('#cfgElVoice').value=localStorage.getItem('regula_el_voice')||'';
+      secVoz.querySelector('#cfgElSave').onclick=function(){
+        var k=secVoz.querySelector('#cfgElKey').value.trim();
+        var v=secVoz.querySelector('#cfgElVoice').value.trim();
+        if(k) localStorage.setItem('regula_el_key',k); else localStorage.removeItem('regula_el_key');
+        if(v) localStorage.setItem('regula_el_voice',v); else localStorage.removeItem('regula_el_voice');
+        var msg=secVoz.querySelector('#cfgElMsg');
+        msg.textContent='Salvo!'; msg.style.opacity='1';
+        setTimeout(function(){ msg.style.opacity='0'; },2500);
+        toast('Configuração de voz (ElevenLabs) salva','ok');
+      };
+      lcIcons();
     }
 
     // ── Aba: Usuários ────────────────────────────────────────────────
@@ -9011,6 +9045,7 @@
     chatHd.innerHTML=
       RAI_AVATAR+
       '<div class="rai-hd-info"><span class="rai-hd-name">RAI</span><span class="rai-hd-sub">Assistente AI</span></div>'+
+      (vozDisponivel()?'<button class="manual-chat-maxbtn chat-hd-btn" id="chatVozBtn" title="Respostas em voz: desligado" aria-label="Alternar respostas em voz" aria-pressed="false">'+ico('volume-x',14)+'</button>':'')+
       '<button class="manual-chat-maxbtn chat-hd-btn" id="chatHistBtn" title="Conversas anteriores" aria-label="Conversas anteriores">'+ico('history',14)+'</button>'+
       '<button class="manual-chat-maxbtn chat-hd-btn" id="chatMaxBtn" title="Expandir" aria-label="Expandir" style="margin-left:2px">'+ico('maximize-2',14)+'</button>'+
       '<button class="manual-chat-maxbtn chat-hd-btn" id="chatMinBtn" title="Minimizar" aria-label="Minimizar" style="margin-left:2px">'+ico('chevron-down',14)+'</button>'+
@@ -9027,6 +9062,12 @@
 
     var chatFoot=el('div',{class:'manual-chat-foot'});
     var chatInp=el('textarea',{class:'manual-chat-inp',placeholder:'Digite sua mensagem...',rows:'1'});
+    var chatMicBtn=null;
+    if(vozDisponivel() && SpeechRec){
+      chatMicBtn=el('button',{class:'manual-chat-mic',title:'Falar com a RAI'});
+      chatMicBtn.innerHTML=ico('mic',15);
+      chatFoot.appendChild(chatMicBtn);
+    }
     var chatSend=el('button',{class:'manual-chat-send',title:'Enviar'});
     chatSend.innerHTML=ico('send',15);
     chatFoot.appendChild(chatInp);
@@ -9230,6 +9271,47 @@
       if(!key && prov==='gemini') key=localStorage.getItem('regula_gemini_key')||'';
       var model=localStorage.getItem('regula_ia_model_'+prov)||DEF[prov];
       return {prov:prov,key:key,model:model};
+    }
+
+    // ── Voz (ElevenLabs + Web Speech API) — conversa falada com a RAI, exclusiva de Gestor/Administrador ──
+    function getElCfg(){
+      return {key:localStorage.getItem('regula_el_key')||'', voice:localStorage.getItem('regula_el_voice')||''};
+    }
+    function vozDisponivel(){ return ehGestor() && !!getElCfg().key && !!getElCfg().voice; }
+
+    var _elAudioAtual=null;
+    function pararFala(){ if(_elAudioAtual){ _elAudioAtual.pause(); _elAudioAtual=null; } }
+    // Converte texto em áudio via ElevenLabs TTS e toca. Remove markdown básico antes de enviar (não deve ser falado literalmente).
+    async function falarTexto(texto){
+      var cfg=getElCfg();
+      if(!cfg.key || !cfg.voice) return;
+      var limpo=String(texto||'').replace(/<<<[\s\S]*?>>>/g,'').replace(/[*_`#]/g,'').trim();
+      if(!limpo) return;
+      try{
+        pararFala();
+        var r=await fetch('https://api.elevenlabs.io/v1/text-to-speech/'+encodeURIComponent(cfg.voice),{
+          method:'POST',
+          headers:{'Content-Type':'application/json','xi-api-key':cfg.key,'Accept':'audio/mpeg'},
+          body:JSON.stringify({text:limpo, model_id:'eleven_multilingual_v2', voice_settings:{stability:0.5, similarity_boost:0.75}})
+        });
+        if(!r.ok) return;
+        var blob=await r.blob();
+        var url=URL.createObjectURL(blob);
+        _elAudioAtual=new Audio(url);
+        _elAudioAtual.play().catch(function(){});
+      }catch(e){}
+    }
+
+    // Reconhecimento de fala (Web Speech API, nativa do navegador — Chrome/Edge). Sem chave, sem custo.
+    var SpeechRec=window.SpeechRecognition||window.webkitSpeechRecognition;
+    function criarReconhecimento(onResult, onEnd){
+      if(!SpeechRec) return null;
+      var rec=new SpeechRec();
+      rec.lang='pt-BR'; rec.interimResults=false; rec.maxAlternatives=1;
+      rec.onresult=function(ev){ var t=ev.results[0][0].transcript; onResult(t); };
+      rec.onerror=function(){ if(onEnd) onEnd(); };
+      rec.onend=function(){ if(onEnd) onEnd(); };
+      return rec;
     }
 
     // Chama a API do provedor selecionado; history no formato canônico Gemini
@@ -9448,6 +9530,7 @@
           }
           chatHistory.push({role:'model',parts:[{text:textoExibir}]});
           addMsg('bot',textoExibir);
+          if(vozAtiva && vozDisponivel()) falarTexto(textoExibir);
           if(anexosEnviadosAgora.length && chatGuia){ marcarAnexosAnalisados(chatGuia, anexosEnviadosAgora); }
         } else {
           addMsg('bot','❌ '+res.text);
@@ -9509,6 +9592,48 @@
       lcIcons();
       chatInp.focus();
     };
+
+    // Toggle "responder em voz" — só existe no DOM quando vozDisponivel() (Gestor/Administrador + chave ElevenLabs configurada)
+    var vozAtiva=localStorage.getItem('regula_voz_ativa')==='1';
+    var chatVozBtn=chatHd.querySelector('#chatVozBtn');
+    if(chatVozBtn){
+      function syncVozBtn(){
+        chatVozBtn.classList.toggle('active',vozAtiva);
+        chatVozBtn.innerHTML=ico(vozAtiva?'volume-2':'volume-x',14);
+        chatVozBtn.title='Respostas em voz: '+(vozAtiva?'ligado':'desligado');
+        chatVozBtn.setAttribute('aria-pressed',vozAtiva?'true':'false');
+        lcIcons();
+      }
+      syncVozBtn();
+      chatVozBtn.onclick=function(e){
+        e.stopPropagation();
+        vozAtiva=!vozAtiva;
+        localStorage.setItem('regula_voz_ativa',vozAtiva?'1':'0');
+        if(!vozAtiva) pararFala();
+        syncVozBtn();
+      };
+    }
+
+    // Botão de microfone — grava a fala, transcreve (Web Speech API) e envia como mensagem normal
+    if(chatMicBtn){
+      var reconhecendo=false;
+      var recAtivo=criarReconhecimento(function(transcricao){
+        chatInp.value=transcricao;
+        sendChat();
+      }, function(){
+        reconhecendo=false;
+        chatMicBtn.classList.remove('gravando');
+        chatMicBtn.innerHTML=ico('mic',15); lcIcons();
+      });
+      chatMicBtn.onclick=function(){
+        if(!recAtivo) return;
+        if(reconhecendo){ recAtivo.stop(); return; }
+        reconhecendo=true;
+        chatMicBtn.classList.add('gravando');
+        chatMicBtn.innerHTML=ico('mic',15); lcIcons();
+        try{ recAtivo.start(); }catch(e){ reconhecendo=false; chatMicBtn.classList.remove('gravando'); }
+      };
+    }
 
     // Botão histórico no header (abre/fecha; fechar inicia conversa nova)
     chatHd.querySelector('#chatHistBtn').onclick=function(e){
