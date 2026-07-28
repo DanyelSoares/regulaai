@@ -1926,6 +1926,8 @@ body.sidebar-collapsed .modal-backdrop{left:66px}
   z-index:56;box-shadow:-4px 0 18px rgba(0,0,0,.2);transition:width .25s;overflow:hidden;
 }
 .voz-room.voz-open{display:flex}
+.voz-room.voz-max{width:520px}
+.voz-room.voz-max2{width:min(820px,70vw)}
 .voz-room.voz-minimized{top:auto;bottom:0;height:auto;border-left:none;border-top:1px solid var(--line);border-radius:8px 8px 0 0;box-shadow:0 -2px 12px rgba(0,0,0,.12);z-index:36;width:140px}
 .voz-room.voz-minimized .voz-body,
 .voz-room.voz-minimized .voz-foot{display:none}
@@ -1937,6 +1939,8 @@ body.sidebar-collapsed .modal-backdrop{left:66px}
 .voz-hd{position:relative;z-index:5;display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid rgba(255,255,255,.08);font-size:13.5px;font-weight:700;color:#fff;background:linear-gradient(135deg,#0a2e18 0%,#0f3d22 60%,#1a5c38 100%);flex-shrink:0}
 .voz-body{position:relative;z-index:1;flex:1 1 auto;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:16px 20px;overflow:hidden}
 .voz-esfera-wrap{position:relative;width:min(220px,38vh);height:min(220px,38vh);flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.voz-room.voz-max .voz-esfera-wrap{width:min(300px,42vh);height:min(300px,42vh)}
+.voz-room.voz-max2 .voz-esfera-wrap{width:min(380px,46vh);height:min(380px,46vh)}
 .voz-esfera-wrap canvas{width:100%;height:100%;position:relative;z-index:2}
 /* Halos concêntricos por trás da esfera — profundidade e glow ambiente, pulsando devagar mesmo em repouso */
 .voz-esfera-wrap::before,
@@ -1971,10 +1975,10 @@ body.sidebar-collapsed .modal-backdrop{left:66px}
 .voz-transcricao{font-size:12px;color:rgba(234,255,244,.75);text-align:center;max-width:280px;min-height:16px;line-height:1.5}
 .voz-foot{position:relative;z-index:2;padding:14px 12px 18px;display:flex;justify-content:center;flex-shrink:0}
 .voz-mic-btn{
-  width:60px;height:60px;border-radius:50%;border:none;cursor:pointer;
+  width:44px;height:44px;border-radius:50%;border:none;cursor:pointer;
   background:radial-gradient(circle at 35% 30%,#4ade80,#16a34a 65%);color:#fff;
   display:flex;align-items:center;justify-content:center;
-  box-shadow:0 4px 18px rgba(22,163,94,.5);transition:transform .15s,box-shadow .15s;
+  box-shadow:0 4px 14px rgba(22,163,94,.5);transition:transform .15s,box-shadow .15s;
 }
 .voz-mic-btn:hover{transform:scale(1.05)}
 .voz-mic-btn.gravando{background:radial-gradient(circle at 35% 30%,#f87171,#dc2626 65%);box-shadow:0 4px 18px rgba(220,38,38,.55);animation:mic-pulse 1.1s ease-in-out infinite}

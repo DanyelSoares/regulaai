@@ -9695,6 +9695,7 @@
     hd.innerHTML=
       RAI_AVATAR+
       '<div class="rai-hd-info"><span class="rai-hd-name">RAI</span><span class="rai-hd-sub">Conversa por voz</span></div>'+
+      '<button class="manual-chat-maxbtn voz-hd-btn" id="vozMaxBtn" title="Expandir" aria-label="Expandir">'+ico('maximize-2',14)+'</button>'+
       '<button class="manual-chat-maxbtn voz-hd-btn" id="vozMinBtn" title="Minimizar" aria-label="Minimizar" style="margin-left:2px">'+ico('chevron-down',14)+'</button>'+
       '<button class="manual-chat-maxbtn voz-hd-btn" id="vozCloseBtn" title="Fechar" aria-label="Fechar sala de voz" style="margin-left:2px">'+ico('x',14)+'</button>';
     vozRoot.appendChild(hd);
@@ -9702,14 +9703,14 @@
     var body=el('div',{class:'voz-body'});
     body.innerHTML=
       '<div class="voz-esfera-wrap"><div class="voz-anel"></div><div class="voz-anel voz-anel-2"></div><canvas id="vozCanvas" width="280" height="280"></canvas></div>'+
-      '<div class="voz-status" id="vozStatus">Toque no microfone para falar</div>'+
+      '<div class="voz-status" id="vozStatus" style="display:none"></div>'+
       '<div class="voz-transcricao" id="vozTranscricao"></div>';
     vozRoot.appendChild(body);
 
     var foot=el('div',{class:'voz-foot',style:'flex-direction:column;gap:10px'});
     var micRow=el('div',{style:'display:flex;justify-content:center'});
     var micBtn=el('button',{class:'voz-mic-btn',id:'vozMicBtn',title:'Falar com a RAI'});
-    micBtn.innerHTML=ico('mic',24);
+    micBtn.innerHTML=ico('mic',18);
     micRow.appendChild(micBtn);
     foot.appendChild(micRow);
     var continuaRow=el('label',{class:'voz-continua-toggle'});
@@ -9725,7 +9726,7 @@
     // ── Desenho da esfera reativa (canvas 2D, pontos distribuídos numa esfera, deslocados pela amplitude do áudio) ──
     var canvas=$('#vozCanvas',vozRoot), ctx2d=canvas.getContext('2d');
     var DPR=Math.min(window.devicePixelRatio||1,2);
-    var CANVAS_PX=280;
+    var CANVAS_PX=380; // resolução interna cobre o maior tamanho possível (modo voz-max2); CSS escala para baixo nos demais, sem perda de nitidez
     canvas.width=CANVAS_PX*DPR; canvas.height=CANVAS_PX*DPR;
     var pontos=(function(){
       // Distribuição em espiral de Fibonacci sobre uma esfera — visual uniforme sem acúmulo nos polos.
@@ -9861,6 +9862,21 @@
 
     // ── Fluxo de conversa: push-to-talk (clique inicia, clique de novo encerra e envia) ──
     var statusEl=$('#vozStatus',vozRoot), transcEl=$('#vozTranscricao',vozRoot);
+    var STATUS_OCIOSO='Toque no microfone para falar';
+    // Estado ocioso: some do corpo (dá mais espaço à esfera) e vira tooltip do próprio botão.
+    // Qualquer outro estado (ouvindo/pensando/respondendo/erros) continua visível no corpo normalmente.
+    function setStatus(texto){
+      if(texto===STATUS_OCIOSO){
+        statusEl.textContent='';
+        statusEl.style.display='none';
+        micBtn.title=STATUS_OCIOSO;
+      } else {
+        statusEl.textContent=texto;
+        statusEl.style.display='';
+        micBtn.title='Falar com a RAI';
+      }
+    }
+    setStatus(STATUS_OCIOSO);
     var historicoVoz=[]; // {role:'user'|'model', text}
     var gravando=false, processando=false;
     var ERRO_RECONHECIMENTO_LBL={
@@ -9884,15 +9900,15 @@
         _ultimoErroRec=null;
         // O reconhecimento pode encerrar sozinho por silêncio (sem transcrição) — no modo mãos-livres,
         // reabre a escuta automaticamente em vez de deixar a conversa "travada" esperando um clique.
-        if(conversaContinua){ statusEl.textContent='Ouvindo de novo…'; setTimeout(function(){ if(conversaContinua && !gravando && !processando) iniciarGravacao(); },400); }
-        else statusEl.textContent=msgErro || 'Toque no microfone para falar';
+        if(conversaContinua){ setStatus('Ouvindo de novo…'); setTimeout(function(){ if(conversaContinua && !gravando && !processando) iniciarGravacao(); },400); }
+        else setStatus(msgErro || STATUS_OCIOSO);
       }
     }, function(erro){ _ultimoErroRec=erro; });
 
     async function enviarMensagemVoz(texto){
       if(!texto || !texto.trim()) return;
       processando=true;
-      statusEl.textContent='Pensando…';
+      setStatus('Pensando…');
       historicoVoz.push({role:'user',text:texto});
       var contexto=(window.ctxSistemaVoz||'')+'\n\nMODO: CONVERSA POR VOZ. Responda de forma curta e natural para ser OUVIDA em áudio — frases diretas, sem listas, sem markdown, sem emojis.';
       var cfg=window.getIaCfg();
@@ -9901,27 +9917,27 @@
         var res=await window.callIAComSistema(cfg, contexto, historicoTxt);
         if(res && res.ok){
           historicoVoz.push({role:'model',text:res.text});
-          statusEl.textContent='Respondendo…';
+          setStatus('Respondendo…');
           transcEl.textContent=res.text;
           var audioEl=await window.falarTexto(res.text);
           if(audioEl){
             ligarAnalyserNoAudio(audioEl);
             audioEl.addEventListener('ended',function(){
               processando=false;
-              statusEl.textContent='Toque no microfone para falar';
+              setStatus(STATUS_OCIOSO);
             },{once:true});
           } else {
             processando=false;
-            statusEl.textContent=conversaContinua?'Ouvindo de novo…':'Toque no microfone para falar';
+            setStatus(conversaContinua?'Ouvindo de novo…':STATUS_OCIOSO);
             if(conversaContinua) iniciarGravacao();
           }
         } else {
           processando=false;
-          statusEl.textContent='Erro ao responder — toque para tentar de novo';
+          setStatus('Erro ao responder — toque para tentar de novo');
         }
       }catch(e){
         processando=false;
-        statusEl.textContent='Erro de conexão — toque para tentar de novo';
+        setStatus('Erro de conexão — toque para tentar de novo');
       }
     }
 
@@ -9932,7 +9948,7 @@
         _micStream=stream;
         gravando=true;
         micBtn.classList.add('gravando');
-        statusEl.textContent='Ouvindo…'; transcEl.textContent='';
+        setStatus('Ouvindo…'); transcEl.textContent='';
         ligarAnalyserNoMic(stream);
         try{ rec.start(); }catch(e){}
       }).catch(function(){
@@ -9989,6 +10005,15 @@
       pararDesenho();
       persistVozUI();
     }
+    var vozMaxLevel=0; // 0=normal, 1=largo, 2=muito largo
+    hd.querySelector('#vozMaxBtn').onclick=function(){
+      vozMaxLevel=(vozMaxLevel+1)%3;
+      vozRoot.classList.toggle('voz-max',vozMaxLevel===1);
+      vozRoot.classList.toggle('voz-max2',vozMaxLevel===2);
+      this.innerHTML=ico(vozMaxLevel===2?'minimize-2':'maximize-2',14);
+      this.title=vozMaxLevel===0?'Expandir':(vozMaxLevel===1?'Expandir mais':'Restaurar');
+      lcIcons();
+    };
     hd.querySelector('#vozMinBtn').onclick=function(e){ e.stopPropagation(); vozMinimize(); };
     hd.querySelector('#vozCloseBtn').onclick=function(e){ e.stopPropagation(); vozFechar(); };
     hd.onclick=function(){ if(vozRoot.classList.contains('voz-minimized')) vozRestore(); };
