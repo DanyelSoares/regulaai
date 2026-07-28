@@ -5101,6 +5101,41 @@
         openai:'📌 Obtenha sua chave em <b>platform.openai.com/api-keys</b>. Requer créditos na conta OpenAI.'
       };
 
+      // Consulta a API de cada provedor para listar os modelos REALMENTE disponíveis para a chave informada —
+      // evita depender de uma lista fixa no código, que fica obsoleta sempre que o provedor descontinua/lança modelos.
+      // Filtra por prefixos de família (ex.: "gemini-", "claude-", "gpt-"/"o") para não poluir com modelos de
+      // embedding/imagem/audio que não servem para chat de texto.
+      async function listarModelosDinamico(prov, key){
+        try{
+          if(prov==='gemini'){
+            var r=await fetch('https://generativelanguage.googleapis.com/v1beta/models?key='+encodeURIComponent(key));
+            var d=await r.json();
+            if(!d.models) return null;
+            return d.models
+              .filter(function(m){ return /generateContent/.test((m.supportedGenerationMethods||[]).join(',')) && /gemini/.test(m.name); })
+              .map(function(m){ return (m.name||'').replace(/^models\//,''); })
+              .filter(function(v,i,arr){ return v && arr.indexOf(v)===i; });
+          }
+          if(prov==='claude'){
+            var rc=await fetch('https://api.anthropic.com/v1/models',{
+              headers:{'x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'}
+            });
+            var dc=await rc.json();
+            if(!dc.data) return null;
+            return dc.data.map(function(m){ return m.id; }).filter(Boolean);
+          }
+          if(prov==='openai'){
+            var ro=await fetch('https://api.openai.com/v1/models',{headers:{'Authorization':'Bearer '+key}});
+            var do_=await ro.json();
+            if(!do_.data) return null;
+            return do_.data.map(function(m){ return m.id; })
+              .filter(function(id){ return /^(gpt-|o[0-9]|chatgpt)/.test(id); })
+              .sort();
+          }
+        }catch(e){ return null; }
+        return null;
+      }
+
       var provedor=localStorage.getItem('regula_ia_provider')||'gemini';
 
       var sec=el('div',{class:'panel',style:'padding:20px'});
@@ -5123,6 +5158,7 @@
         '<div style="margin-bottom:18px">'+
           '<label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">Modelo</label>'+
           '<select id="cfgIaModel" style="padding:8px 12px;border:1.5px solid var(--g-200);border-radius:8px;font-size:13px;min-width:280px"></select>'+
+          '<p id="iaModelStatus" style="font-size:11.5px;color:var(--muted);margin:6px 0 0;min-height:14px"></p>'+
         '</div>'+
         '<button id="cfgIaSave" class="btn-primary" style="padding:9px 22px">'+ico('save',13)+' Salvar configuração</button>'+
         '<span id="cfgIaMsg" style="margin-left:12px;font-size:12.5px;color:var(--ok);opacity:0;transition:opacity .3s"></span>'+
@@ -5136,25 +5172,58 @@
       var keyLbl=sec.querySelector('#iaKeyProvLbl');
       var obterTxt=sec.querySelector('#iaObterTxt');
 
+      // Preenche o <select> com a lista estática (fallback) — chamado imediatamente ao trocar de provedor,
+      // antes de a busca dinâmica (assíncrona) responder, para o dropdown nunca ficar vazio.
+      function preencherModelosEstaticos(p, valorAtual){
+        selModel.innerHTML=MODELOS[p].map(function(m){ return '<option value="'+m.v+'">'+m.t+'</option>'; }).join('');
+        selModel.value=valorAtual;
+      }
+      // Busca os modelos reais disponíveis para a chave e substitui as opções do <select>, preservando a
+      // seleção atual quando ela também existir na lista dinâmica (senão cai no primeiro item retornado).
+      var _reqModeloSeq=0;
+      async function atualizarModelosDinamico(p, key){
+        if(!key){ return; }
+        var meuSeq=++_reqModeloSeq; // descarta respostas atrasadas de uma chave/provedor já trocado
+        var statusModel=sec.querySelector('#iaModelStatus');
+        if(statusModel) statusModel.textContent='Consultando modelos disponíveis para esta chave…';
+        var lista=await listarModelosDinamico(p, key);
+        if(meuSeq!==_reqModeloSeq || provedor!==p) return; // usuário já trocou de provedor/chave nesse meio-tempo
+        if(statusModel) statusModel.textContent='';
+        if(!lista || !lista.length) return; // mantém a lista estática já exibida
+        var valorAtual=selModel.value;
+        selModel.innerHTML=lista.map(function(v){ return '<option value="'+v+'">'+v+'</option>'; }).join('');
+        selModel.value=lista.indexOf(valorAtual)>=0 ? valorAtual : lista[0];
+      }
+
       // Preenche modelo + chave conforme o provedor selecionado
       function carregaProvedor(p){
         provedor=p;
         // modelos
         var savedModel=localStorage.getItem('regula_ia_model_'+p)||DEFAULTS[p];
-        selModel.innerHTML=MODELOS[p].map(function(m){ return '<option value="'+m.v+'">'+m.t+'</option>'; }).join('');
-        selModel.value=savedModel;
+        preencherModelosEstaticos(p, savedModel);
         // chave
-        inpKey.value=localStorage.getItem('regula_ia_key_'+p)||'';
+        var savedKey=localStorage.getItem('regula_ia_key_'+p)||'';
+        inpKey.value=savedKey;
         inpKey.placeholder=KEY_HINT[p];
         keyLbl.textContent=PROV_LABEL[p];
         obterTxt.innerHTML=OBTER[p];
         // botões ativos
         $$('.ia-prov-btn',sec).forEach(function(b){ b.classList.toggle('active',b.getAttribute('data-prov')===p); });
+        if(savedKey) atualizarModelosDinamico(p, savedKey);
       }
       carregaProvedor(provedor);
 
       $$('.ia-prov-btn',sec).forEach(function(b){
         b.onclick=function(){ carregaProvedor(b.getAttribute('data-prov')); };
+      });
+
+      // Ao colar/editar a chave, busca os modelos dessa chave após uma pausa na digitação (evita 1 chamada por tecla)
+      var _debounceModelos=null;
+      inpKey.addEventListener('input',function(){
+        clearTimeout(_debounceModelos);
+        var k=inpKey.value.trim();
+        if(!k) return;
+        _debounceModelos=setTimeout(function(){ atualizarModelosDinamico(provedor, k); },600);
       });
 
       sec.querySelector('#cfgIaSave').onclick=function(){
