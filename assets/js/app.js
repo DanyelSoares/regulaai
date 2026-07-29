@@ -5244,17 +5244,21 @@
       };
       lcIcons();
 
-      // ── Voz (ElevenLabs / Fish Audio) — conversa falada com a RAI, exclusiva dos perfis Gestor/Administrador ──
-      var VOZ_PROV_LABEL={elevenlabs:'ElevenLabs',fish:'Fish Audio'};
+      // ── Voz (ElevenLabs / Fish Audio / Google Cloud) — conversa falada com a RAI, exclusiva dos perfis Gestor/Administrador ──
+      var VOZ_PROV_LABEL={elevenlabs:'ElevenLabs',fish:'Fish Audio',gcloud:'Google Cloud'};
+      var VOZ_VOICE_LABEL={elevenlabs:'Voice ID',fish:'Voice ID',gcloud:'Nome da voz'};
       var VOZ_VOICE_HINT={
         elevenlabs:'Ex.: 21m00Tcm4TlvDq8ikWAM',
-        fish:'Ex.: 802e3bc2b27e49c2995d23ef70e6ac89'
+        fish:'Ex.: 802e3bc2b27e49c2995d23ef70e6ac89',
+        gcloud:'Ex.: pt-BR-Neural2-A ou pt-BR-Wavenet-B'
       };
       var VOZ_OBTER={
         elevenlabs:'📌 Chave em <b>elevenlabs.io</b> → Profile → API Keys. Voice ID em <b>elevenlabs.io</b> → Voices. <b>Atenção:</b> o plano gratuito da ElevenLabs só libera vozes clonadas pelo próprio usuário via API — vozes prontas da biblioteca exigem plano pago.',
         fish:'📌 Chave em <b>fish.audio</b> → Developer/API Keys. Voice ID (reference_id) em <b>fish.audio</b> → Voices. '+
           '⚠️ <b>Atenção:</b> a API do Fish Audio bloqueia chamadas diretas do navegador (CORS) — funciona apenas através de um servidor/proxy intermediário, que este sistema (100% front-end, hospedado no GitHub Pages) não possui. '+
-          'Selecionar este provedor hoje resultará em erro "Failed to fetch" ao tentar falar. Use a ElevenLabs enquanto essa limitação não for contornada.'
+          'Selecionar este provedor hoje resultará em erro "Failed to fetch" ao tentar falar. Use a ElevenLabs enquanto essa limitação não for contornada.',
+        gcloud:'📌 Chave em <b>console.cloud.google.com</b> → APIs e serviços → Credenciais (exige projeto com faturamento habilitado e a "Cloud Text-to-Speech API" ativada). '+
+          'O nome da voz é um identificador pré-definido do Google (não é possível clonar sua própria voz aqui) — veja a lista completa em <b>cloud.google.com/text-to-speech/docs/voices</b>. As vozes em português começam com "pt-BR-".'
       };
       var vozProvedor=localStorage.getItem('regula_voz_provider')||'elevenlabs';
 
@@ -5265,7 +5269,7 @@
         '<div style="margin-bottom:16px">'+
           '<label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">Provedor de voz</label>'+
           '<div class="ia-prov-row" id="vozProvRow">'+
-            ['elevenlabs','fish'].map(function(p){
+            ['elevenlabs','fish','gcloud'].map(function(p){
               return '<button type="button" class="ia-prov-btn'+(p===vozProvedor?' active':'')+'" data-prov="'+p+'">'+VOZ_PROV_LABEL[p]+(p==='fish'?' '+ico('alert-triangle',11):'')+'</button>';
             }).join('')+
           '</div>'+
@@ -5275,7 +5279,7 @@
           '<input id="cfgVozKey" type="password" placeholder="Cole aqui sua chave" style="width:100%;max-width:480px;padding:9px 12px;border:1.5px solid var(--g-200);border-radius:8px;font-size:13px;font-family:monospace"/>'+
         '</div>'+
         '<div style="margin-bottom:18px">'+
-          '<label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">Voice ID</label>'+
+          '<label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px" id="vozVoiceLbl">'+VOZ_VOICE_LABEL[vozProvedor]+'</label>'+
           '<input id="cfgVozVoice" type="text" style="width:100%;max-width:320px;padding:9px 12px;border:1.5px solid var(--g-200);border-radius:8px;font-size:13px;font-family:monospace"/>'+
         '</div>'+
         '<button id="cfgVozSave" class="btn-primary" style="padding:9px 22px">'+ico('save',13)+' Salvar configuração</button>'+
@@ -5288,6 +5292,7 @@
       var inpVozKey=secVoz.querySelector('#cfgVozKey');
       var inpVozVoice=secVoz.querySelector('#cfgVozVoice');
       var vozKeyLbl=secVoz.querySelector('#vozKeyProvLbl');
+      var vozVoiceLbl=secVoz.querySelector('#vozVoiceLbl');
       var vozObterTxt=secVoz.querySelector('#vozObterTxt');
 
       function carregaProvedorVoz(p){
@@ -5296,6 +5301,7 @@
         inpVozVoice.value=localStorage.getItem('regula_voz_voice_'+p)||'';
         inpVozVoice.placeholder=VOZ_VOICE_HINT[p];
         vozKeyLbl.textContent=VOZ_PROV_LABEL[p];
+        vozVoiceLbl.textContent=VOZ_VOICE_LABEL[p];
         vozObterTxt.innerHTML=VOZ_OBTER[p];
         $$('.ia-prov-btn',secVoz).forEach(function(b){ b.classList.toggle('active',b.getAttribute('data-prov')===p); });
       }
@@ -9413,28 +9419,55 @@
       if(!cfg.key || !cfg.voice) return {erro:'Chave ou Voice ID de voz não configurados.'};
       var limpo=String(texto||'').replace(/<<<[\s\S]*?>>>/g,'').replace(/[*_`#]/g,'').trim();
       if(!limpo) return {erro:'Nada para narrar (texto vazio após limpeza).'};
+      var PROV_NOME={fish:'Fish Audio',elevenlabs:'ElevenLabs',gcloud:'Google Cloud'};
       try{
         pararFala();
-        var r;
-        if(cfg.prov==='fish'){
-          r=await fetch('https://api.fish.audio/v1/tts',{
+        var blob;
+        if(cfg.prov==='gcloud'){
+          // Google Cloud TTS responde JSON com o áudio em base64 (audioContent), diferente dos demais
+          // provedores (que retornam os bytes de áudio diretamente no corpo da resposta HTTP).
+          var rg=await fetch('https://texttospeech.googleapis.com/v1/text:synthesize?key='+encodeURIComponent(cfg.key),{
             method:'POST',
-            headers:{'Content-Type':'application/json','Authorization':'Bearer '+cfg.key},
-            body:JSON.stringify({text:limpo, reference_id:cfg.voice, format:'mp3'})
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({
+              input:{text:limpo},
+              voice:{languageCode:(cfg.voice.match(/^[a-z]{2}-[A-Z]{2}/)||['pt-BR'])[0], name:cfg.voice},
+              audioConfig:{audioEncoding:'MP3'}
+            })
           });
+          if(!rg.ok){
+            var corpoErroG=await rg.text().catch(function(){return '';});
+            console.warn('[RAI voz] TTS (gcloud) falhou:', rg.status, corpoErroG);
+            return {erro:'Google Cloud retornou erro '+rg.status+(corpoErroG?': '+corpoErroG.slice(0,200):'')};
+          }
+          var dg=await rg.json();
+          if(!dg.audioContent) return {erro:'Google Cloud não retornou áudio na resposta.'};
+          var binario=atob(dg.audioContent);
+          var bytes=new Uint8Array(binario.length);
+          for(var i=0;i<binario.length;i++) bytes[i]=binario.charCodeAt(i);
+          blob=new Blob([bytes],{type:'audio/mp3'});
         } else {
-          r=await fetch('https://api.elevenlabs.io/v1/text-to-speech/'+encodeURIComponent(cfg.voice),{
-            method:'POST',
-            headers:{'Content-Type':'application/json','xi-api-key':cfg.key,'Accept':'audio/mpeg'},
-            body:JSON.stringify({text:limpo, model_id:'eleven_multilingual_v2', voice_settings:{stability:0.5, similarity_boost:0.75}})
-          });
+          var r;
+          if(cfg.prov==='fish'){
+            r=await fetch('https://api.fish.audio/v1/tts',{
+              method:'POST',
+              headers:{'Content-Type':'application/json','Authorization':'Bearer '+cfg.key},
+              body:JSON.stringify({text:limpo, reference_id:cfg.voice, format:'mp3'})
+            });
+          } else {
+            r=await fetch('https://api.elevenlabs.io/v1/text-to-speech/'+encodeURIComponent(cfg.voice),{
+              method:'POST',
+              headers:{'Content-Type':'application/json','xi-api-key':cfg.key,'Accept':'audio/mpeg'},
+              body:JSON.stringify({text:limpo, model_id:'eleven_multilingual_v2', voice_settings:{stability:0.5, similarity_boost:0.75}})
+            });
+          }
+          if(!r.ok){
+            var corpoErro=await r.text().catch(function(){return '';});
+            console.warn('[RAI voz] TTS ('+cfg.prov+') falhou:', r.status, corpoErro);
+            return {erro:PROV_NOME[cfg.prov]+' retornou erro '+r.status+(corpoErro?': '+corpoErro.slice(0,200):'')};
+          }
+          blob=await r.blob();
         }
-        if(!r.ok){
-          var corpoErro=await r.text().catch(function(){return '';});
-          console.warn('[RAI voz] TTS ('+cfg.prov+') falhou:', r.status, corpoErro);
-          return {erro:(cfg.prov==='fish'?'Fish Audio':'ElevenLabs')+' retornou erro '+r.status+(corpoErro?': '+corpoErro.slice(0,200):'')};
-        }
-        var blob=await r.blob();
         var url=URL.createObjectURL(blob);
         _elAudioAtual=new Audio(url);
         await _elAudioAtual.play().catch(function(e){ console.warn('[RAI voz] audio.play() falhou:', e); });
