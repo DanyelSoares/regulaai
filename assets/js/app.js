@@ -5252,7 +5252,9 @@
       };
       var VOZ_OBTER={
         elevenlabs:'📌 Chave em <b>elevenlabs.io</b> → Profile → API Keys. Voice ID em <b>elevenlabs.io</b> → Voices. <b>Atenção:</b> o plano gratuito da ElevenLabs só libera vozes clonadas pelo próprio usuário via API — vozes prontas da biblioteca exigem plano pago.',
-        fish:'📌 Chave em <b>fish.audio</b> → Developer/API Keys. Voice ID (reference_id) em <b>fish.audio</b> → Voices (clone sua própria voz ou use uma pública).'
+        fish:'📌 Chave em <b>fish.audio</b> → Developer/API Keys. Voice ID (reference_id) em <b>fish.audio</b> → Voices. '+
+          '⚠️ <b>Atenção:</b> a API do Fish Audio bloqueia chamadas diretas do navegador (CORS) — funciona apenas através de um servidor/proxy intermediário, que este sistema (100% front-end, hospedado no GitHub Pages) não possui. '+
+          'Selecionar este provedor hoje resultará em erro "Failed to fetch" ao tentar falar. Use a ElevenLabs enquanto essa limitação não for contornada.'
       };
       var vozProvedor=localStorage.getItem('regula_voz_provider')||'elevenlabs';
 
@@ -5264,7 +5266,7 @@
           '<label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">Provedor de voz</label>'+
           '<div class="ia-prov-row" id="vozProvRow">'+
             ['elevenlabs','fish'].map(function(p){
-              return '<button type="button" class="ia-prov-btn'+(p===vozProvedor?' active':'')+'" data-prov="'+p+'">'+VOZ_PROV_LABEL[p]+'</button>';
+              return '<button type="button" class="ia-prov-btn'+(p===vozProvedor?' active':'')+'" data-prov="'+p+'">'+VOZ_PROV_LABEL[p]+(p==='fish'?' '+ico('alert-triangle',11):'')+'</button>';
             }).join('')+
           '</div>'+
         '</div>'+
@@ -9439,6 +9441,11 @@
         return {audio:_elAudioAtual};
       }catch(e){
         console.warn('[RAI voz] exceção em falarTexto:', e);
+        // "Failed to fetch" sem nenhum status HTTP quase sempre é bloqueio de CORS (o navegador nem chega
+        // a receber resposta) — caso conhecido do Fish Audio, que não libera chamadas diretas do navegador.
+        if(cfg.prov==='fish' && /Failed to fetch/i.test(e&&e.message||'')){
+          return {erro:'Fish Audio bloqueou a chamada direta do navegador (CORS). Esse provedor exige um servidor/proxy intermediário — use a ElevenLabs por enquanto.'};
+        }
         return {erro:'Exceção ao gerar áudio: '+(e&&e.message||e)};
       }
     }
