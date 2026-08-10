@@ -1782,7 +1782,7 @@
             '<div class="field"><label>Pessoa p/ contato</label><input id="siPessoaContato" type="text" value="'+esc(s.pessoaContato)+'"></div>'+
           '</div>'+
         '</div>'+
-        '<div class="solic-benef-foto" id="siBenefFoto">'+(s.benef&&s.benef.foto?'<img src="'+esc(s.benef.foto)+'" alt="Foto do beneficiário">':'<span>'+ico('image-off',20)+' Foto não disponível</span>')+'</div>'+
+        '<div class="solic-benef-foto" id="siBenefFoto">'+(s.benef&&s.benef.foto?'<img src="'+esc(s.benef.foto)+'" alt="Foto do beneficiário">':'<span>'+ico('image-off',28)+'Foto não<br>disponível</span>')+'</div>'+
       '</div>'+
       '<div class="field"><label>Observações do beneficiário</label><textarea id="siObsBenef" rows="2">'+esc(s.obsBenef)+'</textarea></div>'+
 
