@@ -2086,7 +2086,7 @@
   // Todos os campos preenchidos são combinados (E lógico); campos vazios não filtram.
   function _abrirBuscaAvancadaBenef(onEscolher){
     var CAMPOS_BUSCA=[
-      {id:'babNome', campo:'nome', label:''},
+      {id:'babNome', campo:'nome', label:'Nome do beneficiário:'},
       {id:'babCarteira', campo:'carteirinha', label:'Carteira:'},
       {id:'babOutras', campo:'outrasCarteiras', label:'Outras carteiras:'},
       {id:'babCpf', campo:'cpf', label:'CPF:'},
@@ -2098,7 +2098,7 @@
     var body=
       '<div class="solic-babusca-form">'+
         CAMPOS_BUSCA.map(function(c){
-          return '<div class="solic-babusca-row">'+(c.label?'<label>'+c.label+'</label>':'<label></label>')+'<input type="text" id="'+c.id+'" placeholder="'+(c.label?'':'Nome do beneficiário')+'"></div>';
+          return '<div class="solic-babusca-row"><label>'+c.label+'</label><input type="text" id="'+c.id+'"></div>';
         }).join('')+
         '<div class="solic-babusca-row"><label>Qtde de resultados:</label><input type="number" id="babQtde" value="20" min="1" max="100" style="max-width:90px"></div>'+
       '</div>'+
