@@ -2060,6 +2060,51 @@
     inp.addEventListener('input',function(){ renderResultados(inp.value); });
   }
 
+  // Busca avançada de beneficiário — formulário multi-campo (Nome, Carteira, Outras carteiras, CPF,
+  // Data de nascimento, Data de inclusão, Nome da Mãe, Matrícula) + limite de resultados, com botão "Localizar".
+  // Todos os campos preenchidos são combinados (E lógico); campos vazios não filtram.
+  function _abrirBuscaAvancadaBenef(onEscolher){
+    var CAMPOS_BUSCA=[
+      {id:'babNome', campo:'nome', label:''},
+      {id:'babCarteira', campo:'carteirinha', label:'Carteira:'},
+      {id:'babOutras', campo:'outrasCarteiras', label:'Outras carteiras:'},
+      {id:'babCpf', campo:'cpf', label:'CPF:'},
+      {id:'babDataNasc', campo:'dataNascimento', label:'Data de nascimento:'},
+      {id:'babDataInc', campo:'dataInclusao', label:'Data de inclusão:'},
+      {id:'babNomeMae', campo:'nomeMae', label:'Nome da Mãe:'},
+      {id:'babMatricula', campo:'matricula', label:'Matrícula:'}
+    ];
+    var body=
+      '<div class="solic-babusca-form">'+
+        CAMPOS_BUSCA.map(function(c){
+          return '<div class="solic-babusca-row">'+(c.label?'<label>'+c.label+'</label>':'<label></label>')+'<input type="text" id="'+c.id+'" placeholder="'+(c.label?'':'Nome do beneficiário')+'"></div>';
+        }).join('')+
+        '<div class="solic-babusca-row"><label>Qtde de resultados:</label><input type="number" id="babQtde" value="20" min="1" max="100" style="max-width:90px"></div>'+
+      '</div>'+
+      '<div style="text-align:center;margin-top:14px"><button type="button" class="btn-primary" id="babLocalizar">'+ico('search',13)+' Localizar</button></div>'+
+      '<div id="babResultadosWrap" style="margin-top:16px"></div>';
+    var m=modal(ico('user-search',16)+' Buscar beneficiário', 'Preencha um ou mais campos para localizar', body, '<button class="btn ghost" id="babFechar">Fechar</button>');
+    m.querySelector('#babFechar').onclick=function(){ m.parentNode.remove(); };
+
+    m.querySelector('#babLocalizar').onclick=function(){
+      var filtros=CAMPOS_BUSCA.map(function(c){ return {campo:c.campo, valor:(m.querySelector('#'+c.id).value||'').trim().toLowerCase()}; }).filter(function(f){return f.valor;});
+      var qtde=Math.max(1, parseInt(m.querySelector('#babQtde').value)||20);
+      var lista=(MOCK.BENEFICIARIOS||[]).filter(function(b){
+        return filtros.every(function(f){ return String(b[f.campo]||'').toLowerCase().indexOf(f.valor)>=0; });
+      }).slice(0,qtde);
+      var resWrap=m.querySelector('#babResultadosWrap');
+      if(!filtros.length){ resWrap.innerHTML='<div class="resumo-mini-empty">Informe ao menos um critério de busca.</div>'; return; }
+      resWrap.innerHTML = lista.length ?
+        '<div class="table-wrap" style="max-height:280px;overflow-y:auto"><table class="cfg-table"><thead><tr><th>Nome</th><th>Carteira</th><th>CPF</th><th>Nascimento</th></tr></thead><tbody>'+
+          lista.map(function(b,i){ return '<tr class="risk-clickable solic-bab-row" data-idx="'+i+'"><td>'+esc(b.nome)+'</td><td>'+esc(b.carteirinha||'—')+'</td><td>'+esc(b.cpf||'—')+'</td><td>'+esc(b.dataNascimento||'—')+'</td></tr>'; }).join('')+
+        '</tbody></table></div>'
+        : '<div class="resumo-mini-empty">Nenhum beneficiário encontrado com os critérios informados.</div>';
+      $$('.solic-bab-row',resWrap).forEach(function(tr){
+        tr.onclick=function(){ onEscolher(lista[+tr.getAttribute('data-idx')]); m.parentNode.remove(); };
+      });
+    };
+  }
+
   function _ligarSolicitacaoInternacao(wrap){
     var s=_solicInt;
 
@@ -2071,9 +2116,7 @@
       _renderSolicitacaoInternacao(wrap);
     }
     function abrirBuscaBenef(){
-      _abrirBuscaGenerica('Buscar beneficiário', MOCK.BENEFICIARIOS||[], [
-        {label:'Carteirinha',campo:'carteirinha'},{label:'Nome',campo:'nome'},{label:'Plano',campo:'plano'}
-      ], aplicarBeneficiario);
+      _abrirBuscaAvancadaBenef(aplicarBeneficiario);
     }
     $('#siBenefBusca').onclick=abrirBuscaBenef;
     $('#siBenefBusca2').onclick=abrirBuscaBenef;
