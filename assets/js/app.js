@@ -1318,6 +1318,27 @@
     }catch(e){ return ''; }
   }
 
+  // Busca códigos CID-10 compatíveis com um nome de patologia ou um código (parcial/completo) via IA —
+  // não há tabela CID local, então a IA usa seu próprio conhecimento da CID-10 (mesmo padrão de resolverSignificadoCid).
+  // Retorna um array de {codigo, descricao}, limitado a "qtde" itens.
+  async function buscarCidPorIA(termo, qtde){
+    if(!window.getIaCfg || !window.callIAComSistema) return {erro:'Módulo de IA não inicializado.'};
+    var cfg=window.getIaCfg();
+    if(!cfg.key) return {erro:'Nenhuma chave de IA configurada (Configurações → Assistente IA).'};
+    try{
+      var sistema='Você é um especialista em codificação CID-10 (Classificação Internacional de Doenças). Responda SOMENTE com JSON válido, sem markdown, sem texto adicional.';
+      var pedido='Liste até '+(qtde||10)+' códigos CID-10 reais e oficiais que correspondam a este termo de busca (pode ser o nome de uma patologia/doença ou um código CID, completo ou parcial): "'+termo+'". '+
+        'Se o termo já for um código específico e válido, retorne apenas ele. Ordene do mais relevante para o menos relevante. '+
+        'Responda EXATAMENTE neste formato: [{"codigo":"J18.9","descricao":"Pneumonia não especificada"}]. Se nada corresponder, responda [].';
+      var resp=await window.callIAComSistema(cfg, sistema, pedido);
+      if(!resp || !resp.ok) return {erro:(resp&&resp.text)||'Falha ao consultar a IA.'};
+      var texto=resp.text.trim().replace(/^```json/i,'').replace(/^```/,'').replace(/```$/,'').trim();
+      var lista=JSON.parse(texto);
+      if(!Array.isArray(lista)) return {erro:'Resposta da IA em formato inesperado.'};
+      return {lista:lista.filter(function(it){return it&&it.codigo;}).slice(0,qtde||10)};
+    }catch(e){ return {erro:'Erro ao interpretar a resposta da IA: '+(e&&e.message||e)}; }
+  }
+
   // Preview do documento anexado — coluna direita fixa, sempre visível (não precisa rolar para ver o pedido).
   // Imagem: <img> direto do dataURL. PDF: <iframe> (renderização nativa do navegador) — mais fiel que um ícone genérico.
   // scanAtivo=true acrescenta a linha de scanner animada por cima (só enquanto a IA está processando).
@@ -2105,6 +2126,45 @@
     };
   }
 
+  // Busca avançada de CID — Nome da patologia, Código da patologia, Qtde de resultados + botão "Localizar".
+  // Não há tabela CID local; a IA (mesmo padrão de resolverSignificadoCid) sugere os códigos compatíveis.
+  function _abrirBuscaAvancadaCid(onEscolher){
+    var body=
+      '<div class="solic-babusca-form">'+
+        '<div class="solic-babusca-row"><label>Nome da patologia:</label><input type="text" id="bacNome" placeholder="Ex.: Pneumonia"></div>'+
+        '<div class="solic-babusca-row"><label>Código da patologia:</label><input type="text" id="bacCodigo" placeholder="Ex.: J18" style="text-transform:uppercase"></div>'+
+        '<div class="solic-babusca-row"><label>Qtde de resultados:</label><input type="number" id="bacQtde" value="10" min="1" max="30" style="max-width:90px"></div>'+
+      '</div>'+
+      '<div style="text-align:center;margin-top:14px"><button type="button" class="btn-primary" id="bacLocalizar">'+ico('search',13)+' Localizar</button></div>'+
+      '<div id="bacResultadosWrap" style="margin-top:16px"></div>';
+    var m=modal(ico('search',16)+' Buscar CID', 'Consulta feita via IA — não depende de uma tabela local', body, '<button class="btn ghost" id="bacFechar">Fechar</button>');
+    m.querySelector('#bacFechar').onclick=function(){ m.parentNode.remove(); };
+
+    var btnLoc=m.querySelector('#bacLocalizar');
+    btnLoc.onclick=async function(){
+      var nome=(m.querySelector('#bacNome').value||'').trim();
+      var codigo=(m.querySelector('#bacCodigo').value||'').trim();
+      var qtde=Math.max(1, parseInt(m.querySelector('#bacQtde').value)||10);
+      var resWrap=m.querySelector('#bacResultadosWrap');
+      if(!nome && !codigo){ resWrap.innerHTML='<div class="resumo-mini-empty">Informe o nome ou o código da patologia.</div>'; return; }
+      var termo=[nome,codigo].filter(Boolean).join(' — ');
+      btnLoc.disabled=true; btnLoc.innerHTML=ico('loader',13)+' Buscando…'; lcIcons();
+      resWrap.innerHTML='<div class="resumo-mini-empty">'+ico('loader',14)+' Consultando a IA…</div>'; lcIcons();
+      var res=await buscarCidPorIA(termo, qtde);
+      btnLoc.disabled=false; btnLoc.innerHTML=ico('search',13)+' Localizar'; lcIcons();
+      if(res.erro){ resWrap.innerHTML='<div class="ai-warn">'+ico('alert-triangle',14)+' '+esc(res.erro)+'</div>'; return; }
+      var lista=res.lista||[];
+      resWrap.innerHTML = lista.length ?
+        '<div class="table-wrap" style="max-height:280px;overflow-y:auto"><table class="cfg-table"><thead><tr><th style="width:100px">Código</th><th>Descrição</th></tr></thead><tbody>'+
+          lista.map(function(it,i){ return '<tr class="risk-clickable solic-bac-row" data-idx="'+i+'"><td style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace">'+esc(it.codigo)+'</td><td>'+esc(it.descricao||'')+'</td></tr>'; }).join('')+
+        '</tbody></table></div>'
+        : '<div class="resumo-mini-empty">Nenhum CID encontrado para este termo.</div>';
+      $$('.solic-bac-row',resWrap).forEach(function(tr){
+        tr.onclick=function(){ onEscolher(lista[+tr.getAttribute('data-idx')]); m.parentNode.remove(); };
+      });
+    };
+  }
+
   function _ligarSolicitacaoInternacao(wrap){
     var s=_solicInt;
 
@@ -2161,7 +2221,7 @@
     $('#siPrevOpme').onchange=function(){ s.previsaoOpme=this.value; };
     $('#siPrevQuimio').onchange=function(){ s.previsaoQuimio=this.value; };
 
-    // CID: busca por texto direto (o usuário digita) + botão de lupa abre busca simples na tabela CID já usada no sistema
+    // CID: digitar direto no campo resolve o significado via IA; a lupa abre a busca avançada (Nome/Código da patologia)
     $('#siCid').onchange=async function(){
       var v=this.value.trim().toUpperCase(); s.cid=v;
       if(!v){ s.cidDescricao=''; return; }
@@ -2170,7 +2230,11 @@
       var hip=$('#siHipotese'); if(hip && !hip.value.trim()) hip.value=s.cidDescricao;
     };
     $('#siCidBusca').onclick=function(){
-      toast('Digite o código CID diretamente no campo — o significado é resolvido automaticamente pela IA.','ok');
+      _abrirBuscaAvancadaCid(function(item){
+        s.cid=item.codigo; s.cidDescricao=item.descricao||'';
+        var cidInp=$('#siCid'); if(cidInp) cidInp.value=s.cid;
+        var hip=$('#siHipotese'); if(hip){ hip.value=s.cidDescricao; s.hipoteseDiagnostica=s.cidDescricao; }
+      });
     };
     $('#siHipotese').onchange=function(){ s.hipoteseDiagnostica=this.value; };
 
