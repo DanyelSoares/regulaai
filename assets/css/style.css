@@ -2184,6 +2184,34 @@ body.sidebar-collapsed .modal-backdrop{left:66px}
 .chip-lbl{font-weight:600;color:var(--g-600);font-size:11px;text-transform:uppercase;letter-spacing:.4px;margin-right:2px}
 .chip-rm{margin-left:4px;background:none;border:none;color:var(--g-500);cursor:pointer;font-size:15px;line-height:1;padding:0 1px;border-radius:50%;transition:color .12s,background .12s}
 
+/* Solicitações — hub de novas solicitações (Internação, Prorrogação, OPME, Quimioterapia, Consulta, Exames) */
+.solic-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px}
+.solic-card{padding:22px 18px;text-align:center;cursor:pointer;transition:transform .15s,box-shadow .15s;position:relative}
+.solic-card:hover{transform:translateY(-2px);box-shadow:0 8px 22px rgba(4,54,27,.12)}
+.solic-card-ico{width:48px;height:48px;border-radius:12px;background:var(--g-50);color:var(--g-600);display:flex;align-items:center;justify-content:center;margin:0 auto 12px}
+.solic-card-nome{font-size:13.5px;font-weight:700;color:var(--ink);line-height:1.35}
+.solic-card-disabled{cursor:not-allowed;opacity:.55}
+.solic-card-disabled:hover{transform:none;box-shadow:none}
+.solic-card-badge{position:absolute;top:10px;right:10px;font-size:9.5px}
+.solic-sec-hd{font-size:11.5px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--g-700);background:var(--g-50);padding:8px 12px;border-radius:7px;margin:22px 0 14px}
+.solic-sec-hd:first-of-type{margin-top:0}
+.solic-busca-row{display:flex;gap:6px}
+.solic-busca-row input{flex:1}
+.solic-busca-row .btn{flex-shrink:0}
+.solic-itsec{margin-bottom:18px}
+.solic-itsec-hd{display:flex;align-items:center;justify-content:space-between;font-size:12.5px;font-weight:700;color:var(--g-700);margin-bottom:8px}
+.solic-fav-btn{width:26px;height:26px;border-radius:6px;border:1px solid var(--g-200);background:#fff;color:var(--warn);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .12s}
+.solic-fav-btn:hover{background:var(--g-50)}
+.solic-it-tbl input,.solic-it-tbl select{width:100%;padding:6px 8px;border:1.5px solid var(--g-200);border-radius:6px;font-size:12.5px}
+.solic-it-tbl input[readonly]{background:var(--g-50);color:var(--muted)}
+.solic-it-del{width:26px;height:26px;border-radius:6px;border:none;background:transparent;color:var(--muted);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .12s,color .12s}
+.solic-it-del:hover{background:#fee2e2;color:#dc2626}
+.solic-add-btn{margin-top:8px}
+.solic-anexos{display:flex;flex-direction:column;gap:8px;margin-bottom:18px}
+.solic-anexo-row{display:flex;align-items:center;gap:10px}
+.solic-anexo-nome{font-size:12.5px;color:var(--muted)}
+.solic-charcount{font-size:11px;color:var(--muted);text-align:right;margin-top:4px}
+
 /* ID Código — tradutor de solicitação médica para código TUSS */
 .idcod-upload-box{
   display:flex;flex-direction:column;align-items:center;gap:8px;

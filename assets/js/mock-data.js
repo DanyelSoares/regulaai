@@ -489,6 +489,7 @@
   };
   function cidGuia(g){
     if(!g) return {codigo:'—', descricao:'—'};
+    if(g.cidOverride) return g.cidOverride;
     var lista = CID_MAP[g.tipo] || ['Z76.9 — Contato com serviço de saúde não especificado'];
     var h = _mmSeed(String(g.numero||g.tipo||''));
     var raw = lista[h % lista.length];

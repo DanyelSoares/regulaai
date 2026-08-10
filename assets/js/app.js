@@ -1699,6 +1699,508 @@
     m.querySelector('#dutIdCodClose').onclick=function(){ m.parentNode.remove(); };
   }
 
+  /* === Solicitações === */
+  var SOLICITACOES_TIPOS=[
+    {id:'internacao', nome:'Solicitação de Internação', ico:'bed-double', pronta:true},
+    {id:'prorrogacao', nome:'Solicitação de Prorrogação de Internação', ico:'calendar-clock', pronta:false},
+    {id:'opme', nome:'Solicitação de OPME', ico:'bone', pronta:false},
+    {id:'quimioterapia', nome:'Solicitação de Quimioterapia', ico:'flask-conical', pronta:false},
+    {id:'consulta', nome:'Solicitação de Consulta', ico:'stethoscope', pronta:false},
+    {id:'exames', nome:'Solicitação de Exames e Procedimentos', ico:'clipboard-list', pronta:false}
+  ];
+  var _solicState={tela:'hub'}; // 'hub' | id do tipo (ex.: 'internacao')
+
+  function viewSolicitacoes(){
+    var wrap=el('div');
+    if(_solicState.tela!=='hub'){
+      var tipo=SOLICITACOES_TIPOS.filter(function(t){return t.id===_solicState.tela;})[0];
+      wrap.appendChild(el('div',{class:'page-title'},
+        '<div><h1>'+ico(tipo?tipo.ico:'clipboard-plus',20)+' '+(tipo?esc(tipo.nome):'Solicitação')+'</h1>'+
+        '<p>Preencha os dados abaixo para registrar a solicitação.</p></div>'+
+        '<button class="btn ghost sm" id="solicVoltarBtn">'+ico('arrow-left',13)+' Voltar</button>'
+      ));
+      setTimeout(function(){
+        var b=$('#solicVoltarBtn'); if(b) b.onclick=function(){ _solicState.tela='hub'; render(); };
+      },0);
+      if(_solicState.tela==='internacao') wrap.appendChild(viewSolicitacaoInternacao());
+      return wrap;
+    }
+    wrap.appendChild(el('div',{class:'page-title'},'<div><h1>'+ico('clipboard-plus',20)+' Solicitações</h1><p>Escolha o tipo de solicitação que deseja registrar.</p></div>'));
+    var grid=el('div',{class:'solic-grid'});
+    SOLICITACOES_TIPOS.forEach(function(t){
+      var card=el('div',{class:'panel solic-card'+(t.pronta?'':' solic-card-disabled')});
+      card.innerHTML=
+        '<div class="solic-card-ico">'+ico(t.ico,22)+'</div>'+
+        '<div class="solic-card-nome">'+esc(t.nome)+'</div>'+
+        (t.pronta?'':'<span class="badge muted solic-card-badge">Em breve</span>');
+      if(t.pronta){ card.onclick=function(){ _solicState.tela=t.id; render(); }; }
+      grid.appendChild(card);
+    });
+    wrap.appendChild(grid);
+    return wrap;
+  }
+
+  /* === Solicitação de Internação === */
+  var _solicInt={
+    benef:null, // {id,nome,cpf,cartao,acomodacao,...}
+    acomodacao:'', celContato:'', pessoaContato:'', obsBenef:'',
+    solicitante:null, especSolic:'', executante:null, especExec:'',
+    natureza:'Internacao clinica', regime:'Eletiva', regimeInternacao:'1 - Hospitalar',
+    atendimentoRN:'Não', indicadorAcidente:'Não Acidente', procJaRealizado:'Não',
+    dataHoraInternacao:'', previsaoOpme:'Não', previsaoQuimio:'Não', dataHoraPrevAlta:'',
+    cid:'', cidDescricao:'', hipoteseDiagnostica:'',
+    procedimentos:[], pacotes:[], taxas:[], matmed:[], opmes:[],
+    profSolicNome:'', profSolicTelefone:'', profSolicEmail:'',
+    justificativaTecnica:'', especificacaoMaterial:'', obsOpme:'',
+    obsImpressa:''
+  };
+  function _solicNovoItem(campos){ var o={qtd:1}; (campos||[]).forEach(function(c){o[c]='';}); return o; }
+
+  function viewSolicitacaoInternacao(){
+    var wrap=el('div',{class:'panel',style:'padding:22px;max-width:1000px;margin:0 auto'});
+    var s=_solicInt;
+
+    function secaoTitulo(txt){ return '<div class="solic-sec-hd">'+esc(txt)+'</div>'; }
+
+    wrap.innerHTML=
+      secaoTitulo('Dados do beneficiário')+
+      '<div class="g2" style="align-items:end">'+
+        '<div class="field"><label>Código do beneficiário</label>'+
+          '<div class="solic-busca-row"><input id="siBenefCod" type="text" readonly value="'+esc(s.benef?s.benef.carteirinha:'')+'" placeholder="Buscar beneficiário">'+
+          '<button type="button" class="btn ghost sm" id="siBenefBusca">'+ico('search',13)+'</button></div></div>'+
+        '<div class="field"><label>Nome do beneficiário</label>'+
+          '<div class="solic-busca-row"><input id="siBenefNome" type="text" readonly value="'+esc(s.benef?s.benef.nome:'')+'" placeholder="Buscar beneficiário">'+
+          '<button type="button" class="btn ghost sm" id="siBenefBusca2">'+ico('user-search',13)+'</button></div></div>'+
+      '</div>'+
+      '<div class="g3">'+
+        '<div class="field"><label>Acomodação</label><select id="siAcomodacao">'+
+          ['','APARTAMENTO','ENFERMARIA'].map(function(v){return '<option value="'+v+'"'+(s.acomodacao===v?' selected':'')+'>'+(v||'Selecione')+'</option>';}).join('')+
+        '</select></div>'+
+        '<div class="field"><label>Cel. contato Benef.</label><input id="siCelContato" type="text" value="'+esc(s.celContato)+'" placeholder="(00) 00000-0000"></div>'+
+        '<div class="field"><label>Pessoa p/ contato</label><input id="siPessoaContato" type="text" value="'+esc(s.pessoaContato)+'"></div>'+
+      '</div>'+
+      '<div class="field"><label>Observações do beneficiário</label><textarea id="siObsBenef" rows="2">'+esc(s.obsBenef)+'</textarea></div>'+
+
+      secaoTitulo('Dados da guia')+
+      '<div class="g3" style="align-items:end">'+
+        '<div class="field"><label>Solicitante</label>'+
+          '<div class="solic-busca-row"><input id="siSolicNome" type="text" readonly value="'+esc(s.solicitante?s.solicitante.nome:'')+'" placeholder="Buscar solicitante">'+
+          '<button type="button" class="btn ghost sm" id="siSolicBusca">'+ico('search',13)+'</button></div></div>'+
+        '<div class="field"><label>Especialidade solicitante</label><select id="siEspecSolic">'+
+          ['',].concat(Object.keys(MOCK.ESPEC_MAP||{}).map(function(k){return MOCK.ESPEC_MAP[k];}).filter(function(v,i,a){return a.indexOf(v)===i;}).sort())
+            .map(function(v){return '<option value="'+esc(v)+'"'+(s.especSolic===v?' selected':'')+'>'+(v||'Selecione')+'</option>';}).join('')+
+        '</select></div>'+
+        '<div class="field"><label>Executante</label><select id="siExecutante">'+
+          ['<option value="">Selecione o prestador executante</option>'].concat(
+            (MOCK.PRESTADORES||[]).map(function(p){return '<option value="'+p.id+'"'+(s.executante&&s.executante.id===p.id?' selected':'')+'>'+esc(p.nome)+'</option>';})
+          ).join('')+
+        '</select></div>'+
+      '</div>'+
+      '<div class="field" style="max-width:340px"><label>Especialidade</label><select id="siEspec">'+
+        ['',].concat(Object.keys(MOCK.ESPEC_MAP||{}).map(function(k){return MOCK.ESPEC_MAP[k];}).filter(function(v,i,a){return a.indexOf(v)===i;}).sort())
+          .map(function(v){return '<option value="'+esc(v)+'"'+(s.especExec===v?' selected':'')+'>'+(v||'Selecione')+'</option>';}).join('')+
+      '</select></div>'+
+      '<div class="g2">'+
+        '<div class="field"><label>Natureza</label><select id="siNatureza">'+
+          ['Internacao clinica','Internacao cirurgica'].map(function(v){return '<option value="'+v+'"'+(s.natureza===v?' selected':'')+'>'+v.replace('Internacao','Internação')+'</option>';}).join('')+
+        '</select></div>'+
+        '<div class="field"><label>Regime</label><select id="siRegime">'+
+          ['Eletiva','Urgência/Emergência'].map(function(v){return '<option value="'+v+'"'+(s.regime===v?' selected':'')+'>'+v+'</option>';}).join('')+
+        '</select></div>'+
+      '</div>'+
+      '<div class="field" style="max-width:340px"><label>Regime Internação</label><select id="siRegimeInt">'+
+        ['1 - Hospitalar','2 - Hospital dia','3 - Domiciliar'].map(function(v){return '<option value="'+v+'"'+(s.regimeInternacao===v?' selected':'')+'>'+v+'</option>';}).join('')+
+      '</select></div>'+
+      '<div class="g3">'+
+        '<div class="field"><label>Atendimento RN</label><select id="siAtendRN">'+
+          ['Não','Sim'].map(function(v){return '<option value="'+v+'"'+(s.atendimentoRN===v?' selected':'')+'>'+v+'</option>';}).join('')+
+        '</select></div>'+
+        '<div class="field"><label>Indicador de acidente</label><select id="siIndAcidente">'+
+          ['Não Acidente','Acidente de trabalho','Acidente de trânsito','Outros acidentes'].map(function(v){return '<option value="'+v+'"'+(s.indicadorAcidente===v?' selected':'')+'>'+v+'</option>';}).join('')+
+        '</select></div>'+
+        '<div class="field"><label>Procedimento já realizado?</label><select id="siProcRealizado">'+
+          ['Não','Sim'].map(function(v){return '<option value="'+v+'"'+(s.procJaRealizado===v?' selected':'')+'>'+v+'</option>';}).join('')+
+        '</select></div>'+
+      '</div>'+
+
+      secaoTitulo('Dados complementares da Internação')+
+      '<div class="g2">'+
+        '<div class="field"><label>Data/hora internação</label><input id="siDataInt" type="datetime-local" value="'+esc(s.dataHoraInternacao)+'"></div>'+
+        '<div class="field"><label>Data/Hora prev. de alta</label><input id="siDataAlta" type="datetime-local" value="'+esc(s.dataHoraPrevAlta)+'"></div>'+
+      '</div>'+
+      '<div class="g2">'+
+        '<div class="field"><label>Previsão de uso de OPME</label><select id="siPrevOpme">'+
+          ['Não','Sim'].map(function(v){return '<option value="'+v+'"'+(s.previsaoOpme===v?' selected':'')+'>'+v+'</option>';}).join('')+
+        '</select></div>'+
+        '<div class="field"><label>Previsão de uso de quimioterápico</label><select id="siPrevQuimio">'+
+          ['Não','Sim'].map(function(v){return '<option value="'+v+'"'+(s.previsaoQuimio===v?' selected':'')+'>'+v+'</option>';}).join('')+
+        '</select></div>'+
+      '</div>'+
+
+      secaoTitulo('Indicação Clínica / Hipótese diagnóstica')+
+      '<div class="g2" style="align-items:end">'+
+        '<div class="field"><label>C.I.D</label>'+
+          '<div class="solic-busca-row"><input id="siCid" type="text" style="text-transform:uppercase" value="'+esc(s.cid)+'" placeholder="Ex.: J18.9">'+
+          '<button type="button" class="btn ghost sm" id="siCidBusca">'+ico('search',13)+'</button></div></div>'+
+        '<div class="field"><label>Hipótese diagnóstica</label><input id="siHipotese" type="text" value="'+esc(s.hipoteseDiagnostica||s.cidDescricao)+'"></div>'+
+      '</div>'+
+
+      '<div id="siSecoes"></div>'+
+
+      secaoTitulo('Dados do Profissional Solicitante')+
+      '<div class="g3">'+
+        '<div class="field"><label>Solicitante</label><input id="siProfNome" type="text" value="'+esc(s.profSolicNome)+'"></div>'+
+        '<div class="field"><label>Telefone</label><input id="siProfTel" type="text" value="'+esc(s.profSolicTelefone)+'"></div>'+
+        '<div class="field"><label>E-mail</label><input id="siProfEmail" type="email" value="'+esc(s.profSolicEmail)+'"></div>'+
+      '</div>'+
+
+      secaoTitulo('Dados da cirurgia')+
+      '<div class="field"><label>Justificativa Técnica</label><textarea id="siJustTec" rows="2">'+esc(s.justificativaTecnica)+'</textarea></div>'+
+      '<div class="field"><label>Especificação do material</label><textarea id="siEspecMat" rows="2">'+esc(s.especificacaoMaterial)+'</textarea></div>'+
+      '<div class="field"><label>Observações / Justificativa do OPME</label><textarea id="siObsOpme" rows="2">'+esc(s.obsOpme)+'</textarea></div>'+
+
+      '<div class="solic-sec-hd">Anexos</div>'+
+      '<div class="solic-anexos">'+
+        [0,1,2,3,4,5].map(function(i){ return '<div class="solic-anexo-row"><label class="btn ghost sm">Escolher arquivo<input type="file" id="siAnexo'+i+'" style="display:none"></label><span id="siAnexo'+i+'Nome" class="solic-anexo-nome">Nenhum arquivo escolhido</span></div>'; }).join('')+
+      '</div>'+
+
+      '<div class="solic-sec-hd">Observação impressa / Justificativa da guia</div>'+
+      '<div class="field"><textarea id="siObsImpressa" maxlength="2000" rows="4">'+esc(s.obsImpressa)+'</textarea>'+
+      '<div class="solic-charcount" id="siObsImpressaCount">'+ (s.obsImpressa||'').length +' de 2000 caracteres</div></div>'+
+
+      '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px">'+
+        '<button class="btn-primary" id="siAutorizarBtn">'+ico('check',14)+' Autorizar</button>'+
+      '</div>';
+
+    setTimeout(function(){ _ligarSolicitacaoInternacao(wrap); },0);
+    return wrap;
+  }
+
+  // Renderiza as 5 seções colapsáveis de itens (Procedimentos/Pacotes/Taxas/Materiais/OPMEs)
+  function _renderSolicSecoes(wrap){
+    var s=_solicInt;
+    var host=wrap.querySelector('#siSecoes');
+    if(!host) return;
+
+    function linhaItem(item, idx, chave, colunas){
+      var cols=colunas.map(function(c){
+        if(c==='tabela'){
+          return '<td style="width:60px"><select class="solic-it-tabela" data-chave="'+chave+'" data-idx="'+idx+'">'+
+            ['00','18','19','20','22'].map(function(t){return '<option value="'+t+'"'+(item.tabela===t?' selected':'')+'>'+t+'</option>';}).join('')+
+          '</select></td>';
+        }
+        if(c==='codigo'){
+          return '<td style="width:150px"><div class="solic-busca-row"><input type="text" class="solic-it-codigo" data-chave="'+chave+'" data-idx="'+idx+'" value="'+esc(item.codigo||'')+'">'+
+            '<button type="button" class="btn ghost sm solic-it-buscabtn" data-chave="'+chave+'" data-idx="'+idx+'">'+ico('search',12)+'</button></div></td>';
+        }
+        if(c==='descricao'){
+          return '<td><input type="text" class="solic-it-desc" data-chave="'+chave+'" data-idx="'+idx+'" value="'+esc(item.descricao||'')+'" readonly></td>';
+        }
+        if(c==='quantidade'){
+          return '<td style="width:80px"><input type="number" min="1" class="solic-it-qtd" data-chave="'+chave+'" data-idx="'+idx+'" value="'+(item.qtd||1)+'"></td>';
+        }
+        if(c==='fornecedor'){
+          return '<td style="width:110px"><select class="solic-it-fornecedor" data-chave="'+chave+'" data-idx="'+idx+'">'+
+            ['Selec','Fornecedor A','Fornecedor B','Fornecedor C'].map(function(f){return '<option value="'+f+'"'+(item.fornecedor===f?' selected':'')+'>'+f+'</option>';}).join('')+
+          '</select></td>';
+        }
+        return '<td></td>';
+      }).join('');
+      return '<tr>'+cols+'<td style="width:34px;text-align:center"><button type="button" class="solic-it-del" data-chave="'+chave+'" data-idx="'+idx+'" title="Remover">'+ico('x',14)+'</button></td></tr>';
+    }
+
+    function secaoTabela(titulo, chave, colunas, comFavorito){
+      var itens=s[chave];
+      var headers={tabela:'Tabela',codigo:'Código',descricao:'Descrição',quantidade:'Quantidade',fornecedor:'Fornecedor'};
+      return '<div class="solic-itsec">'+
+        '<div class="solic-itsec-hd"><span>'+esc(titulo)+'</span>'+(comFavorito?'<button type="button" class="solic-fav-btn" title="Favoritos">'+ico('star',14)+'</button>':'')+'</div>'+
+        '<div class="table-wrap"><table class="cfg-table solic-it-tbl"><thead><tr>'+
+          colunas.map(function(c){return '<th'+(c==='descricao'?'':' style="width:auto"')+'>'+headers[c]+'</th>';}).join('')+
+          '<th></th>'+
+        '</tr></thead><tbody>'+
+          itens.map(function(it,i){ return linhaItem(it,i,chave,colunas); }).join('')+
+        '</tbody></table></div>'+
+        '<button type="button" class="btn ghost sm solic-add-btn" data-chave="'+chave+'">'+ico('plus',13)+' Adicionar '+esc(titulo.replace(/s$/,''))+'</button>'+
+      '</div>';
+    }
+
+    host.innerHTML=
+      secaoTabela('Procedimentos','procedimentos',['codigo','descricao','quantidade'],false)+
+      secaoTabela('Pacotes','pacotes',['codigo','descricao','quantidade'],true)+
+      secaoTabela('Taxas / Diárias','taxas',['codigo','descricao','quantidade'],true)+
+      secaoTabela('Materiais e Medicamentos','matmed',['tabela','codigo','descricao','quantidade'],true)+
+      secaoTabela('OPMEs','opmes',['tabela','codigo','descricao','quantidade','fornecedor'],true);
+
+    _ligarSolicSecoes(wrap);
+  }
+
+  function _ligarSolicSecoes(wrap){
+    var s=_solicInt;
+    var host=wrap.querySelector('#siSecoes');
+
+    $$('.solic-add-btn',host).forEach(function(b){
+      b.onclick=function(){
+        var chave=b.getAttribute('data-chave');
+        var camposExtra=chave==='matmed'||chave==='opmes'?['tabela']:[];
+        var novo=_solicNovoItem(['codigo','descricao'].concat(camposExtra));
+        if(chave==='matmed'||chave==='opmes') novo.tabela='00';
+        if(chave==='opmes') novo.fornecedor='Selec';
+        s[chave].push(novo);
+        _renderSolicSecoes(wrap);
+      };
+    });
+    $$('.solic-it-del',host).forEach(function(b){
+      b.onclick=function(){
+        var chave=b.getAttribute('data-chave'), idx=+b.getAttribute('data-idx');
+        s[chave].splice(idx,1);
+        _renderSolicSecoes(wrap);
+      };
+    });
+    $$('.solic-it-qtd',host).forEach(function(inp){
+      inp.onchange=function(){
+        var chave=inp.getAttribute('data-chave'), idx=+inp.getAttribute('data-idx');
+        s[chave][idx].qtd=Math.max(1,parseInt(inp.value)||1);
+      };
+    });
+    $$('.solic-it-tabela',host).forEach(function(sel){
+      sel.onchange=function(){
+        var chave=sel.getAttribute('data-chave'), idx=+sel.getAttribute('data-idx');
+        s[chave][idx].tabela=sel.value;
+      };
+    });
+    $$('.solic-it-fornecedor',host).forEach(function(sel){
+      sel.onchange=function(){
+        var chave=sel.getAttribute('data-chave'), idx=+sel.getAttribute('data-idx');
+        s[chave][idx].fornecedor=sel.value;
+      };
+    });
+    $$('.solic-it-codigo',host).forEach(function(inp){
+      inp.onchange=function(){
+        var chave=inp.getAttribute('data-chave'), idx=+inp.getAttribute('data-idx');
+        s[chave][idx].codigo=inp.value.trim().toUpperCase();
+      };
+    });
+    $$('.solic-it-buscabtn',host).forEach(function(b){
+      b.onclick=function(){
+        var chave=b.getAttribute('data-chave'), idx=+b.getAttribute('data-idx');
+        _abrirBuscaItemSolic(chave, function(item){
+          s[chave][idx].codigo=item.cod;
+          s[chave][idx].descricao=item.desc;
+          _renderSolicSecoes(wrap);
+        });
+      };
+    });
+  }
+
+  // Abre modal de busca de código para as seções de itens (Procedimentos usa a base TUSS real; as demais usam os catálogos mock)
+  function _abrirBuscaItemSolic(chave, onEscolher){
+    var fonte = chave==='procedimentos' ? null // busca dinâmica via MOCK.buscarTussCandidatos
+      : chave==='pacotes' ? (MOCK.PACOTES||[])
+      : chave==='taxas' ? (MOCK.DIARIAS_TAXAS||[])
+      : (MOCK.MATMED||[]); // matmed e opmes usam o mesmo catálogo de materiais/medicamentos
+    var body=
+      '<div class="field" style="margin-bottom:12px"><input type="text" id="baiTermo" placeholder="Digite o código ou descrição..." autofocus></div>'+
+      '<div class="table-wrap" style="max-height:360px;overflow-y:auto"><table class="cfg-table"><thead><tr><th style="width:130px">Código</th><th>Descrição</th></tr></thead><tbody id="baiResultados"></tbody></table></div>';
+    var m=modal(ico('search',16)+' Buscar item', '', body, '<button class="btn ghost" id="baiFechar">Fechar</button>');
+    m.querySelector('#baiFechar').onclick=function(){ m.parentNode.remove(); };
+    var inp=m.querySelector('#baiTermo'), tbody=m.querySelector('#baiResultados');
+    function renderResultados(termo){
+      var lista;
+      if(fonte===null){
+        lista = termo.trim().length>1 && MOCK.buscarTussCandidatos ? MOCK.buscarTussCandidatos(termo,20) : [];
+      } else {
+        var t=termo.trim().toLowerCase();
+        lista = !t ? fonte.slice(0,20) : fonte.filter(function(it){ return it.cod.toLowerCase().indexOf(t)>=0 || it.desc.toLowerCase().indexOf(t)>=0; }).slice(0,20);
+      }
+      tbody.innerHTML = lista.length ? lista.map(function(it){
+        return '<tr class="risk-clickable solic-bai-row" data-cod="'+esc(it.cod)+'" data-desc="'+esc(it.desc)+'"><td style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px">'+esc(it.cod)+'</td><td>'+esc(it.desc)+'</td></tr>';
+      }).join('') : '<tr><td colspan="2" style="text-align:center;color:var(--muted);padding:20px">Nenhum resultado. Digite para buscar.</td></tr>';
+      $$('.solic-bai-row',tbody).forEach(function(tr){
+        tr.onclick=function(){
+          onEscolher({cod:tr.getAttribute('data-cod'), desc:tr.getAttribute('data-desc')});
+          m.parentNode.remove();
+        };
+      });
+    }
+    renderResultados('');
+    inp.addEventListener('input',function(){ renderResultados(inp.value); });
+  }
+
+  // Modal de busca simples (lista clicável) reutilizado para beneficiário / prestador
+  function _abrirBuscaGenerica(titulo, lista, colunas, onEscolher){
+    var body=
+      '<div class="field" style="margin-bottom:12px"><input type="text" id="bgTermo" placeholder="Digite para buscar..." autofocus></div>'+
+      '<div class="table-wrap" style="max-height:360px;overflow-y:auto"><table class="cfg-table"><thead><tr>'+
+        colunas.map(function(c){return '<th>'+esc(c.label)+'</th>';}).join('')+
+      '</tr></thead><tbody id="bgResultados"></tbody></table></div>';
+    var m=modal(ico('search',16)+' '+esc(titulo), '', body, '<button class="btn ghost" id="bgFechar">Fechar</button>');
+    m.querySelector('#bgFechar').onclick=function(){ m.parentNode.remove(); };
+    var inp=m.querySelector('#bgTermo'), tbody=m.querySelector('#bgResultados');
+    function renderResultados(termo){
+      var t=termo.trim().toLowerCase();
+      var filtrada = !t ? lista : lista.filter(function(it){
+        return colunas.some(function(c){ return String(it[c.campo]||'').toLowerCase().indexOf(t)>=0; });
+      });
+      tbody.innerHTML = filtrada.length ? filtrada.map(function(it,i){
+        return '<tr class="risk-clickable solic-bg-row" data-idx="'+i+'">'+colunas.map(function(c){return '<td>'+esc(it[c.campo]||'—')+'</td>';}).join('')+'</tr>';
+      }).join('') : '<tr><td colspan="'+colunas.length+'" style="text-align:center;color:var(--muted);padding:20px">Nenhum resultado encontrado.</td></tr>';
+      $$('.solic-bg-row',tbody).forEach(function(tr){
+        tr.onclick=function(){
+          onEscolher(filtrada[+tr.getAttribute('data-idx')]);
+          m.parentNode.remove();
+        };
+      });
+    }
+    renderResultados('');
+    inp.addEventListener('input',function(){ renderResultados(inp.value); });
+  }
+
+  function _ligarSolicitacaoInternacao(wrap){
+    var s=_solicInt;
+
+    // Beneficiário
+    function abrirBuscaBenef(){
+      _abrirBuscaGenerica('Buscar beneficiário', MOCK.BENEFICIARIOS||[], [
+        {label:'Carteirinha',campo:'carteirinha'},{label:'Nome',campo:'nome'},{label:'Plano',campo:'plano'}
+      ], function(b){
+        s.benef=b; s.acomodacao=b.acomodacao||s.acomodacao;
+        _renderSolicitacaoInternacao(wrap);
+      });
+    }
+    $('#siBenefBusca').onclick=abrirBuscaBenef;
+    $('#siBenefBusca2').onclick=abrirBuscaBenef;
+
+    // Solicitante (mesma base de prestadores, já que o mock não distingue médico solicitante de prestador PJ)
+    $('#siSolicBusca').onclick=function(){
+      _abrirBuscaGenerica('Buscar solicitante', MOCK.PRESTADORES||[], [
+        {label:'Nome',campo:'nome'},{label:'Tipo',campo:'tipo'}
+      ], function(p){ s.solicitante=p; _renderSolicitacaoInternacao(wrap); });
+    };
+
+    $('#siAcomodacao').onchange=function(){ s.acomodacao=this.value; };
+    $('#siCelContato').onchange=function(){ s.celContato=this.value; };
+    $('#siPessoaContato').onchange=function(){ s.pessoaContato=this.value; };
+    $('#siObsBenef').onchange=function(){ s.obsBenef=this.value; };
+    $('#siEspecSolic').onchange=function(){ s.especSolic=this.value; };
+    $('#siExecutante').onchange=function(){ var id=this.value; s.executante=(MOCK.PRESTADORES||[]).filter(function(p){return p.id===id;})[0]||null; };
+    $('#siEspec').onchange=function(){ s.especExec=this.value; };
+    $('#siNatureza').onchange=function(){ s.natureza=this.value; };
+    $('#siRegime').onchange=function(){ s.regime=this.value; };
+    $('#siRegimeInt').onchange=function(){ s.regimeInternacao=this.value; };
+    $('#siAtendRN').onchange=function(){ s.atendimentoRN=this.value; };
+    $('#siIndAcidente').onchange=function(){ s.indicadorAcidente=this.value; };
+    $('#siProcRealizado').onchange=function(){ s.procJaRealizado=this.value; };
+    $('#siDataInt').onchange=function(){ s.dataHoraInternacao=this.value; };
+    $('#siDataAlta').onchange=function(){ s.dataHoraPrevAlta=this.value; };
+    $('#siPrevOpme').onchange=function(){ s.previsaoOpme=this.value; };
+    $('#siPrevQuimio').onchange=function(){ s.previsaoQuimio=this.value; };
+
+    // CID: busca por texto direto (o usuário digita) + botão de lupa abre busca simples na tabela CID já usada no sistema
+    $('#siCid').onchange=async function(){
+      var v=this.value.trim().toUpperCase(); s.cid=v;
+      if(!v){ s.cidDescricao=''; return; }
+      var desc=await resolverSignificadoCid(v);
+      s.cidDescricao=desc||'';
+      var hip=$('#siHipotese'); if(hip && !hip.value.trim()) hip.value=s.cidDescricao;
+    };
+    $('#siCidBusca').onclick=function(){
+      toast('Digite o código CID diretamente no campo — o significado é resolvido automaticamente pela IA.','ok');
+    };
+    $('#siHipotese').onchange=function(){ s.hipoteseDiagnostica=this.value; };
+
+    $('#siProfNome').onchange=function(){ s.profSolicNome=this.value; };
+    $('#siProfTel').onchange=function(){ s.profSolicTelefone=this.value; };
+    $('#siProfEmail').onchange=function(){ s.profSolicEmail=this.value; };
+    $('#siJustTec').onchange=function(){ s.justificativaTecnica=this.value; };
+    $('#siEspecMat').onchange=function(){ s.especificacaoMaterial=this.value; };
+    $('#siObsOpme').onchange=function(){ s.obsOpme=this.value; };
+
+    var obsImp=$('#siObsImpressa'), obsCount=$('#siObsImpressaCount');
+    obsImp.addEventListener('input',function(){ s.obsImpressa=this.value; obsCount.textContent=this.value.length+' de 2000 caracteres'; });
+
+    for(var i=0;i<6;i++){
+      (function(idx){
+        var inp=$('#siAnexo'+idx), lbl=$('#siAnexo'+idx+'Nome');
+        if(!inp) return;
+        inp.onchange=function(){ lbl.textContent=inp.files&&inp.files[0]?inp.files[0].name:'Nenhum arquivo escolhido'; };
+      })(i);
+    }
+
+    $('#siAutorizarBtn').onclick=function(){ _autorizarSolicitacaoInternacao(); };
+
+    _renderSolicSecoes(wrap);
+  }
+
+  // Re-renderiza a tela inteira preservando o estado (usado após escolher beneficiário/solicitante)
+  function _renderSolicitacaoInternacao(wrap){
+    var novo=viewSolicitacaoInternacao();
+    wrap.parentNode.replaceChild(novo, wrap);
+    lcIcons();
+  }
+
+  function _autorizarSolicitacaoInternacao(){
+    var s=_solicInt;
+    if(!s.benef){ toast('Selecione o beneficiário.','err'); return; }
+    if(!s.solicitante){ toast('Selecione o solicitante.','err'); return; }
+    if(!s.executante){ toast('Selecione o prestador executante.','err'); return; }
+    if(!s.cid && !s.hipoteseDiagnostica){ toast('Informe o CID ou a hipótese diagnóstica.','err'); return; }
+    var todosItens=[].concat(s.procedimentos,s.pacotes,s.taxas,s.matmed,s.opmes);
+    if(!todosItens.some(function(it){return it.codigo;})){ toast('Adicione ao menos um procedimento, pacote, taxa, material ou OPME.','err'); return; }
+
+    var fluxo=(MOCK.FLUXOS||[]).filter(function(f){ return s.regime==='Urgência/Emergência' ? f.id==='F1' : f.id==='F2'; })[0] || (MOCK.FLUXOS||[])[0];
+    var numero=String(Date.now()).slice(-9);
+    var agora=new Date();
+    var dataEmissao=agora.getFullYear()+'-'+String(agora.getMonth()+1).padStart(2,'0')+'-'+String(agora.getDate()).padStart(2,'0');
+    var horaEmissao=String(agora.getHours()).padStart(2,'0')+':'+String(agora.getMinutes()).padStart(2,'0');
+
+    var etapas=(fluxo.etapas||[]).map(function(nome,i){
+      return { ordem:i+1, nome:nome, ia:(MOCK.IA_POR_ETAPA&&MOCK.IA_POR_ETAPA[nome])||'apoio',
+        status:i===0?'em_execucao':'aguardando',
+        prazoHoras: nome.indexOf('URG')>=0?4:(nome.indexOf('JUNTA')>=0?72:24),
+        horasReais:0, responsavel:(nome.indexOf('MÉDICO')>=0||nome.indexOf('JUNTA')>=0)?'auditor':(nome.indexOf('ENFERMEIRA')>=0?'enfermeiro':'auditor'),
+        inicio:dataEmissao+' '+horaEmissao, fim:'' };
+    });
+
+    function itemsParaGuia(lista){ return lista.filter(function(it){return it.codigo;}).map(function(it){ return {cod:it.codigo, desc:it.descricao||it.codigo, qtd:it.qtd||1, tabela:it.tabela, fornecedor:it.fornecedor}; }); }
+
+    var guia={
+      numero:numero, beneficiario:s.benef, prestadorSol:s.solicitante, prestadorExe:s.executante, fluxo:fluxo,
+      tipo:'Internação', natureza:'Internação', subInternacao:s.natureza.indexOf('cirurgica')>=0?'Cirúrgica':'Clínica',
+      regime:s.regime==='Urgência/Emergência'?'Urgência':'Eletivo', status:'Em análise', origem:'Emissão guias',
+      congenere:s.benef.cidade||'—', solicitante:s.profSolicNome||(s.solicitante&&s.solicitante.nome)||'—',
+      uti:false, opme:s.previsaoOpme==='Sim', dut:false, anexos:false, prio:s.regime==='Urgência/Emergência'?'Alta':'Média',
+      risco:'baixo', dataEmissao:dataEmissao, horaEmissao:horaEmissao,
+      internacao:s.dataHoraInternacao?s.dataHoraInternacao.replace('T',' '):'', alta:s.dataHoraPrevAlta?s.dataHoraPrevAlta.replace('T',' '):'',
+      diasAuditoria:0, prazoVencido:false,
+      procedimentos:itemsParaGuia(s.procedimentos), pacotes:itemsParaGuia(s.pacotes),
+      matmed:itemsParaGuia(s.matmed).concat(itemsParaGuia(s.opmes).map(function(o){o=Object.assign({},o);o.opme=true;return o;})),
+      diariasTaxas:itemsParaGuia(s.taxas),
+      etapas:etapas, anexosLista:[],
+      observacoes:s.justificativaTecnica||s.obsImpressa||'',
+      cidOverride:{codigo:s.cid||'—', descricao:s.hipoteseDiagnostica||s.cidDescricao||'—'},
+      parecerOperadora:null, parecerIA:null, ultimaSync:dataEmissao+' '+horaEmissao
+    };
+
+    State.guias.push(guia);
+    logAcao('Solicitação de Internação registrada', 'Guia '+numero+' — '+s.benef.nome);
+    toast('Solicitação registrada com sucesso — guia '+numero+' criada.','ok');
+
+    _solicInt={
+      benef:null, acomodacao:'', celContato:'', pessoaContato:'', obsBenef:'',
+      solicitante:null, especSolic:'', executante:null, especExec:'',
+      natureza:'Internacao clinica', regime:'Eletiva', regimeInternacao:'1 - Hospitalar',
+      atendimentoRN:'Não', indicadorAcidente:'Não Acidente', procJaRealizado:'Não',
+      dataHoraInternacao:'', previsaoOpme:'Não', previsaoQuimio:'Não', dataHoraPrevAlta:'',
+      cid:'', cidDescricao:'', hipoteseDiagnostica:'',
+      procedimentos:[], pacotes:[], taxas:[], matmed:[], opmes:[],
+      profSolicNome:'', profSolicTelefone:'', profSolicEmail:'',
+      justificativaTecnica:'', especificacaoMaterial:'', obsOpme:'',
+      obsImpressa:''
+    };
+    _solicState.tela='hub';
+    render();
+  }
+
   /* === Views === */
   function render(){
     var v=$('#view'); v.innerHTML='';
@@ -1712,6 +2214,7 @@
     else if(State.route==='kanban') v.appendChild(viewKanban());
     else if(State.route==='relatorios') v.appendChild(viewRelatorios());
     else if(State.route==='idcodigo') v.appendChild(viewIdCodigo());
+    else if(State.route==='solicitacoes') v.appendChild(viewSolicitacoes());
     else if(State.route==='param') v.appendChild(viewParam());
     else if(State.route==='logs'){ if(can('logs')) v.appendChild(viewLogs()); else { State.route='dashboard'; v.appendChild(viewDashboard()); } }
     else if(State.route==='config') v.appendChild(viewConfig());
@@ -7873,7 +8376,7 @@
   setInterval(atualizarRelogio,1000);
 
   /* === Breadcrumb === */
-  var ROUTE_LABELS={dashboard:'Dashboard',guias:'Guias',kanban:'Kanban',relatorios:'Relatórios',idcodigo:'ID Código',param:'Parametrização',logs:'Logs',config:'Configurações',manual:'Manual do Usuário'};
+  var ROUTE_LABELS={dashboard:'Dashboard',guias:'Guias',kanban:'Kanban',relatorios:'Relatórios',idcodigo:'ID Código',solicitacoes:'Solicitações',param:'Parametrização',logs:'Logs',config:'Configurações',manual:'Manual do Usuário'};
   function atualizarBreadcrumb(){
     var el=$('#topbarRoute'); if(!el) return;
     el.textContent=ROUTE_LABELS[State.route]||State.route;
