@@ -1764,20 +1764,25 @@
 
     wrap.innerHTML=
       secaoTitulo('Dados do beneficiário')+
-      '<div class="g2" style="align-items:end">'+
-        '<div class="field"><label>Código do beneficiário</label>'+
-          '<div class="solic-busca-row"><input id="siBenefCod" type="text" readonly value="'+esc(s.benef?s.benef.carteirinha:'')+'" placeholder="Buscar beneficiário">'+
-          '<button type="button" class="btn ghost sm" id="siBenefBusca">'+ico('search',13)+'</button></div></div>'+
-        '<div class="field"><label>Nome do beneficiário</label>'+
-          '<div class="solic-busca-row"><input id="siBenefNome" type="text" readonly value="'+esc(s.benef?s.benef.nome:'')+'" placeholder="Buscar beneficiário">'+
-          '<button type="button" class="btn ghost sm" id="siBenefBusca2">'+ico('user-search',13)+'</button></div></div>'+
-      '</div>'+
-      '<div class="g3">'+
-        '<div class="field"><label>Acomodação</label><select id="siAcomodacao">'+
-          ['','APARTAMENTO','ENFERMARIA'].map(function(v){return '<option value="'+v+'"'+(s.acomodacao===v?' selected':'')+'>'+(v||'Selecione')+'</option>';}).join('')+
-        '</select></div>'+
-        '<div class="field"><label>Cel. contato Benef.</label><input id="siCelContato" type="text" value="'+esc(s.celContato)+'" placeholder="(00) 00000-0000"></div>'+
-        '<div class="field"><label>Pessoa p/ contato</label><input id="siPessoaContato" type="text" value="'+esc(s.pessoaContato)+'"></div>'+
+      '<div class="solic-benef-row">'+
+        '<div class="solic-benef-campos">'+
+          '<div class="g2" style="align-items:end">'+
+            '<div class="field"><label>Código do beneficiário</label>'+
+              '<div class="solic-busca-row"><input id="siBenefCod" type="text" value="'+esc(s.benef?s.benef.carteirinha:'')+'" placeholder="Digite ou busque o código">'+
+              '<button type="button" class="btn ghost sm" id="siBenefBusca">'+ico('search',13)+'</button></div></div>'+
+            '<div class="field"><label>Nome do beneficiário</label>'+
+              '<div class="solic-busca-row"><input id="siBenefNome" type="text" readonly value="'+esc(s.benef?s.benef.nome:'')+'" placeholder="Preenchido automaticamente">'+
+              '<button type="button" class="btn ghost sm" id="siBenefBusca2">'+ico('user-search',13)+'</button></div></div>'+
+          '</div>'+
+          '<div class="g3">'+
+            '<div class="field"><label>Acomodação</label><select id="siAcomodacao">'+
+              ['','APARTAMENTO','ENFERMARIA'].map(function(v){return '<option value="'+v+'"'+(s.acomodacao===v?' selected':'')+'>'+(v||'Selecione')+'</option>';}).join('')+
+            '</select></div>'+
+            '<div class="field"><label>Cel. contato Benef.</label><input id="siCelContato" type="text" value="'+esc(s.celContato)+'" placeholder="(00) 00000-0000"></div>'+
+            '<div class="field"><label>Pessoa p/ contato</label><input id="siPessoaContato" type="text" value="'+esc(s.pessoaContato)+'"></div>'+
+          '</div>'+
+        '</div>'+
+        '<div class="solic-benef-foto" id="siBenefFoto">'+(s.benef&&s.benef.foto?'<img src="'+esc(s.benef.foto)+'" alt="Foto do beneficiário">':'<span>'+ico('image-off',20)+' Foto não disponível</span>')+'</div>'+
       '</div>'+
       '<div class="field"><label>Observações do beneficiário</label><textarea id="siObsBenef" rows="2">'+esc(s.obsBenef)+'</textarea></div>'+
 
@@ -2058,17 +2063,35 @@
   function _ligarSolicitacaoInternacao(wrap){
     var s=_solicInt;
 
-    // Beneficiário
+    // Beneficiário — selecionar (por busca ou por código digitado) preenche Nome, Acomodação, Cel. contato e a foto automaticamente
+    function aplicarBeneficiario(b){
+      s.benef=b;
+      s.acomodacao=b.acomodacao||s.acomodacao;
+      s.celContato=b.celContato||s.celContato;
+      _renderSolicitacaoInternacao(wrap);
+    }
     function abrirBuscaBenef(){
       _abrirBuscaGenerica('Buscar beneficiário', MOCK.BENEFICIARIOS||[], [
         {label:'Carteirinha',campo:'carteirinha'},{label:'Nome',campo:'nome'},{label:'Plano',campo:'plano'}
-      ], function(b){
-        s.benef=b; s.acomodacao=b.acomodacao||s.acomodacao;
-        _renderSolicitacaoInternacao(wrap);
-      });
+      ], aplicarBeneficiario);
     }
     $('#siBenefBusca').onclick=abrirBuscaBenef;
     $('#siBenefBusca2').onclick=abrirBuscaBenef;
+
+    // Digitar o código (carteirinha/cartão) direto no campo e sair (blur) ou apertar Enter também busca e preenche
+    var benefCodInp=$('#siBenefCod');
+    function buscarBenefPorCodigo(){
+      var termo=benefCodInp.value.trim().toLowerCase();
+      if(!termo){ return; }
+      if(s.benef && s.benef.carteirinha && s.benef.carteirinha.toLowerCase()===termo) return; // já aplicado
+      var achado=(MOCK.BENEFICIARIOS||[]).filter(function(b){
+        return (b.carteirinha||'').toLowerCase()===termo || (b.cartao||'').toLowerCase()===termo;
+      })[0];
+      if(achado){ aplicarBeneficiario(achado); }
+      else { toast('Nenhum beneficiário encontrado com este código.','warn'); }
+    }
+    benefCodInp.addEventListener('blur',buscarBenefPorCodigo);
+    benefCodInp.addEventListener('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); buscarBenefPorCodigo(); } });
 
     // Solicitante (mesma base de prestadores, já que o mock não distingue médico solicitante de prestador PJ)
     $('#siSolicBusca').onclick=function(){

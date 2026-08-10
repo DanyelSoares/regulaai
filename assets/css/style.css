@@ -2198,6 +2198,16 @@ body.sidebar-collapsed .modal-backdrop{left:66px}
 .solic-busca-row{display:flex;gap:6px}
 .solic-busca-row input{flex:1}
 .solic-busca-row .btn{flex-shrink:0}
+.solic-benef-row{display:flex;gap:16px;align-items:flex-start}
+.solic-benef-campos{flex:1;min-width:0}
+.solic-benef-foto{
+  flex:0 0 96px;width:96px;height:96px;border-radius:10px;border:1.5px dashed var(--g-200);
+  background:var(--g-50);display:flex;align-items:center;justify-content:center;overflow:hidden;
+  text-align:center;font-size:10.5px;color:var(--muted);line-height:1.4;padding:6px;
+}
+.solic-benef-foto img{width:100%;height:100%;object-fit:cover;display:block}
+.solic-benef-foto span{display:flex;flex-direction:column;align-items:center;gap:4px}
+@media(max-width:640px){ .solic-benef-row{flex-direction:column} .solic-benef-foto{align-self:center} }
 .solic-itsec{margin-bottom:18px}
 .solic-itsec-hd{display:flex;align-items:center;justify-content:space-between;font-size:12.5px;font-weight:700;color:var(--g-700);margin-bottom:8px}
 .solic-fav-btn{width:26px;height:26px;border-radius:6px;border:1px solid var(--g-200);background:#fff;color:var(--warn);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .12s}
