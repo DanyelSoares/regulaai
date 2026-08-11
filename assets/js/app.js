@@ -1788,14 +1788,14 @@
       secaoTitulo('Dados do beneficiário')+
       '<div class="solic-benef-row">'+
         '<div class="solic-benef-campos">'+
-          '<div class="solic-benef-codnome" style="align-items:end">'+
+          '<div class="solic-benef-grid" style="align-items:end">'+
             '<div class="field">'+lblObrig('Código do beneficiário')+
               '<div class="solic-busca-row"><input id="siBenefCod" type="text" maxlength="10" value="'+esc(s.benef?s.benef.carteirinha:'')+'" placeholder="Carteirinha">'+
               '<button type="button" class="btn ghost sm" id="siBenefBusca">'+ico('search',13)+'</button></div></div>'+
-            '<div class="field">'+lblObrig('Nome do beneficiário')+
+            '<div class="field solic-span2">'+lblObrig('Nome do beneficiário')+
               '<input id="siBenefNome" type="text" readonly value="'+esc(s.benef?s.benef.nome:'')+'" placeholder="Preenchido automaticamente"></div>'+
           '</div>'+
-          '<div class="g3">'+
+          '<div class="solic-benef-grid">'+
             '<div class="field"><label>Acomodação</label><select id="siAcomodacao">'+
               ['','APARTAMENTO','ENFERMARIA'].map(function(v){return '<option value="'+v+'"'+(s.acomodacao===v?' selected':'')+'>'+(v||'Selecione')+'</option>';}).join('')+
             '</select></div>'+
