@@ -1776,6 +1776,8 @@
     obsImpressa:''
   };
   function _solicNovoItem(campos){ var o={qtd:1}; (campos||[]).forEach(function(c){o[c]='';}); return o; }
+  // Especificação do material / Observações do OPME só fazem sentido (e só são obrigatórias) quando há ao menos um OPME adicionado
+  function _solicTemOpme(s){ return (s.opmes||[]).some(function(it){return it.codigo;}); }
 
   function viewSolicitacaoInternacao(){
     var wrap=el('div',{class:'panel',style:'padding:22px;max-width:1000px;margin:0 auto'});
@@ -1880,10 +1882,12 @@
         '<div class="field">'+lblObrig('E-mail')+'<input id="siProfEmail" type="email" value="'+esc(s.profSolicEmail)+'"></div>'+
       '</div>'+
 
-      secaoTitulo('Dados da cirurgia')+
+      secaoTitulo('Detalhes do pedido')+
       '<div class="field">'+lblObrig('Justificativa Técnica')+'<textarea id="siJustTec" rows="2">'+esc(s.justificativaTecnica)+'</textarea></div>'+
-      '<div class="field">'+lblObrig('Especificação do material')+'<textarea id="siEspecMat" rows="2">'+esc(s.especificacaoMaterial)+'</textarea></div>'+
-      '<div class="field">'+lblObrig('Observações / Justificativa do OPME')+'<textarea id="siObsOpme" rows="2">'+esc(s.obsOpme)+'</textarea></div>'+
+      '<div class="field">'+(_solicTemOpme(s)?lblObrig('Especificação do material'):'<label>Especificação do material</label>')+
+        '<textarea id="siEspecMat" rows="2"'+(_solicTemOpme(s)?'':' disabled placeholder="Disponível apenas quando houver OPME adicionado"')+'>'+esc(s.especificacaoMaterial)+'</textarea></div>'+
+      '<div class="field">'+(_solicTemOpme(s)?lblObrig('Observações / Justificativa do OPME'):'<label>Observações / Justificativa do OPME</label>')+
+        '<textarea id="siObsOpme" rows="2"'+(_solicTemOpme(s)?'':' disabled placeholder="Disponível apenas quando houver OPME adicionado"')+'>'+esc(s.obsOpme)+'</textarea></div>'+
 
       '<div class="solic-sec-hd">Anexos</div>'+
       '<div class="solic-anexos">'+
@@ -1935,11 +1939,11 @@
       return '<tr>'+cols+'<td style="width:34px;text-align:center"><button type="button" class="solic-it-del" data-chave="'+chave+'" data-idx="'+idx+'" title="Remover">'+ico('x',14)+'</button></td></tr>';
     }
 
-    function secaoTabela(titulo, chave, colunas, comFavorito){
+    function secaoTabela(titulo, chave, colunas){
       var itens=s[chave];
       var headers={tabela:'Tabela',codigo:'Código',descricao:'Descrição',quantidade:'Quantidade',fornecedor:'Fornecedor'};
       return '<div class="solic-itsec">'+
-        '<div class="solic-itsec-hd"><span>'+esc(titulo)+'</span>'+(comFavorito?'<button type="button" class="solic-fav-btn" title="Favoritos">'+ico('star',14)+'</button>':'')+'</div>'+
+        '<div class="solic-itsec-hd"><span>'+esc(titulo)+'</span></div>'+
         '<div class="table-wrap"><table class="cfg-table solic-it-tbl"><thead><tr>'+
           colunas.map(function(c){return '<th'+(c==='descricao'?'':' style="width:auto"')+'>'+headers[c]+'</th>';}).join('')+
           '<th></th>'+
@@ -1951,13 +1955,29 @@
     }
 
     host.innerHTML=
-      secaoTabela('Procedimentos','procedimentos',['codigo','descricao','quantidade'],false)+
-      secaoTabela('Pacotes','pacotes',['codigo','descricao','quantidade'],true)+
-      secaoTabela('Taxas / Diárias','taxas',['codigo','descricao','quantidade'],true)+
-      secaoTabela('Materiais e Medicamentos','matmed',['tabela','codigo','descricao','quantidade'],true)+
-      secaoTabela('OPMEs','opmes',['tabela','codigo','descricao','quantidade','fornecedor'],true);
+      secaoTabela('Procedimentos','procedimentos',['codigo','descricao','quantidade'])+
+      secaoTabela('Pacotes','pacotes',['codigo','descricao','quantidade'])+
+      secaoTabela('Taxas / Diárias','taxas',['codigo','descricao','quantidade'])+
+      secaoTabela('Materiais e Medicamentos','matmed',['tabela','codigo','descricao','quantidade'])+
+      secaoTabela('OPMEs','opmes',['tabela','codigo','descricao','quantidade','fornecedor']);
 
     _ligarSolicSecoes(wrap);
+    _atualizarCamposOpme(wrap);
+  }
+
+  // Habilita/exige "Especificação do material" e "Observações/Justificativa do OPME" somente quando
+  // há ao menos um OPME adicionado — reflete a mudança sem re-renderizar o formulário inteiro (preserva foco/cursor).
+  function _atualizarCamposOpme(wrap){
+    var s=_solicInt, temOpme=_solicTemOpme(s);
+    [['siEspecMat','Especificação do material'],['siObsOpme','Observações / Justificativa do OPME']].forEach(function(par){
+      var campo=wrap.querySelector('#'+par[0]);
+      if(!campo) return;
+      var lblEl=campo.closest('.field').querySelector('label');
+      campo.disabled=!temOpme;
+      campo.placeholder=temOpme?'':'Disponível apenas quando houver OPME adicionado';
+      lblEl.innerHTML=temOpme?esc(par[1])+' <span class="solic-obrig-ast">*</span>':esc(par[1]);
+      lblEl.className=temOpme?'solic-lbl-obrig':'';
+    });
   }
 
   function _ligarSolicSecoes(wrap){
@@ -2285,8 +2305,10 @@
     if(!s.profSolicTelefone.trim()){ toast('Informe o Telefone do profissional solicitante.','err'); return; }
     if(!s.profSolicEmail.trim()){ toast('Informe o E-mail do profissional solicitante.','err'); return; }
     if(!s.justificativaTecnica.trim()){ toast('Informe a Justificativa Técnica.','err'); return; }
-    if(!s.especificacaoMaterial.trim()){ toast('Informe a Especificação do material.','err'); return; }
-    if(!s.obsOpme.trim()){ toast('Informe as Observações / Justificativa do OPME.','err'); return; }
+    if(_solicTemOpme(s)){
+      if(!s.especificacaoMaterial.trim()){ toast('Informe a Especificação do material (obrigatório quando há OPME).','err'); return; }
+      if(!s.obsOpme.trim()){ toast('Informe as Observações / Justificativa do OPME (obrigatório quando há OPME).','err'); return; }
+    }
     var todosItens=[].concat(s.procedimentos,s.pacotes,s.taxas,s.matmed,s.opmes);
     if(!todosItens.some(function(it){return it.codigo;})){ toast('Adicione ao menos um procedimento, pacote, taxa, material ou OPME.','err'); return; }
 

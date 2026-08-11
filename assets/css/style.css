@@ -2221,8 +2221,6 @@ body.sidebar-collapsed .modal-backdrop{left:66px}
 .solic-babusca-row input:focus{outline:none;border-color:var(--g-500);box-shadow:0 0 0 3px rgba(10,138,67,.1)}
 .solic-itsec{margin-bottom:18px}
 .solic-itsec-hd{display:flex;align-items:center;justify-content:space-between;font-size:12.5px;font-weight:700;color:var(--g-700);margin-bottom:8px}
-.solic-fav-btn{width:26px;height:26px;border-radius:6px;border:1px solid var(--g-200);background:#fff;color:var(--warn);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .12s}
-.solic-fav-btn:hover{background:var(--g-50)}
 .solic-it-tbl input,.solic-it-tbl select{width:100%;padding:6px 8px;border:1.5px solid var(--g-200);border-radius:6px;font-size:12.5px}
 .solic-it-tbl input[readonly]{background:var(--g-50);color:var(--muted)}
 .solic-it-del{width:26px;height:26px;border-radius:6px;border:none;background:transparent;color:var(--muted);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .12s,color .12s}
