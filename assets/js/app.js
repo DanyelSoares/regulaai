@@ -1866,10 +1866,10 @@
 
       secaoTitulo('Indicação Clínica / Hipótese diagnóstica')+
       '<div class="g2" style="align-items:end">'+
-        '<div class="field">'+lblObrig('C.I.D')+
+        '<div class="field"><label>C.I.D</label>'+
           '<div class="solic-busca-row"><input id="siCid" type="text" style="text-transform:uppercase" value="'+esc(s.cid)+'" placeholder="Ex.: J18.9">'+
           '<button type="button" class="btn ghost sm" id="siCidBusca">'+ico('search',13)+'</button></div></div>'+
-        '<div class="field"><label>Hipótese diagnóstica</label><input id="siHipotese" type="text" value="'+esc(s.hipoteseDiagnostica||s.cidDescricao)+'"></div>'+
+        '<div class="field">'+lblObrig('Hipótese diagnóstica')+'<input id="siHipotese" type="text" value="'+esc(s.hipoteseDiagnostica||s.cidDescricao)+'"></div>'+
       '</div>'+
 
       '<div id="siSecoes"></div>'+
@@ -2279,7 +2279,7 @@
     if(!s.executante){ toast('Selecione o Executante.','err'); return; }
     if(!s.dataHoraInternacao){ toast('Informe a Data/hora internação.','err'); return; }
     if(!s.dataHoraPrevAlta){ toast('Informe a Data/Hora prev. de alta.','err'); return; }
-    if(!s.cid.trim()){ toast('Informe o C.I.D.','err'); return; }
+    if(!s.hipoteseDiagnostica.trim()){ toast('Informe a Hipótese diagnóstica.','err'); return; }
     if(!s.profSolicNome.trim()){ toast('Informe o Solicitante (Dados do Profissional Solicitante).','err'); return; }
     if(!s.profSolicTelefone.trim()){ toast('Informe o Telefone do profissional solicitante.','err'); return; }
     if(!s.profSolicEmail.trim()){ toast('Informe o E-mail do profissional solicitante.','err'); return; }
