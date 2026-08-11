@@ -2198,11 +2198,11 @@ body.sidebar-collapsed .modal-backdrop{left:66px}
 .field .solic-lbl-obrig{color:#c0392b}
 .solic-obrig-ast{color:#c0392b;font-weight:800}
 .solic-busca-row{display:flex;gap:6px}
-.solic-busca-row input{flex:1}
+.solic-busca-row input{flex:1;min-width:0}
 .solic-busca-row .btn{flex-shrink:0}
 .solic-benef-row{display:flex;gap:18px;align-items:flex-start}
 .solic-benef-campos{flex:1;min-width:0}
-.solic-benef-codnome{display:grid;grid-template-columns:180px 1fr;gap:14px}
+.solic-benef-codnome{display:grid;grid-template-columns:210px 1fr;gap:14px}
 @media(max-width:640px){ .solic-benef-codnome{grid-template-columns:1fr} }
 .solic-benef-foto{
   flex:0 0 110px;width:110px;height:110px;border-radius:12px;border:1.5px dashed var(--g-200);

@@ -1790,7 +1790,7 @@
         '<div class="solic-benef-campos">'+
           '<div class="solic-benef-codnome" style="align-items:end">'+
             '<div class="field">'+lblObrig('Código do beneficiário')+
-              '<div class="solic-busca-row"><input id="siBenefCod" type="text" maxlength="10" value="'+esc(s.benef?s.benef.carteirinha:'')+'" placeholder="Digite ou busque o código">'+
+              '<div class="solic-busca-row"><input id="siBenefCod" type="text" maxlength="10" value="'+esc(s.benef?s.benef.carteirinha:'')+'" placeholder="Carteirinha">'+
               '<button type="button" class="btn ghost sm" id="siBenefBusca">'+ico('search',13)+'</button></div></div>'+
             '<div class="field">'+lblObrig('Nome do beneficiário')+
               '<input id="siBenefNome" type="text" readonly value="'+esc(s.benef?s.benef.nome:'')+'" placeholder="Preenchido automaticamente"></div>'+
