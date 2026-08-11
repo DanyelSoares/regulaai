@@ -2197,7 +2197,7 @@ body.sidebar-collapsed .modal-backdrop{left:66px}
 .solic-sec-hd:first-of-type{margin-top:0}
 .field .solic-lbl-obrig{color:#c0392b}
 .solic-obrig-ast{color:#c0392b;font-weight:800}
-.solic-busca-row{display:flex;gap:6px}
+.solic-busca-row{display:flex;gap:6px;width:100%}
 .solic-busca-row input{flex:1;min-width:0}
 .solic-busca-row .btn{flex-shrink:0}
 .solic-benef-row{display:flex;gap:18px;align-items:flex-start}
