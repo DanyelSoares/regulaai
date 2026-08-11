@@ -1823,19 +1823,19 @@
           ).join('')+
         '</select></div>'+
       '</div>'+
-      '<div class="field" style="max-width:340px"><label>Especialidade</label><select id="siEspec">'+
+      '<div class="field" style="max-width:340px">'+lblObrig('Especialidade')+'<select id="siEspec">'+
         ['',].concat(Object.keys(MOCK.ESPEC_MAP||{}).map(function(k){return MOCK.ESPEC_MAP[k];}).filter(function(v,i,a){return a.indexOf(v)===i;}).sort())
           .map(function(v){return '<option value="'+esc(v)+'"'+(s.especExec===v?' selected':'')+'>'+(v||'Selecione')+'</option>';}).join('')+
       '</select></div>'+
       '<div class="g2">'+
-        '<div class="field"><label>Natureza</label><select id="siNatureza">'+
+        '<div class="field">'+lblObrig('Natureza')+'<select id="siNatureza">'+
           ['Internacao clinica','Internacao cirurgica'].map(function(v){return '<option value="'+v+'"'+(s.natureza===v?' selected':'')+'>'+v.replace('Internacao','Internação')+'</option>';}).join('')+
         '</select></div>'+
-        '<div class="field"><label>Regime</label><select id="siRegime">'+
+        '<div class="field">'+lblObrig('Regime')+'<select id="siRegime">'+
           ['Eletiva','Urgência/Emergência'].map(function(v){return '<option value="'+v+'"'+(s.regime===v?' selected':'')+'>'+v+'</option>';}).join('')+
         '</select></div>'+
       '</div>'+
-      '<div class="field" style="max-width:340px"><label>Regime Internação</label><select id="siRegimeInt">'+
+      '<div class="field" style="max-width:340px">'+lblObrig('Regime Internação')+'<select id="siRegimeInt">'+
         ['1 - Hospitalar','2 - Hospital dia','3 - Domiciliar'].map(function(v){return '<option value="'+v+'"'+(s.regimeInternacao===v?' selected':'')+'>'+v+'</option>';}).join('')+
       '</select></div>'+
       '<div class="g3">'+
@@ -1852,7 +1852,7 @@
 
       secaoTitulo('Dados complementares da Internação')+
       '<div class="g2">'+
-        '<div class="field">'+lblObrig('Data/hora internação')+'<input id="siDataInt" type="datetime-local" value="'+esc(s.dataHoraInternacao)+'"></div>'+
+        '<div class="field"><label>Data/hora internação</label><input id="siDataInt" type="datetime-local" value="'+esc(s.dataHoraInternacao)+'"></div>'+
         '<div class="field">'+lblObrig('Data/Hora prev. de alta')+'<input id="siDataAlta" type="datetime-local" value="'+esc(s.dataHoraPrevAlta)+'"></div>'+
       '</div>'+
       '<div class="g2">'+
@@ -2277,7 +2277,10 @@
     if(!s.solicitante){ toast('Selecione o Solicitante.','err'); return; }
     if(!s.especSolic){ toast('Selecione a Especialidade solicitante.','err'); return; }
     if(!s.executante){ toast('Selecione o Executante.','err'); return; }
-    if(!s.dataHoraInternacao){ toast('Informe a Data/hora internação.','err'); return; }
+    if(!s.especExec){ toast('Selecione a Especialidade.','err'); return; }
+    if(!s.natureza){ toast('Selecione a Natureza.','err'); return; }
+    if(!s.regime){ toast('Selecione o Regime.','err'); return; }
+    if(!s.regimeInternacao){ toast('Selecione o Regime Internação.','err'); return; }
     if(!s.dataHoraPrevAlta){ toast('Informe a Data/Hora prev. de alta.','err'); return; }
     if(!s.hipoteseDiagnostica.trim()){ toast('Informe a Hipótese diagnóstica.','err'); return; }
     if(!s.profSolicNome.trim()){ toast('Informe o Solicitante (Dados do Profissional Solicitante).','err'); return; }
