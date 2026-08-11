@@ -1782,16 +1782,17 @@
     var s=_solicInt;
 
     function secaoTitulo(txt){ return '<div class="solic-sec-hd">'+esc(txt)+'</div>'; }
+    function lblObrig(txt){ return '<label class="solic-lbl-obrig">'+esc(txt)+' <span class="solic-obrig-ast">*</span></label>'; }
 
     wrap.innerHTML=
       secaoTitulo('Dados do beneficiário')+
       '<div class="solic-benef-row">'+
         '<div class="solic-benef-campos">'+
           '<div class="g2" style="align-items:end">'+
-            '<div class="field"><label>Código do beneficiário</label>'+
+            '<div class="field">'+lblObrig('Código do beneficiário')+
               '<div class="solic-busca-row"><input id="siBenefCod" type="text" value="'+esc(s.benef?s.benef.carteirinha:'')+'" placeholder="Digite ou busque o código">'+
               '<button type="button" class="btn ghost sm" id="siBenefBusca">'+ico('search',13)+'</button></div></div>'+
-            '<div class="field"><label>Nome do beneficiário</label>'+
+            '<div class="field">'+lblObrig('Nome do beneficiário')+
               '<div class="solic-busca-row"><input id="siBenefNome" type="text" readonly value="'+esc(s.benef?s.benef.nome:'')+'" placeholder="Preenchido automaticamente">'+
               '<button type="button" class="btn ghost sm" id="siBenefBusca2">'+ico('user-search',13)+'</button></div></div>'+
           '</div>'+
@@ -1799,7 +1800,7 @@
             '<div class="field"><label>Acomodação</label><select id="siAcomodacao">'+
               ['','APARTAMENTO','ENFERMARIA'].map(function(v){return '<option value="'+v+'"'+(s.acomodacao===v?' selected':'')+'>'+(v||'Selecione')+'</option>';}).join('')+
             '</select></div>'+
-            '<div class="field"><label>Cel. contato Benef.</label><input id="siCelContato" type="text" value="'+esc(s.celContato)+'" placeholder="(00) 00000-0000"></div>'+
+            '<div class="field">'+lblObrig('Cel. contato Benef.')+'<input id="siCelContato" type="text" value="'+esc(s.celContato)+'" placeholder="(00) 00000-0000"></div>'+
             '<div class="field"><label>Pessoa p/ contato</label><input id="siPessoaContato" type="text" value="'+esc(s.pessoaContato)+'"></div>'+
           '</div>'+
         '</div>'+
@@ -1809,14 +1810,14 @@
 
       secaoTitulo('Dados da guia')+
       '<div class="g3" style="align-items:end">'+
-        '<div class="field"><label>Solicitante</label>'+
+        '<div class="field">'+lblObrig('Solicitante')+
           '<div class="solic-busca-row"><input id="siSolicNome" type="text" readonly value="'+esc(s.solicitante?s.solicitante.nome:'')+'" placeholder="Buscar solicitante">'+
           '<button type="button" class="btn ghost sm" id="siSolicBusca">'+ico('search',13)+'</button></div></div>'+
-        '<div class="field"><label>Especialidade solicitante</label><select id="siEspecSolic">'+
+        '<div class="field">'+lblObrig('Especialidade solicitante')+'<select id="siEspecSolic">'+
           ['',].concat(Object.keys(MOCK.ESPEC_MAP||{}).map(function(k){return MOCK.ESPEC_MAP[k];}).filter(function(v,i,a){return a.indexOf(v)===i;}).sort())
             .map(function(v){return '<option value="'+esc(v)+'"'+(s.especSolic===v?' selected':'')+'>'+(v||'Selecione')+'</option>';}).join('')+
         '</select></div>'+
-        '<div class="field"><label>Executante</label><select id="siExecutante">'+
+        '<div class="field">'+lblObrig('Executante')+'<select id="siExecutante">'+
           ['<option value="">Selecione o prestador executante</option>'].concat(
             (MOCK.PRESTADORES||[]).map(function(p){return '<option value="'+p.id+'"'+(s.executante&&s.executante.id===p.id?' selected':'')+'>'+esc(p.nome)+'</option>';})
           ).join('')+
@@ -1838,10 +1839,10 @@
         ['1 - Hospitalar','2 - Hospital dia','3 - Domiciliar'].map(function(v){return '<option value="'+v+'"'+(s.regimeInternacao===v?' selected':'')+'>'+v+'</option>';}).join('')+
       '</select></div>'+
       '<div class="g3">'+
-        '<div class="field"><label>Atendimento RN</label><select id="siAtendRN">'+
+        '<div class="field">'+lblObrig('Atendimento RN')+'<select id="siAtendRN">'+
           ['Não','Sim'].map(function(v){return '<option value="'+v+'"'+(s.atendimentoRN===v?' selected':'')+'>'+v+'</option>';}).join('')+
         '</select></div>'+
-        '<div class="field"><label>Indicador de acidente</label><select id="siIndAcidente">'+
+        '<div class="field">'+lblObrig('Indicador de acidente')+'<select id="siIndAcidente">'+
           ['Não Acidente','Acidente de trabalho','Acidente de trânsito','Outros acidentes'].map(function(v){return '<option value="'+v+'"'+(s.indicadorAcidente===v?' selected':'')+'>'+v+'</option>';}).join('')+
         '</select></div>'+
         '<div class="field"><label>Procedimento já realizado?</label><select id="siProcRealizado">'+
@@ -1851,8 +1852,8 @@
 
       secaoTitulo('Dados complementares da Internação')+
       '<div class="g2">'+
-        '<div class="field"><label>Data/hora internação</label><input id="siDataInt" type="datetime-local" value="'+esc(s.dataHoraInternacao)+'"></div>'+
-        '<div class="field"><label>Data/Hora prev. de alta</label><input id="siDataAlta" type="datetime-local" value="'+esc(s.dataHoraPrevAlta)+'"></div>'+
+        '<div class="field">'+lblObrig('Data/hora internação')+'<input id="siDataInt" type="datetime-local" value="'+esc(s.dataHoraInternacao)+'"></div>'+
+        '<div class="field">'+lblObrig('Data/Hora prev. de alta')+'<input id="siDataAlta" type="datetime-local" value="'+esc(s.dataHoraPrevAlta)+'"></div>'+
       '</div>'+
       '<div class="g2">'+
         '<div class="field"><label>Previsão de uso de OPME</label><select id="siPrevOpme">'+
@@ -1865,7 +1866,7 @@
 
       secaoTitulo('Indicação Clínica / Hipótese diagnóstica')+
       '<div class="g2" style="align-items:end">'+
-        '<div class="field"><label>C.I.D</label>'+
+        '<div class="field">'+lblObrig('C.I.D')+
           '<div class="solic-busca-row"><input id="siCid" type="text" style="text-transform:uppercase" value="'+esc(s.cid)+'" placeholder="Ex.: J18.9">'+
           '<button type="button" class="btn ghost sm" id="siCidBusca">'+ico('search',13)+'</button></div></div>'+
         '<div class="field"><label>Hipótese diagnóstica</label><input id="siHipotese" type="text" value="'+esc(s.hipoteseDiagnostica||s.cidDescricao)+'"></div>'+
@@ -1875,15 +1876,15 @@
 
       secaoTitulo('Dados do Profissional Solicitante')+
       '<div class="g3">'+
-        '<div class="field"><label>Solicitante</label><input id="siProfNome" type="text" value="'+esc(s.profSolicNome)+'"></div>'+
-        '<div class="field"><label>Telefone</label><input id="siProfTel" type="text" value="'+esc(s.profSolicTelefone)+'"></div>'+
-        '<div class="field"><label>E-mail</label><input id="siProfEmail" type="email" value="'+esc(s.profSolicEmail)+'"></div>'+
+        '<div class="field">'+lblObrig('Solicitante')+'<input id="siProfNome" type="text" value="'+esc(s.profSolicNome)+'"></div>'+
+        '<div class="field">'+lblObrig('Telefone')+'<input id="siProfTel" type="text" value="'+esc(s.profSolicTelefone)+'"></div>'+
+        '<div class="field">'+lblObrig('E-mail')+'<input id="siProfEmail" type="email" value="'+esc(s.profSolicEmail)+'"></div>'+
       '</div>'+
 
       secaoTitulo('Dados da cirurgia')+
-      '<div class="field"><label>Justificativa Técnica</label><textarea id="siJustTec" rows="2">'+esc(s.justificativaTecnica)+'</textarea></div>'+
-      '<div class="field"><label>Especificação do material</label><textarea id="siEspecMat" rows="2">'+esc(s.especificacaoMaterial)+'</textarea></div>'+
-      '<div class="field"><label>Observações / Justificativa do OPME</label><textarea id="siObsOpme" rows="2">'+esc(s.obsOpme)+'</textarea></div>'+
+      '<div class="field">'+lblObrig('Justificativa Técnica')+'<textarea id="siJustTec" rows="2">'+esc(s.justificativaTecnica)+'</textarea></div>'+
+      '<div class="field">'+lblObrig('Especificação do material')+'<textarea id="siEspecMat" rows="2">'+esc(s.especificacaoMaterial)+'</textarea></div>'+
+      '<div class="field">'+lblObrig('Observações / Justificativa do OPME')+'<textarea id="siObsOpme" rows="2">'+esc(s.obsOpme)+'</textarea></div>'+
 
       '<div class="solic-sec-hd">Anexos</div>'+
       '<div class="solic-anexos">'+
@@ -2270,10 +2271,21 @@
 
   function _autorizarSolicitacaoInternacao(){
     var s=_solicInt;
-    if(!s.benef){ toast('Selecione o beneficiário.','err'); return; }
-    if(!s.solicitante){ toast('Selecione o solicitante.','err'); return; }
-    if(!s.executante){ toast('Selecione o prestador executante.','err'); return; }
-    if(!s.cid && !s.hipoteseDiagnostica){ toast('Informe o CID ou a hipótese diagnóstica.','err'); return; }
+    // Campos marcados com * no formulário (rótulo vermelho) — validação alinhada à sinalização visual
+    if(!s.benef){ toast('Selecione o beneficiário (Código/Nome do beneficiário).','err'); return; }
+    if(!s.celContato.trim()){ toast('Informe o Cel. contato Benef.','err'); return; }
+    if(!s.solicitante){ toast('Selecione o Solicitante.','err'); return; }
+    if(!s.especSolic){ toast('Selecione a Especialidade solicitante.','err'); return; }
+    if(!s.executante){ toast('Selecione o Executante.','err'); return; }
+    if(!s.dataHoraInternacao){ toast('Informe a Data/hora internação.','err'); return; }
+    if(!s.dataHoraPrevAlta){ toast('Informe a Data/Hora prev. de alta.','err'); return; }
+    if(!s.cid.trim()){ toast('Informe o C.I.D.','err'); return; }
+    if(!s.profSolicNome.trim()){ toast('Informe o Solicitante (Dados do Profissional Solicitante).','err'); return; }
+    if(!s.profSolicTelefone.trim()){ toast('Informe o Telefone do profissional solicitante.','err'); return; }
+    if(!s.profSolicEmail.trim()){ toast('Informe o E-mail do profissional solicitante.','err'); return; }
+    if(!s.justificativaTecnica.trim()){ toast('Informe a Justificativa Técnica.','err'); return; }
+    if(!s.especificacaoMaterial.trim()){ toast('Informe a Especificação do material.','err'); return; }
+    if(!s.obsOpme.trim()){ toast('Informe as Observações / Justificativa do OPME.','err'); return; }
     var todosItens=[].concat(s.procedimentos,s.pacotes,s.taxas,s.matmed,s.opmes);
     if(!todosItens.some(function(it){return it.codigo;})){ toast('Adicione ao menos um procedimento, pacote, taxa, material ou OPME.','err'); return; }
 

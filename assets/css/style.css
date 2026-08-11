@@ -2195,6 +2195,8 @@ body.sidebar-collapsed .modal-backdrop{left:66px}
 .solic-card-badge{position:absolute;top:10px;right:10px;font-size:9.5px}
 .solic-sec-hd{font-size:11.5px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--g-700);background:var(--g-50);padding:8px 12px;border-radius:7px;margin:22px 0 14px}
 .solic-sec-hd:first-of-type{margin-top:0}
+.field .solic-lbl-obrig{color:#c0392b}
+.solic-obrig-ast{color:#c0392b;font-weight:800}
 .solic-busca-row{display:flex;gap:6px}
 .solic-busca-row input{flex:1}
 .solic-busca-row .btn{flex-shrink:0}
