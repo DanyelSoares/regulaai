@@ -1724,7 +1724,7 @@
   var SOLICITACOES_TIPOS=[
     {id:'internacao', nome:'Solicitação de Internação', ico:'bed-double', pronta:true},
     {id:'prorrogacao', nome:'Solicitação de Prorrogação de Internação', ico:'calendar-clock', pronta:false},
-    {id:'opme', nome:'Solicitação de OPME', ico:'bone', pronta:false},
+    {id:'opme', nome:'Solicitação de OPME', ico:'bone', pronta:true},
     {id:'quimioterapia', nome:'Solicitação de Quimioterapia', ico:'flask-conical', pronta:false},
     {id:'consulta', nome:'Solicitação de Consulta', ico:'stethoscope', pronta:false},
     {id:'exames', nome:'Solicitação de Exames e Procedimentos', ico:'clipboard-list', pronta:false}
@@ -1744,6 +1744,7 @@
         var b=$('#solicVoltarBtn'); if(b) b.onclick=function(){ _solicState.tela='hub'; render(); };
       },0);
       if(_solicState.tela==='internacao') wrap.appendChild(viewSolicitacaoInternacao());
+      else if(_solicState.tela==='opme') wrap.appendChild(viewSolicitacaoOpme());
       return wrap;
     }
     wrap.appendChild(el('div',{class:'page-title'},'<div><h1>'+ico('clipboard-plus',20)+' Solicitações</h1><p>Escolha o tipo de solicitação que deseja registrar.</p></div>'));
@@ -2361,6 +2362,278 @@
       profSolicNome:'', profSolicTelefone:'', profSolicEmail:'',
       justificativaTecnica:'', especificacaoMaterial:'', obsOpme:'',
       obsImpressa:''
+    };
+    _solicState.tela='hub';
+    render();
+  }
+
+  /* === Solicitação de OPME === */
+  // Diferente da Internação: não cria guia nova — anexa itens de OPME/Taxas a uma guia JÁ EXISTENTE
+  // (informada em "Nº da guia referenciada"), reabrindo-a para auditoria ("Cotação de OPME").
+  var _solicOpme={
+    benef:null, acomodacao:'', celContato:'', pessoaContato:'', numGuiaRef:'', obsBenef:'',
+    profSolicNome:'', profSolicTelefone:'', profSolicEmail:'',
+    justificativaTecnica:'', especificacaoMaterial:'', obsOpme:'',
+    taxas:[], opmes:[]
+  };
+
+  function viewSolicitacaoOpme(){
+    var wrap=el('div',{class:'panel',style:'padding:22px;max-width:1000px;margin:0 auto'});
+    var s=_solicOpme;
+
+    function secaoTitulo(txt){ return '<div class="solic-sec-hd">'+esc(txt)+'</div>'; }
+    function lblObrig(txt){ return '<label class="solic-lbl-obrig">'+esc(txt)+' <span class="solic-obrig-ast">*</span></label>'; }
+
+    wrap.innerHTML=
+      secaoTitulo('Dados do beneficiário')+
+      '<div class="solic-benef-row">'+
+        '<div class="solic-benef-campos">'+
+          '<div class="solic-benef-grid" style="align-items:end">'+
+            '<div class="field">'+lblObrig('Código do beneficiário')+
+              '<div class="solic-busca-row"><input id="soBenefCod" type="text" maxlength="10" value="'+esc(s.benef?s.benef.carteirinha:'')+'" placeholder="Carteirinha">'+
+              '<button type="button" class="btn ghost sm" id="soBenefBusca">'+ico('search',13)+'</button></div></div>'+
+            '<div class="field solic-span2"><label>Nome do beneficiário</label>'+
+              '<input id="soBenefNome" type="text" readonly value="'+esc(s.benef?s.benef.nome:'')+'" placeholder="Preenchido automaticamente"></div>'+
+          '</div>'+
+          '<div class="solic-benef-grid">'+
+            '<div class="field"><label>Acomodação</label><input id="soAcomodacao" type="text" readonly value="'+esc(s.acomodacao)+'" placeholder="Preenchido automaticamente"></div>'+
+            '<div class="field"><label>Cel. contato Benef.</label><input id="soCelContato" type="text" value="'+esc(s.celContato)+'" placeholder="(00) 00000-0000"></div>'+
+            '<div class="field"><label>Pessoa p/ contato</label><input id="soPessoaContato" type="text" value="'+esc(s.pessoaContato)+'"></div>'+
+          '</div>'+
+        '</div>'+
+        '<div class="solic-benef-foto" id="soBenefFoto">'+(s.benef&&s.benef.foto?'<img src="'+esc(s.benef.foto)+'" alt="Foto do beneficiário">':'<span>'+ico('image-off',28)+'Foto não<br>disponível</span>')+'</div>'+
+      '</div>'+
+      '<div class="field">'+lblObrig('Nº da guia referenciada')+'<input id="soNumGuiaRef" type="text" value="'+esc(s.numGuiaRef)+'" placeholder="Número da guia já autorizada"></div>'+
+      '<div class="field"><label>Observações do beneficiário</label><textarea id="soObsBenef" rows="2">'+esc(s.obsBenef)+'</textarea></div>'+
+
+      secaoTitulo('Dados do Profissional Solicitante')+
+      '<div class="g3">'+
+        '<div class="field">'+lblObrig('Solicitante')+'<input id="soProfNome" type="text" value="'+esc(s.profSolicNome)+'"></div>'+
+        '<div class="field">'+lblObrig('Telefone')+'<input id="soProfTel" type="text" value="'+esc(s.profSolicTelefone)+'"></div>'+
+        '<div class="field">'+lblObrig('E-mail')+'<input id="soProfEmail" type="email" value="'+esc(s.profSolicEmail)+'"></div>'+
+      '</div>'+
+
+      secaoTitulo('Dados da cirurgia')+
+      '<div class="field">'+lblObrig('Justificativa Técnica')+'<textarea id="soJustTec" rows="2">'+esc(s.justificativaTecnica)+'</textarea></div>'+
+      '<div class="field">'+lblObrig('Especificação do material')+'<textarea id="soEspecMat" rows="2">'+esc(s.especificacaoMaterial)+'</textarea></div>'+
+      '<div class="field">'+lblObrig('Observações / Justificativa do OPME')+'<textarea id="soObsOpme" rows="2">'+esc(s.obsOpme)+'</textarea></div>'+
+
+      '<div id="soSecoes"></div>'+
+
+      '<div class="solic-sec-hd">Anexos</div>'+
+      '<div class="solic-anexos">'+
+        [0,1,2,3,4,5].map(function(i){ return '<div class="solic-anexo-row"><label class="btn ghost sm">Escolher arquivo<input type="file" id="soAnexo'+i+'" style="display:none"></label><span id="soAnexo'+i+'Nome" class="solic-anexo-nome">Nenhum arquivo escolhido</span></div>'; }).join('')+
+      '</div>'+
+
+      '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px">'+
+        '<button class="btn-primary" id="soAutorizarBtn">'+ico('check',14)+' Autorizar</button>'+
+      '</div>';
+
+    setTimeout(function(){ _ligarSolicitacaoOpme(wrap); },0);
+    return wrap;
+  }
+
+  function _renderSolicOpmeSecoes(wrap){
+    var s=_solicOpme;
+    var host=wrap.querySelector('#soSecoes');
+    if(!host) return;
+
+    function linhaItem(item, idx, chave, colunas){
+      var cols=colunas.map(function(c){
+        if(c==='tabela'){
+          return '<td style="width:60px"><select class="solic-it-tabela" data-chave="'+chave+'" data-idx="'+idx+'">'+
+            ['00','18','19','20','22'].map(function(t){return '<option value="'+t+'"'+(item.tabela===t?' selected':'')+'>'+t+'</option>';}).join('')+
+          '</select></td>';
+        }
+        if(c==='codigo'){
+          return '<td style="width:150px"><div class="solic-busca-row"><input type="text" class="solic-it-codigo" data-chave="'+chave+'" data-idx="'+idx+'" value="'+esc(item.codigo||'')+'">'+
+            '<button type="button" class="btn ghost sm solic-it-buscabtn" data-chave="'+chave+'" data-idx="'+idx+'">'+ico('search',12)+'</button></div></td>';
+        }
+        if(c==='descricao'){
+          return '<td><input type="text" class="solic-it-desc" data-chave="'+chave+'" data-idx="'+idx+'" value="'+esc(item.descricao||'')+'" readonly></td>';
+        }
+        if(c==='quantidade'){
+          return '<td style="width:80px"><input type="number" min="1" class="solic-it-qtd" data-chave="'+chave+'" data-idx="'+idx+'" value="'+(item.qtd||1)+'"></td>';
+        }
+        if(c==='fornecedor'){
+          return '<td style="width:110px"><select class="solic-it-fornecedor" data-chave="'+chave+'" data-idx="'+idx+'">'+
+            ['Selec','Fornecedor A','Fornecedor B','Fornecedor C'].map(function(f){return '<option value="'+f+'"'+(item.fornecedor===f?' selected':'')+'>'+f+'</option>';}).join('')+
+          '</select></td>';
+        }
+        return '<td></td>';
+      }).join('');
+      return '<tr>'+cols+'<td style="width:34px;text-align:center"><button type="button" class="solic-it-del" data-chave="'+chave+'" data-idx="'+idx+'" title="Remover">'+ico('x',14)+'</button></td></tr>';
+    }
+
+    function secaoTabela(titulo, chave, colunas){
+      var itens=s[chave];
+      var headers={tabela:'Tabela',codigo:'Código',descricao:'Descrição',quantidade:'Quantidade',fornecedor:'Fornecedor'};
+      return '<div class="solic-itsec">'+
+        '<div class="solic-itsec-hd"><span>'+esc(titulo)+'</span></div>'+
+        '<div class="table-wrap"><table class="cfg-table solic-it-tbl"><thead><tr>'+
+          colunas.map(function(c){return '<th'+(c==='descricao'?'':' style="width:auto"')+'>'+headers[c]+'</th>';}).join('')+
+          '<th></th>'+
+        '</tr></thead><tbody>'+
+          itens.map(function(it,i){ return linhaItem(it,i,chave,colunas); }).join('')+
+        '</tbody></table></div>'+
+        '<button type="button" class="btn ghost sm solic-add-btn" data-chave="'+chave+'">'+ico('plus',13)+' Adicionar '+esc(titulo.replace(/s$/,''))+'</button>'+
+      '</div>';
+    }
+
+    host.innerHTML=
+      secaoTabela('Taxas / Diárias','taxas',['codigo','descricao','quantidade'])+
+      secaoTabela('OPMEs','opmes',['tabela','codigo','descricao','quantidade','fornecedor']);
+
+    $$('.solic-add-btn',host).forEach(function(b){
+      b.onclick=function(){
+        var chave=b.getAttribute('data-chave');
+        var camposExtra=chave==='opmes'?['tabela']:[];
+        var novo=_solicNovoItem(['codigo','descricao'].concat(camposExtra));
+        if(chave==='opmes'){ novo.tabela='00'; novo.fornecedor='Selec'; }
+        s[chave].push(novo);
+        _renderSolicOpmeSecoes(wrap);
+      };
+    });
+    $$('.solic-it-del',host).forEach(function(b){
+      b.onclick=function(){
+        var chave=b.getAttribute('data-chave'), idx=+b.getAttribute('data-idx');
+        s[chave].splice(idx,1);
+        _renderSolicOpmeSecoes(wrap);
+      };
+    });
+    $$('.solic-it-qtd',host).forEach(function(inp){
+      inp.onchange=function(){
+        var chave=inp.getAttribute('data-chave'), idx=+inp.getAttribute('data-idx');
+        s[chave][idx].qtd=Math.max(1,parseInt(inp.value)||1);
+      };
+    });
+    $$('.solic-it-tabela',host).forEach(function(sel){
+      sel.onchange=function(){
+        var chave=sel.getAttribute('data-chave'), idx=+sel.getAttribute('data-idx');
+        s[chave][idx].tabela=sel.value;
+      };
+    });
+    $$('.solic-it-fornecedor',host).forEach(function(sel){
+      sel.onchange=function(){
+        var chave=sel.getAttribute('data-chave'), idx=+sel.getAttribute('data-idx');
+        s[chave][idx].fornecedor=sel.value;
+      };
+    });
+    $$('.solic-it-codigo',host).forEach(function(inp){
+      inp.onchange=function(){
+        var chave=inp.getAttribute('data-chave'), idx=+inp.getAttribute('data-idx');
+        s[chave][idx].codigo=inp.value.trim().toUpperCase();
+      };
+    });
+    $$('.solic-it-buscabtn',host).forEach(function(b){
+      b.onclick=function(){
+        var chave=b.getAttribute('data-chave'), idx=+b.getAttribute('data-idx');
+        _abrirBuscaItemSolic(chave==='opmes'?'matmed':chave, function(item){
+          s[chave][idx].codigo=item.cod;
+          s[chave][idx].descricao=item.desc;
+          _renderSolicOpmeSecoes(wrap);
+        });
+      };
+    });
+  }
+
+  function _ligarSolicitacaoOpme(wrap){
+    var s=_solicOpme;
+
+    function aplicarBeneficiario(b){
+      s.benef=b;
+      s.acomodacao=b.acomodacao||s.acomodacao;
+      s.celContato=b.celContato||s.celContato;
+      _renderSolicitacaoOpmeTela(wrap);
+    }
+    function abrirBuscaBenef(){ _abrirBuscaAvancadaBenef(aplicarBeneficiario); }
+    $('#soBenefBusca').onclick=abrirBuscaBenef;
+
+    var benefCodInp=$('#soBenefCod');
+    function buscarBenefPorCodigo(){
+      var termo=benefCodInp.value.trim().toLowerCase();
+      if(!termo) return;
+      if(s.benef && s.benef.carteirinha && s.benef.carteirinha.toLowerCase()===termo) return;
+      var achado=(MOCK.BENEFICIARIOS||[]).filter(function(b){
+        return (b.carteirinha||'').toLowerCase()===termo || (b.cartao||'').toLowerCase()===termo;
+      })[0];
+      if(achado){ aplicarBeneficiario(achado); }
+      else { toast('Nenhum beneficiário encontrado com este código.','warn'); }
+    }
+    benefCodInp.addEventListener('blur',buscarBenefPorCodigo);
+    benefCodInp.addEventListener('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); buscarBenefPorCodigo(); } });
+
+    $('#soCelContato').onchange=function(){ s.celContato=this.value; };
+    $('#soPessoaContato').onchange=function(){ s.pessoaContato=this.value; };
+    $('#soNumGuiaRef').onchange=function(){ s.numGuiaRef=this.value.trim(); };
+    $('#soObsBenef').onchange=function(){ s.obsBenef=this.value; };
+    $('#soProfNome').onchange=function(){ s.profSolicNome=this.value; };
+    $('#soProfTel').onchange=function(){ s.profSolicTelefone=this.value; };
+    $('#soProfEmail').onchange=function(){ s.profSolicEmail=this.value; };
+    $('#soJustTec').onchange=function(){ s.justificativaTecnica=this.value; };
+    $('#soEspecMat').onchange=function(){ s.especificacaoMaterial=this.value; };
+    $('#soObsOpme').onchange=function(){ s.obsOpme=this.value; };
+
+    for(var i=0;i<6;i++){
+      (function(idx){
+        var inp=$('#soAnexo'+idx), lbl=$('#soAnexo'+idx+'Nome');
+        if(!inp) return;
+        inp.onchange=function(){ lbl.textContent=inp.files&&inp.files[0]?inp.files[0].name:'Nenhum arquivo escolhido'; };
+      })(i);
+    }
+
+    $('#soAutorizarBtn').onclick=function(){ _autorizarSolicitacaoOpme(); };
+
+    _renderSolicOpmeSecoes(wrap);
+  }
+
+  function _renderSolicitacaoOpmeTela(wrap){
+    var novo=viewSolicitacaoOpme();
+    wrap.parentNode.replaceChild(novo, wrap);
+    lcIcons();
+  }
+
+  function _autorizarSolicitacaoOpme(){
+    var s=_solicOpme;
+    if(!s.benef){ toast('Selecione o beneficiário (Código/Nome do beneficiário).','err'); return; }
+    if(!s.numGuiaRef){ toast('Informe o Nº da guia referenciada.','err'); return; }
+    if(!s.profSolicNome.trim()){ toast('Informe o Solicitante.','err'); return; }
+    if(!s.profSolicTelefone.trim()){ toast('Informe o Telefone do profissional solicitante.','err'); return; }
+    if(!s.profSolicEmail.trim()){ toast('Informe o E-mail do profissional solicitante.','err'); return; }
+    if(!s.justificativaTecnica.trim()){ toast('Informe a Justificativa Técnica.','err'); return; }
+    if(!s.especificacaoMaterial.trim()){ toast('Informe a Especificação do material.','err'); return; }
+    if(!s.obsOpme.trim()){ toast('Informe as Observações / Justificativa do OPME.','err'); return; }
+    if(!s.opmes.some(function(it){return it.codigo;})){ toast('Adicione ao menos um OPME.','err'); return; }
+
+    var guia=(State.guias||[]).filter(function(g){ return g.numero===s.numGuiaRef; })[0];
+    if(!guia){ toast('Nenhuma guia encontrada com o número "'+s.numGuiaRef+'". Verifique o Nº da guia referenciada.','err'); return; }
+    if(guia.beneficiario && s.benef && guia.beneficiario.id!==s.benef.id){
+      toast('A guia '+s.numGuiaRef+' pertence a outro beneficiário ('+guia.beneficiario.nome+') — confira o número informado.','err');
+      return;
+    }
+
+    function itemsParaGuia(lista){ return lista.filter(function(it){return it.codigo;}).map(function(it){ return {cod:it.codigo, desc:it.descricao||it.codigo, qtd:it.qtd||1, tabela:it.tabela, fornecedor:it.fornecedor}; }); }
+
+    guia.matmed=(guia.matmed||[]).concat(itemsParaGuia(s.opmes).map(function(o){ o=Object.assign({},o); o.opme=true; return o; }));
+    guia.diariasTaxas=(guia.diariasTaxas||[]).concat(itemsParaGuia(s.taxas));
+    guia.opme=true;
+    guia.status='Cotação de OPME'; // reabre a guia para auditoria técnica do(s) OPME(s) anexado(s)
+    var agora=new Date();
+    guia.ultimaSync=agora.getFullYear()+'-'+String(agora.getMonth()+1).padStart(2,'0')+'-'+String(agora.getDate()).padStart(2,'0')+' '+String(agora.getHours()).padStart(2,'0')+':'+String(agora.getMinutes()).padStart(2,'0');
+    // Reabre a primeira etapa "COTAÇÃO OPME" do fluxo (se existir) para execução; mantém as demais como estavam
+    if(guia.etapas){
+      var etCotacao=guia.etapas.filter(function(et){return et.nome==='COTAÇÃO OPME';})[0];
+      if(etCotacao && etCotacao.status==='aguardando') etCotacao.status='em_execucao';
+    }
+
+    logAcao('Solicitação de OPME registrada', 'Guia '+s.numGuiaRef+' — '+s.benef.nome+' — '+itemsParaGuia(s.opmes).length+' OPME(s) anexado(s)');
+    toast('Solicitação de OPME anexada à guia '+s.numGuiaRef+' — reaberta para auditoria.','ok');
+
+    _solicOpme={
+      benef:null, acomodacao:'', celContato:'', pessoaContato:'', numGuiaRef:'', obsBenef:'',
+      profSolicNome:'', profSolicTelefone:'', profSolicEmail:'',
+      justificativaTecnica:'', especificacaoMaterial:'', obsOpme:'',
+      taxas:[], opmes:[]
     };
     _solicState.tela='hub';
     render();
