@@ -2715,17 +2715,25 @@
         '<div class="field"><label>CID 10(4)</label>'+
           '<div class="solic-busca-row"><input id="sqCid4" type="text" style="text-transform:uppercase" value="'+esc(s.cid4)+'">'+
           '<button type="button" class="btn ghost sm" id="sqCid4Busca">'+ico('search',13)+'</button></div></div>'+
-        '<div class="field"><label>Estadiamento</label><input id="sqEstadiamento" type="text" value="'+esc(s.estadiamento)+'"></div>'+
+        '<div class="field">'+lblObrig('Estadiamento')+'<select id="sqEstadiamento">'+
+          ['','1 - I','2 - II','3 - III','4 - IV','5 - Não se aplica'].map(function(v){return '<option value="'+v+'"'+(s.estadiamento===v?' selected':'')+'>'+(v||'Selecione')+'</option>';}).join('')+
+        '</select></div>'+
       '</div>'+
       '<div class="g3">'+
         '<div class="field">'+lblObrig('Tipo de Quimioterapia')+'<select id="sqTipoQuimio">'+
-          ['','Neoadjuvante','Adjuvante','Paliativa','Curativa','Consolidação','Manutenção'].map(function(v){return '<option value="'+v+'"'+(s.tipoQuimio===v?' selected':'')+'>'+(v||'Selecione')+'</option>';}).join('')+
+          ['','1 - 1ª linha','2 - 2ª linha','3 - 3ª linha','4 - Outras linhas'].map(function(v){return '<option value="'+v+'"'+(s.tipoQuimio===v?' selected':'')+'>'+(v||'Selecione')+'</option>';}).join('')+
         '</select></div>'+
-        '<div class="field"><label>Finalidade</label><select id="sqFinalidade">'+
-          ['','Curativa','Paliativa','Controle de doença'].map(function(v){return '<option value="'+v+'"'+(s.finalidade===v?' selected':'')+'>'+(v||'Selecione')+'</option>';}).join('')+
+        '<div class="field">'+lblObrig('Finalidade')+'<select id="sqFinalidade">'+
+          ['','1 - Curativa','2 - Neoadjuvante','3 - Adjuvante','4 - Paliativa','5 - Controle'].map(function(v){return '<option value="'+v+'"'+(s.finalidade===v?' selected':'')+'>'+(v||'Selecione')+'</option>';}).join('')+
         '</select></div>'+
-        '<div class="field"><label>ECOG</label><select id="sqEcog">'+
-          ['','0','1','2','3','4'].map(function(v){return '<option value="'+v+'"'+(s.ecog===v?' selected':'')+'>'+(v||'Selecione')+'</option>';}).join('')+
+        '<div class="field">'+lblObrig('ECOG')+'<select id="sqEcog">'+
+          ['',
+           '0 - Totalmente ativo capaz de exercer, sem restrições, todas as atividades que exercia antes do diagnóstico.',
+           '1 - Não exerce atividade física extenuante, porém é capaz de realizar um trabalho leve em casa ou no escritório.',
+           '2 - Caminha e é capaz de exercer as atividades de autocuidado, mas é incapaz de realizar qualquer atividade de trabalho. Permanece fora do leito mais de 50% das horas de vigília.',
+           '3 - Capacidade de autocuidado limitada. Permanece no leito ou cadeira mais de 50% das horas de vigília.',
+           '4 - Completamente dependente. Não é capaz de exercer qualquer atividade de autocuidado. Totalmente confinado à cama ou cadeira.'
+          ].map(function(v){return '<option value="'+v+'"'+(s.ecog===v?' selected':'')+'>'+(v||'Selecione')+'</option>';}).join('')+
         '</select></div>'+
       '</div>'+
       '<div class="field"><label>Plano Terapêutico</label><textarea id="sqPlanoTerapeutico" maxlength="999" rows="3">'+esc(s.planoTerapeutico)+'</textarea>'+
@@ -2741,13 +2749,13 @@
           secaoTitulo('Ciclos do tratamento')+
           '<div class="g3">'+
             '<div class="field"><label>Tumor</label><select id="sqTumor">'+
-              ['','Tx','T0','T1','T2','T3','T4'].map(function(v){return '<option value="'+v+'"'+(s.tumor===v?' selected':'')+'>'+(v||'Selecione')+'</option>';}).join('')+
+              ['','T1','T2','T3','T4','T0','Tis','Tx','Não se aplica','Sem informação'].map(function(v){return '<option value="'+v+'"'+(s.tumor===v?' selected':'')+'>'+(v||'Selecione')+'</option>';}).join('')+
             '</select></div>'+
             '<div class="field"><label>Nódulo</label><select id="sqNodulo">'+
-              ['','Nx','N0','N1','N2','N3'].map(function(v){return '<option value="'+v+'"'+(s.nodulo===v?' selected':'')+'>'+(v||'Selecione')+'</option>';}).join('')+
+              ['','N1','N2','N3','N0','Nx','Não se aplica','Sem informação'].map(function(v){return '<option value="'+v+'"'+(s.nodulo===v?' selected':'')+'>'+(v||'Selecione')+'</option>';}).join('')+
             '</select></div>'+
             '<div class="field"><label>Metástase</label><select id="sqMetastase">'+
-              ['','Mx','M0','M1'].map(function(v){return '<option value="'+v+'"'+(s.metastase===v?' selected':'')+'>'+(v||'Selecione')+'</option>';}).join('')+
+              ['','M1','M0','Mx','Não se aplica','Sem informação'].map(function(v){return '<option value="'+v+'"'+(s.metastase===v?' selected':'')+'>'+(v||'Selecione')+'</option>';}).join('')+
             '</select></div>'+
           '</div>'+
           '<div class="field"><label>Nº de ciclos previstos</label><input id="sqNumCiclos" type="number" min="1" value="'+esc(s.numCiclosPrevistos)+'"></div>'+
@@ -2783,7 +2791,7 @@
       '<div class="field"><label>Especificação do material</label><textarea id="sqEspecMat" rows="2" disabled placeholder="Disponível apenas quando houver OPME adicionado">'+esc(s.especificacaoMaterial)+'</textarea></div>'+
       '<div class="field"><label>Observações / Justificativa do OPME</label><textarea id="sqObsOpme" rows="2" disabled placeholder="Disponível apenas quando houver OPME adicionado">'+esc(s.obsOpme)+'</textarea></div>'+
 
-      '<div class="solic-sec-hd">Anexos</div>'+
+      '<div class="solic-sec-hd">Anexos complementares</div>'+
       '<div class="solic-anexos">'+
         [0,1,2,3,4,5].map(function(i){ return '<div class="solic-anexo-row"><label class="btn ghost sm">Escolher arquivo<input type="file" id="sqAnexo'+i+'" style="display:none"></label><span id="sqAnexo'+i+'Nome" class="solic-anexo-nome">Nenhum arquivo escolhido</span></div>'; }).join('')+
       '</div>'+
@@ -3082,6 +3090,9 @@
     if(!s.numGuiaRef){ toast('Informe o Nº da guia referenciada.','err'); return; }
     if(!s.cid1.trim()){ toast('Informe o CID 10 Principal.','err'); return; }
     if(!s.tipoQuimio){ toast('Selecione o Tipo de Quimioterapia.','err'); return; }
+    if(!s.finalidade){ toast('Selecione a Finalidade.','err'); return; }
+    if(!s.ecog){ toast('Selecione o ECOG.','err'); return; }
+    if(!s.estadiamento){ toast('Selecione o Estadiamento.','err'); return; }
     if(!s.profSolicNome.trim()){ toast('Informe o Solicitante.','err'); return; }
     if(!s.profSolicTelefone.trim()){ toast('Informe o Telefone do profissional solicitante.','err'); return; }
     if(!s.profSolicEmail.trim()){ toast('Informe o E-mail do profissional solicitante.','err'); return; }
