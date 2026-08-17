@@ -2719,14 +2719,14 @@
           ['','1 - I','2 - II','3 - III','4 - IV','5 - Não se aplica'].map(function(v){return '<option value="'+v+'"'+(s.estadiamento===v?' selected':'')+'>'+(v||'Selecione')+'</option>';}).join('')+
         '</select></div>'+
       '</div>'+
-      '<div class="g3">'+
+      '<div class="solic-quimio-tipofin">'+
         '<div class="field">'+lblObrig('Tipo de Quimioterapia')+'<select id="sqTipoQuimio">'+
           ['','1 - 1ª linha','2 - 2ª linha','3 - 3ª linha','4 - Outras linhas'].map(function(v){return '<option value="'+v+'"'+(s.tipoQuimio===v?' selected':'')+'>'+(v||'Selecione')+'</option>';}).join('')+
         '</select></div>'+
         '<div class="field">'+lblObrig('Finalidade')+'<select id="sqFinalidade">'+
           ['','1 - Curativa','2 - Neoadjuvante','3 - Adjuvante','4 - Paliativa','5 - Controle'].map(function(v){return '<option value="'+v+'"'+(s.finalidade===v?' selected':'')+'>'+(v||'Selecione')+'</option>';}).join('')+
         '</select></div>'+
-        '<div class="field">'+lblObrig('ECOG')+'<select id="sqEcog">'+
+        '<div class="field solic-quimio-ecog">'+lblObrig('ECOG')+'<select id="sqEcog">'+
           ['',
            '0 - Totalmente ativo capaz de exercer, sem restrições, todas as atividades que exercia antes do diagnóstico.',
            '1 - Não exerce atividade física extenuante, porém é capaz de realizar um trabalho leve em casa ou no escritório.',

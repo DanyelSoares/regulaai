@@ -1037,7 +1037,7 @@ body.sidebar-collapsed .modal-backdrop{left:66px}
 .g3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
 .field{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}
 .field label{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--g-600);font-weight:700}
-.field input,.field select,.field textarea{padding:9px 11px;border:1.5px solid var(--g-200);border-radius:8px;font-size:13.5px;transition:border-color .15s,box-shadow .15s;background:#fff}
+.field input,.field select,.field textarea{padding:9px 11px;border:1.5px solid var(--g-200);border-radius:8px;font-size:13.5px;transition:border-color .15s,box-shadow .15s;background:#fff;max-width:100%;min-width:0}
 .field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--g-500);box-shadow:0 0 0 3px rgba(10,138,67,.1)}
 .field textarea{min-height:88px;resize:vertical}
 .field-lbl-row{display:flex;align-items:center;justify-content:space-between}
@@ -2205,8 +2205,12 @@ body.sidebar-collapsed .modal-backdrop{left:66px}
 .solic-benef-grid{display:grid;grid-template-columns:210px 1fr 1fr;gap:14px}
 .solic-benef-grid .solic-span2{grid-column:span 2}
 @media(max-width:640px){ .solic-benef-grid{grid-template-columns:1fr} .solic-benef-grid .solic-span2{grid-column:auto} }
-.solic-quimio-cidrow{display:grid;grid-template-columns:130px repeat(4,1fr) 140px;gap:14px;align-items:end}
-@media(max-width:900px){ .solic-quimio-cidrow{grid-template-columns:1fr 1fr} }
+.solic-quimio-cidrow{display:grid;grid-template-columns:150px repeat(4,minmax(140px,1fr)) 160px;gap:18px 16px;align-items:end}
+@media(max-width:1100px){ .solic-quimio-cidrow{grid-template-columns:1fr 1fr 1fr} }
+@media(max-width:640px){ .solic-quimio-cidrow{grid-template-columns:1fr 1fr} }
+.solic-quimio-tipofin{display:grid;grid-template-columns:200px 200px 1fr;gap:16px}
+@media(max-width:760px){ .solic-quimio-tipofin{grid-template-columns:1fr} }
+.solic-quimio-ecog select{min-width:0}
 .solic-benef-foto{
   flex:0 0 110px;width:110px;height:110px;border-radius:12px;border:1.5px dashed var(--g-200);
   background:var(--g-50);display:flex;align-items:center;justify-content:center;overflow:hidden;
