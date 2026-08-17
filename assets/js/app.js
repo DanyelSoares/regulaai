@@ -1725,7 +1725,7 @@
     {id:'internacao', nome:'Solicitação de Internação', ico:'bed-double', pronta:true},
     {id:'prorrogacao', nome:'Solicitação de Prorrogação de Internação', ico:'calendar-clock', pronta:false},
     {id:'opme', nome:'Solicitação de OPME', ico:'bone', pronta:true},
-    {id:'quimioterapia', nome:'Solicitação de Quimioterapia', ico:'flask-conical', pronta:false},
+    {id:'quimioterapia', nome:'Solicitação de Quimioterapia', ico:'flask-conical', pronta:true},
     {id:'consulta', nome:'Solicitação de Consulta', ico:'stethoscope', pronta:false},
     {id:'exames', nome:'Solicitação de Exames e Procedimentos', ico:'clipboard-list', pronta:false}
   ];
@@ -1745,6 +1745,7 @@
       },0);
       if(_solicState.tela==='internacao') wrap.appendChild(viewSolicitacaoInternacao());
       else if(_solicState.tela==='opme') wrap.appendChild(viewSolicitacaoOpme());
+      else if(_solicState.tela==='quimioterapia') wrap.appendChild(viewSolicitacaoQuimio());
       return wrap;
     }
     wrap.appendChild(el('div',{class:'page-title'},'<div><h1>'+ico('clipboard-plus',20)+' Solicitações</h1><p>Escolha o tipo de solicitação que deseja registrar.</p></div>'));
@@ -2634,6 +2635,515 @@
       profSolicNome:'', profSolicTelefone:'', profSolicEmail:'',
       justificativaTecnica:'', especificacaoMaterial:'', obsOpme:'',
       taxas:[], opmes:[]
+    };
+    _solicState.tela='hub';
+    render();
+  }
+
+  /* === Solicitação de Quimioterapia === */
+  // Diferente da OPME: cria uma guia NOVA (tipo Quimioterapia), mesmo tendo "Nº da guia referenciada"
+  // (guardado apenas como referência textual/contextual, sem buscar/alterar a guia original).
+  var _solicQuimio={
+    benef:null, acomodacao:'', celContato:'', pessoaContato:'', numGuiaRef:'', obsBenef:'',
+    peso:'', altura:'', superficieCorporal:'',
+    profSolicNome:'', profSolicTelefone:'', profSolicEmail:'',
+    dataDiagnostico:'', cid1:'', cid1Desc:'', cid2:'', cid3:'', cid4:'', estadiamento:'',
+    tipoQuimio:'', finalidade:'', ecog:'', planoTerapeutico:'', diagCitoHisto:'', infoRelevantes:'',
+    tumor:'', nodulo:'', metastase:'', numCiclosPrevistos:'', cicloAtual:'', numDiasCicloAtual:'',
+    intervaloCiclos:'', dataSolicitacao:'',
+    cirurgiaAnterior:'', dataRealizacaoCirurgia:'', areaIrradiada:'', dataAplicacao:'',
+    procedimentos:[], taxas:[], medicamentos:[], opmes:[],
+    justificativaTecnica:'', especificacaoMaterial:'', obsOpme:'',
+    obsImpressa:''
+  };
+
+  function viewSolicitacaoQuimio(){
+    var wrap=el('div',{class:'panel',style:'padding:22px;max-width:1080px;margin:0 auto'});
+    var s=_solicQuimio;
+
+    function secaoTitulo(txt){ return '<div class="solic-sec-hd">'+esc(txt)+'</div>'; }
+    function lblObrig(txt){ return '<label class="solic-lbl-obrig">'+esc(txt)+' <span class="solic-obrig-ast">*</span></label>'; }
+
+    var ESPECS=['',].concat(Object.keys(MOCK.ESPEC_MAP||{}).map(function(k){return MOCK.ESPEC_MAP[k];}).filter(function(v,i,a){return a.indexOf(v)===i;}).sort());
+
+    wrap.innerHTML=
+      secaoTitulo('Dados do beneficiário')+
+      '<div class="solic-benef-row">'+
+        '<div class="solic-benef-campos">'+
+          '<div class="solic-benef-grid" style="align-items:end">'+
+            '<div class="field">'+lblObrig('Código do beneficiário')+
+              '<div class="solic-busca-row"><input id="sqBenefCod" type="text" maxlength="10" value="'+esc(s.benef?s.benef.carteirinha:'')+'" placeholder="Carteirinha">'+
+              '<button type="button" class="btn ghost sm" id="sqBenefBusca">'+ico('search',13)+'</button></div></div>'+
+            '<div class="field solic-span2"><label>Nome do beneficiário</label>'+
+              '<input id="sqBenefNome" type="text" readonly value="'+esc(s.benef?s.benef.nome:'')+'" placeholder="Preenchido automaticamente"></div>'+
+          '</div>'+
+          '<div class="solic-benef-grid">'+
+            '<div class="field"><label>Acomodação</label><input id="sqAcomodacao" type="text" readonly value="'+esc(s.acomodacao)+'" placeholder="Preenchido automaticamente"></div>'+
+            '<div class="field"><label>Cel. contato Benef.</label><input id="sqCelContato" type="text" value="'+esc(s.celContato)+'" placeholder="(00) 00000-0000"></div>'+
+            '<div class="field"><label>Pessoa p/ contato</label><input id="sqPessoaContato" type="text" value="'+esc(s.pessoaContato)+'"></div>'+
+          '</div>'+
+        '</div>'+
+        '<div class="solic-benef-foto" id="sqBenefFoto">'+(s.benef&&s.benef.foto?'<img src="'+esc(s.benef.foto)+'" alt="Foto do beneficiário">':'<span>'+ico('image-off',28)+'Foto não<br>disponível</span>')+'</div>'+
+      '</div>'+
+      '<div class="field">'+lblObrig('Nº da guia referenciada')+'<input id="sqNumGuiaRef" type="text" value="'+esc(s.numGuiaRef)+'" placeholder="Número da guia relacionada"></div>'+
+      '<div class="g3">'+
+        '<div class="field"><label>Peso (Kg)</label><input id="sqPeso" type="number" step="0.1" min="0" value="'+esc(s.peso)+'"></div>'+
+        '<div class="field"><label>Altura (m)</label><input id="sqAltura" type="number" step="0.01" min="0" value="'+esc(s.altura)+'"></div>'+
+        '<div class="field"><label>Superfície Corporal(m²)</label><input id="sqSupCorporal" type="text" readonly value="'+esc(s.superficieCorporal)+'" placeholder="Calculado automaticamente"></div>'+
+      '</div>'+
+      '<div class="field"><label>Observações do beneficiário</label><textarea id="sqObsBenef" rows="2">'+esc(s.obsBenef)+'</textarea></div>'+
+
+      secaoTitulo('Dados do Profissional Solicitante')+
+      '<div class="g3">'+
+        '<div class="field"><label>Solicitante</label><input id="sqProfNome" type="text" value="'+esc(s.profSolicNome)+'"></div>'+
+        '<div class="field"><label>Telefone</label><input id="sqProfTel" type="text" value="'+esc(s.profSolicTelefone)+'"></div>'+
+        '<div class="field"><label>E-mail</label><input id="sqProfEmail" type="email" value="'+esc(s.profSolicEmail)+'"></div>'+
+      '</div>'+
+
+      secaoTitulo('Diagnóstico Oncológico')+
+      '<div class="solic-quimio-cidrow">'+
+        '<div class="field"><label>Data do diagnóstico</label><input id="sqDataDiag" type="date" value="'+esc(s.dataDiagnostico)+'"></div>'+
+        '<div class="field">'+lblObrig('CID 10 Principal')+
+          '<div class="solic-busca-row"><input id="sqCid1" type="text" style="text-transform:uppercase" value="'+esc(s.cid1)+'">'+
+          '<button type="button" class="btn ghost sm" id="sqCid1Busca">'+ico('search',13)+'</button></div></div>'+
+        '<div class="field"><label>CID 10(2)</label>'+
+          '<div class="solic-busca-row"><input id="sqCid2" type="text" style="text-transform:uppercase" value="'+esc(s.cid2)+'">'+
+          '<button type="button" class="btn ghost sm" id="sqCid2Busca">'+ico('search',13)+'</button></div></div>'+
+        '<div class="field"><label>CID 10(3)</label>'+
+          '<div class="solic-busca-row"><input id="sqCid3" type="text" style="text-transform:uppercase" value="'+esc(s.cid3)+'">'+
+          '<button type="button" class="btn ghost sm" id="sqCid3Busca">'+ico('search',13)+'</button></div></div>'+
+        '<div class="field"><label>CID 10(4)</label>'+
+          '<div class="solic-busca-row"><input id="sqCid4" type="text" style="text-transform:uppercase" value="'+esc(s.cid4)+'">'+
+          '<button type="button" class="btn ghost sm" id="sqCid4Busca">'+ico('search',13)+'</button></div></div>'+
+        '<div class="field"><label>Estadiamento</label><input id="sqEstadiamento" type="text" value="'+esc(s.estadiamento)+'"></div>'+
+      '</div>'+
+      '<div class="g3">'+
+        '<div class="field">'+lblObrig('Tipo de Quimioterapia')+'<select id="sqTipoQuimio">'+
+          ['','Neoadjuvante','Adjuvante','Paliativa','Curativa','Consolidação','Manutenção'].map(function(v){return '<option value="'+v+'"'+(s.tipoQuimio===v?' selected':'')+'>'+(v||'Selecione')+'</option>';}).join('')+
+        '</select></div>'+
+        '<div class="field"><label>Finalidade</label><select id="sqFinalidade">'+
+          ['','Curativa','Paliativa','Controle de doença'].map(function(v){return '<option value="'+v+'"'+(s.finalidade===v?' selected':'')+'>'+(v||'Selecione')+'</option>';}).join('')+
+        '</select></div>'+
+        '<div class="field"><label>ECOG</label><select id="sqEcog">'+
+          ['','0','1','2','3','4'].map(function(v){return '<option value="'+v+'"'+(s.ecog===v?' selected':'')+'>'+(v||'Selecione')+'</option>';}).join('')+
+        '</select></div>'+
+      '</div>'+
+      '<div class="field"><label>Plano Terapêutico</label><textarea id="sqPlanoTerapeutico" maxlength="999" rows="3">'+esc(s.planoTerapeutico)+'</textarea>'+
+        '<div class="solic-charcount" id="sqPlanoTerapeuticoCount">'+(s.planoTerapeutico||'').length+' de 999 caracteres</div></div>'+
+      '<div class="g2">'+
+        '<div class="field"><label>Diagnóstico Cito/Histopatológico</label><textarea id="sqDiagCito" rows="3">'+esc(s.diagCitoHisto)+'</textarea></div>'+
+        '<div class="field"><label>Informações Relevantes</label><textarea id="sqInfoRelevantes" maxlength="999" rows="3">'+esc(s.infoRelevantes)+'</textarea>'+
+          '<div class="solic-charcount" id="sqInfoRelevantesCount">'+(s.infoRelevantes||'').length+' de 999 caracteres</div></div>'+
+      '</div>'+
+
+      '<div class="g2" style="align-items:start">'+
+        '<div>'+
+          secaoTitulo('Ciclos do tratamento')+
+          '<div class="g3">'+
+            '<div class="field"><label>Tumor</label><select id="sqTumor">'+
+              ['','Tx','T0','T1','T2','T3','T4'].map(function(v){return '<option value="'+v+'"'+(s.tumor===v?' selected':'')+'>'+(v||'Selecione')+'</option>';}).join('')+
+            '</select></div>'+
+            '<div class="field"><label>Nódulo</label><select id="sqNodulo">'+
+              ['','Nx','N0','N1','N2','N3'].map(function(v){return '<option value="'+v+'"'+(s.nodulo===v?' selected':'')+'>'+(v||'Selecione')+'</option>';}).join('')+
+            '</select></div>'+
+            '<div class="field"><label>Metástase</label><select id="sqMetastase">'+
+              ['','Mx','M0','M1'].map(function(v){return '<option value="'+v+'"'+(s.metastase===v?' selected':'')+'>'+(v||'Selecione')+'</option>';}).join('')+
+            '</select></div>'+
+          '</div>'+
+          '<div class="field"><label>Nº de ciclos previstos</label><input id="sqNumCiclos" type="number" min="1" value="'+esc(s.numCiclosPrevistos)+'"></div>'+
+          '<div class="g2">'+
+            '<div class="field"><label>Ciclo atual</label><input id="sqCicloAtual" type="number" min="1" value="'+esc(s.cicloAtual)+'"></div>'+
+            '<div class="field"><label>Nº de dias do ciclo atual</label><input id="sqNumDiasCiclo" type="number" min="1" value="'+esc(s.numDiasCicloAtual)+'"></div>'+
+          '</div>'+
+          '<div class="g2">'+
+            '<div class="field"><label>Intervalo entre ciclos(dias)</label><input id="sqIntervaloCiclos" type="number" min="0" value="'+esc(s.intervaloCiclos)+'"></div>'+
+            '<div class="field"><label>Data de solicitação</label><input id="sqDataSolicitacao" type="date" value="'+esc(s.dataSolicitacao)+'"></div>'+
+          '</div>'+
+        '</div>'+
+        '<div>'+
+          secaoTitulo('Tratamentos Anteriores')+
+          '<div class="field"><label>Cirurgia</label><input id="sqCirurgiaAnt" type="text" value="'+esc(s.cirurgiaAnterior)+'"></div>'+
+          '<div class="field"><label>Data da realização</label><input id="sqDataRealizacao" type="date" value="'+esc(s.dataRealizacaoCirurgia)+'"></div>'+
+          '<div class="field"><label>Área irradiada</label><input id="sqAreaIrradiada" type="text" value="'+esc(s.areaIrradiada)+'"></div>'+
+          '<div class="field"><label>Data da Aplicação</label><input id="sqDataAplicacao" type="date" value="'+esc(s.dataAplicacao)+'"></div>'+
+        '</div>'+
+      '</div>'+
+
+      '<div id="sqSecoes"></div>'+
+
+      secaoTitulo('Dados do Profissional Solicitante')+
+      '<div class="g3">'+
+        '<div class="field">'+lblObrig('Solicitante')+'<input id="sqProfNome2" type="text" value="'+esc(s.profSolicNome)+'"></div>'+
+        '<div class="field">'+lblObrig('Telefone')+'<input id="sqProfTel2" type="text" value="'+esc(s.profSolicTelefone)+'"></div>'+
+        '<div class="field">'+lblObrig('E-mail')+'<input id="sqProfEmail2" type="email" value="'+esc(s.profSolicEmail)+'"></div>'+
+      '</div>'+
+
+      secaoTitulo('Dados da cirurgia')+
+      '<div class="field">'+lblObrig('Justificativa Técnica')+'<textarea id="sqJustTec" rows="2">'+esc(s.justificativaTecnica)+'</textarea></div>'+
+      '<div class="field"><label>Especificação do material</label><textarea id="sqEspecMat" rows="2" disabled placeholder="Disponível apenas quando houver OPME adicionado">'+esc(s.especificacaoMaterial)+'</textarea></div>'+
+      '<div class="field"><label>Observações / Justificativa do OPME</label><textarea id="sqObsOpme" rows="2" disabled placeholder="Disponível apenas quando houver OPME adicionado">'+esc(s.obsOpme)+'</textarea></div>'+
+
+      '<div class="solic-sec-hd">Anexos</div>'+
+      '<div class="solic-anexos">'+
+        [0,1,2,3,4,5].map(function(i){ return '<div class="solic-anexo-row"><label class="btn ghost sm">Escolher arquivo<input type="file" id="sqAnexo'+i+'" style="display:none"></label><span id="sqAnexo'+i+'Nome" class="solic-anexo-nome">Nenhum arquivo escolhido</span></div>'; }).join('')+
+      '</div>'+
+
+      '<div class="solic-sec-hd">Observação impressa / Justificativa da guia</div>'+
+      '<div class="field"><textarea id="sqObsImpressa" maxlength="2000" rows="4">'+esc(s.obsImpressa)+'</textarea>'+
+      '<div class="solic-charcount" id="sqObsImpressaCount">'+(s.obsImpressa||'').length+' de 2000 caracteres</div></div>'+
+
+      '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px">'+
+        '<button class="btn-primary" id="sqAutorizarBtn">'+ico('check',14)+' Autorizar</button>'+
+      '</div>';
+
+    setTimeout(function(){ _ligarSolicitacaoQuimio(wrap); },0);
+    return wrap;
+  }
+
+  function _solicQuimioTemOpme(s){ return (s.opmes||[]).some(function(it){return it.codigo;}); }
+
+  function _atualizarCamposOpmeQuimio(wrap){
+    var s=_solicQuimio, temOpme=_solicQuimioTemOpme(s);
+    [['sqEspecMat','Especificação do material'],['sqObsOpme','Observações / Justificativa do OPME']].forEach(function(par){
+      var campo=wrap.querySelector('#'+par[0]);
+      if(!campo) return;
+      var lblEl=campo.closest('.field').querySelector('label');
+      campo.disabled=!temOpme;
+      campo.placeholder=temOpme?'':'Disponível apenas quando houver OPME adicionado';
+      lblEl.innerHTML=temOpme?esc(par[1])+' <span class="solic-obrig-ast">*</span>':esc(par[1]);
+      lblEl.className=temOpme?'solic-lbl-obrig':'';
+    });
+  }
+
+  function _renderSolicQuimioSecoes(wrap){
+    var s=_solicQuimio;
+    var host=wrap.querySelector('#sqSecoes');
+    if(!host) return;
+
+    function linhaItem(item, idx, chave, colunas){
+      var cols=colunas.map(function(c){
+        if(c==='dtPrevAdm'){
+          return '<td style="width:120px"><input type="date" class="solic-it-dtprevadm" data-chave="'+chave+'" data-idx="'+idx+'" value="'+esc(item.dtPrevAdm||'')+'"></td>';
+        }
+        if(c==='tabela'){
+          return '<td style="width:60px"><select class="solic-it-tabela" data-chave="'+chave+'" data-idx="'+idx+'">'+
+            ['00','18','19','20','22'].map(function(t){return '<option value="'+t+'"'+(item.tabela===t?' selected':'')+'>'+t+'</option>';}).join('')+
+          '</select></td>';
+        }
+        if(c==='codigo'){
+          return '<td style="width:150px"><div class="solic-busca-row"><input type="text" class="solic-it-codigo" data-chave="'+chave+'" data-idx="'+idx+'" value="'+esc(item.codigo||'')+'">'+
+            '<button type="button" class="btn ghost sm solic-it-buscabtn" data-chave="'+chave+'" data-idx="'+idx+'">'+ico('search',12)+'</button></div></td>';
+        }
+        if(c==='descricao'){
+          return '<td><input type="text" class="solic-it-desc" data-chave="'+chave+'" data-idx="'+idx+'" value="'+esc(item.descricao||'')+'" readonly></td>';
+        }
+        if(c==='quantidade'){
+          return '<td style="width:80px"><input type="number" min="1" class="solic-it-qtd" data-chave="'+chave+'" data-idx="'+idx+'" value="'+(item.qtd||1)+'"></td>';
+        }
+        if(c==='doses'){
+          return '<td style="width:80px"><input type="text" class="solic-it-doses" data-chave="'+chave+'" data-idx="'+idx+'" value="'+esc(item.doses||'')+'"></td>';
+        }
+        if(c==='viaAdm'){
+          return '<td style="width:90px"><select class="solic-it-viaadm" data-chave="'+chave+'" data-idx="'+idx+'">'+
+            ['02 - C','01 - Oral','03 - EV','04 - IM','05 - SC'].map(function(v){return '<option value="'+v+'"'+(item.viaAdm===v?' selected':'')+'>'+v+'</option>';}).join('')+
+          '</select></td>';
+        }
+        if(c==='freq'){
+          return '<td style="width:80px"><input type="text" class="solic-it-freq" data-chave="'+chave+'" data-idx="'+idx+'" value="'+esc(item.freq||'')+'"></td>';
+        }
+        if(c==='unidMedida'){
+          return '<td style="width:110px"><select class="solic-it-unidmed" data-chave="'+chave+'" data-idx="'+idx+'">'+
+            ['','mg','mg/m²','mg/Kg','UI','ml','g'].map(function(v){return '<option value="'+v+'"'+(item.unidMedida===v?' selected':'')+'>'+(v||'Selecione')+'</option>';}).join('')+
+          '</select></td>';
+        }
+        if(c==='fornecedor'){
+          return '<td style="width:110px"><select class="solic-it-fornecedor" data-chave="'+chave+'" data-idx="'+idx+'">'+
+            ['Selec','Fornecedor A','Fornecedor B','Fornecedor C'].map(function(f){return '<option value="'+f+'"'+(item.fornecedor===f?' selected':'')+'>'+f+'</option>';}).join('')+
+          '</select></td>';
+        }
+        return '<td></td>';
+      }).join('');
+      return '<tr>'+cols+'<td style="width:34px;text-align:center"><button type="button" class="solic-it-del" data-chave="'+chave+'" data-idx="'+idx+'" title="Remover">'+ico('x',14)+'</button></td></tr>';
+    }
+
+    function secaoTabela(titulo, chave, colunas){
+      var itens=s[chave];
+      var headers={dtPrevAdm:'Dt. Prev. Adm.',tabela:'Tabela',codigo:'Código',descricao:'Descrição',quantidade:'Quantidade',doses:'Doses',viaAdm:'Via Adm',freq:'Freq.',unidMedida:'Unidade de Medida',fornecedor:'Fornecedor'};
+      return '<div class="solic-itsec">'+
+        '<div class="solic-itsec-hd"><span>'+esc(titulo)+'</span></div>'+
+        '<div class="table-wrap"><table class="cfg-table solic-it-tbl"><thead><tr>'+
+          colunas.map(function(c){return '<th'+(c==='descricao'?'':' style="width:auto"')+'>'+headers[c]+'</th>';}).join('')+
+          '<th></th>'+
+        '</tr></thead><tbody>'+
+          itens.map(function(it,i){ return linhaItem(it,i,chave,colunas); }).join('')+
+        '</tbody></table></div>'+
+        '<button type="button" class="btn ghost sm solic-add-btn" data-chave="'+chave+'">'+ico('plus',13)+' Adicionar '+esc(titulo.replace(/s$/,''))+'</button>'+
+      '</div>';
+    }
+
+    host.innerHTML=
+      secaoTabela('Procedimentos','procedimentos',['codigo','descricao','quantidade'])+
+      secaoTabela('Taxas / Diárias','taxas',['codigo','descricao','quantidade'])+
+      secaoTabela('Medicamentos e drogas solicitadas','medicamentos',['dtPrevAdm','tabela','codigo','descricao','doses','viaAdm','freq','unidMedida'])+
+      secaoTabela('OPMEs','opmes',['tabela','codigo','descricao','quantidade','fornecedor']);
+
+    $$('.solic-add-btn',host).forEach(function(b){
+      b.onclick=function(){
+        var chave=b.getAttribute('data-chave');
+        var camposExtra = chave==='opmes' ? ['tabela'] : chave==='medicamentos' ? ['tabela','dtPrevAdm','doses','viaAdm','freq','unidMedida'] : [];
+        var novo=_solicNovoItem(['codigo','descricao'].concat(camposExtra));
+        if(chave==='opmes'){ novo.tabela='00'; novo.fornecedor='Selec'; }
+        if(chave==='medicamentos'){ novo.tabela='00'; novo.viaAdm='02 - C'; }
+        s[chave].push(novo);
+        _renderSolicQuimioSecoes(wrap);
+      };
+    });
+    $$('.solic-it-del',host).forEach(function(b){
+      b.onclick=function(){
+        var chave=b.getAttribute('data-chave'), idx=+b.getAttribute('data-idx');
+        s[chave].splice(idx,1);
+        _renderSolicQuimioSecoes(wrap);
+      };
+    });
+    $$('.solic-it-qtd',host).forEach(function(inp){
+      inp.onchange=function(){ var chave=inp.getAttribute('data-chave'), idx=+inp.getAttribute('data-idx'); s[chave][idx].qtd=Math.max(1,parseInt(inp.value)||1); };
+    });
+    $$('.solic-it-tabela',host).forEach(function(sel){
+      sel.onchange=function(){ var chave=sel.getAttribute('data-chave'), idx=+sel.getAttribute('data-idx'); s[chave][idx].tabela=sel.value; };
+    });
+    $$('.solic-it-fornecedor',host).forEach(function(sel){
+      sel.onchange=function(){ var chave=sel.getAttribute('data-chave'), idx=+sel.getAttribute('data-idx'); s[chave][idx].fornecedor=sel.value; };
+    });
+    $$('.solic-it-dtprevadm',host).forEach(function(inp){
+      inp.onchange=function(){ var chave=inp.getAttribute('data-chave'), idx=+inp.getAttribute('data-idx'); s[chave][idx].dtPrevAdm=inp.value; };
+    });
+    $$('.solic-it-doses',host).forEach(function(inp){
+      inp.onchange=function(){ var chave=inp.getAttribute('data-chave'), idx=+inp.getAttribute('data-idx'); s[chave][idx].doses=inp.value; };
+    });
+    $$('.solic-it-viaadm',host).forEach(function(sel){
+      sel.onchange=function(){ var chave=sel.getAttribute('data-chave'), idx=+sel.getAttribute('data-idx'); s[chave][idx].viaAdm=sel.value; };
+    });
+    $$('.solic-it-freq',host).forEach(function(inp){
+      inp.onchange=function(){ var chave=inp.getAttribute('data-chave'), idx=+inp.getAttribute('data-idx'); s[chave][idx].freq=inp.value; };
+    });
+    $$('.solic-it-unidmed',host).forEach(function(sel){
+      sel.onchange=function(){ var chave=sel.getAttribute('data-chave'), idx=+sel.getAttribute('data-idx'); s[chave][idx].unidMedida=sel.value; };
+    });
+    $$('.solic-it-codigo',host).forEach(function(inp){
+      inp.onchange=function(){ var chave=inp.getAttribute('data-chave'), idx=+inp.getAttribute('data-idx'); s[chave][idx].codigo=inp.value.trim().toUpperCase(); };
+    });
+    $$('.solic-it-buscabtn',host).forEach(function(b){
+      b.onclick=function(){
+        var chave=b.getAttribute('data-chave'), idx=+b.getAttribute('data-idx');
+        var chaveBusca = (chave==='opmes'||chave==='medicamentos') ? 'matmed' : chave;
+        _abrirBuscaItemSolic(chaveBusca, function(item){
+          s[chave][idx].codigo=item.cod;
+          s[chave][idx].descricao=item.desc;
+          _renderSolicQuimioSecoes(wrap);
+        });
+      };
+    });
+
+    _atualizarCamposOpmeQuimio(wrap);
+  }
+
+  function _ligarSolicitacaoQuimio(wrap){
+    var s=_solicQuimio;
+
+    function aplicarBeneficiario(b){
+      s.benef=b;
+      s.acomodacao=b.acomodacao||s.acomodacao;
+      s.celContato=b.celContato||s.celContato;
+      _renderSolicitacaoQuimioTela(wrap);
+    }
+    function abrirBuscaBenef(){ _abrirBuscaAvancadaBenef(aplicarBeneficiario); }
+    $('#sqBenefBusca').onclick=abrirBuscaBenef;
+
+    var benefCodInp=$('#sqBenefCod');
+    function buscarBenefPorCodigo(){
+      var termo=benefCodInp.value.trim().toLowerCase();
+      if(!termo) return;
+      if(s.benef && s.benef.carteirinha && s.benef.carteirinha.toLowerCase()===termo) return;
+      var achado=(MOCK.BENEFICIARIOS||[]).filter(function(b){
+        return (b.carteirinha||'').toLowerCase()===termo || (b.cartao||'').toLowerCase()===termo;
+      })[0];
+      if(achado){ aplicarBeneficiario(achado); }
+      else { toast('Nenhum beneficiário encontrado com este código.','warn'); }
+    }
+    benefCodInp.addEventListener('blur',buscarBenefPorCodigo);
+    benefCodInp.addEventListener('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); buscarBenefPorCodigo(); } });
+
+    $('#sqCelContato').onchange=function(){ s.celContato=this.value; };
+    $('#sqPessoaContato').onchange=function(){ s.pessoaContato=this.value; };
+    $('#sqNumGuiaRef').onchange=function(){ s.numGuiaRef=this.value.trim(); };
+    $('#sqObsBenef').onchange=function(){ s.obsBenef=this.value; };
+
+    // Superfície corporal (m²) calculada automaticamente pela fórmula de Mosteller a partir de Peso/Altura
+    function recalcularSuperficieCorporal(){
+      var peso=parseFloat(s.peso), altura=parseFloat(s.altura);
+      var supEl=$('#sqSupCorporal');
+      if(peso>0 && altura>0){
+        var sup=Math.sqrt((peso*altura*100)/3600); // Mosteller: altura em cm
+        s.superficieCorporal=sup.toFixed(2);
+      } else {
+        s.superficieCorporal='';
+      }
+      if(supEl) supEl.value=s.superficieCorporal;
+    }
+    $('#sqPeso').onchange=function(){ s.peso=this.value; recalcularSuperficieCorporal(); };
+    $('#sqAltura').onchange=function(){ s.altura=this.value; recalcularSuperficieCorporal(); };
+
+    $('#sqProfNome').onchange=function(){ s.profSolicNome=this.value; syncProf(); };
+    $('#sqProfTel').onchange=function(){ s.profSolicTelefone=this.value; syncProf(); };
+    $('#sqProfEmail').onchange=function(){ s.profSolicEmail=this.value; syncProf(); };
+    $('#sqProfNome2').onchange=function(){ s.profSolicNome=this.value; syncProf(); };
+    $('#sqProfTel2').onchange=function(){ s.profSolicTelefone=this.value; syncProf(); };
+    $('#sqProfEmail2').onchange=function(){ s.profSolicEmail=this.value; syncProf(); };
+    // O formulário de referência repete "Dados do Profissional Solicitante" (topo e antes de "Dados da cirurgia") — mantém os dois pares de campos sincronizados
+    function syncProf(){
+      var n1=$('#sqProfNome'), n2=$('#sqProfNome2'), t1=$('#sqProfTel'), t2=$('#sqProfTel2'), e1=$('#sqProfEmail'), e2=$('#sqProfEmail2');
+      if(n1) n1.value=s.profSolicNome; if(n2) n2.value=s.profSolicNome;
+      if(t1) t1.value=s.profSolicTelefone; if(t2) t2.value=s.profSolicTelefone;
+      if(e1) e1.value=s.profSolicEmail; if(e2) e2.value=s.profSolicEmail;
+    }
+
+    $('#sqDataDiag').onchange=function(){ s.dataDiagnostico=this.value; };
+    $('#sqEstadiamento').onchange=function(){ s.estadiamento=this.value; };
+    $('#sqTipoQuimio').onchange=function(){ s.tipoQuimio=this.value; };
+    $('#sqFinalidade').onchange=function(){ s.finalidade=this.value; };
+    $('#sqEcog').onchange=function(){ s.ecog=this.value; };
+    var planoTerEl=$('#sqPlanoTerapeutico'), planoTerCount=$('#sqPlanoTerapeuticoCount');
+    planoTerEl.addEventListener('input',function(){ s.planoTerapeutico=this.value; planoTerCount.textContent=this.value.length+' de 999 caracteres'; });
+    $('#sqDiagCito').onchange=function(){ s.diagCitoHisto=this.value; };
+    var infoRelEl=$('#sqInfoRelevantes'), infoRelCount=$('#sqInfoRelevantesCount');
+    infoRelEl.addEventListener('input',function(){ s.infoRelevantes=this.value; infoRelCount.textContent=this.value.length+' de 999 caracteres'; });
+
+    // CID: digitar direto resolve o significado via IA; a lupa abre a busca avançada (só o CID Principal exige preenchimento)
+    function ligarCid(inpId, btnId, campo, descCampo){
+      $(inpId).onchange=async function(){
+        var v=this.value.trim().toUpperCase(); s[campo]=v;
+        if(!v){ if(descCampo) s[descCampo]=''; return; }
+        if(descCampo){ var desc=await resolverSignificadoCid(v); s[descCampo]=desc||''; }
+      };
+      $(btnId).onclick=function(){
+        _abrirBuscaAvancadaCid(function(item){
+          s[campo]=item.codigo; if(descCampo) s[descCampo]=item.descricao||'';
+          var el2=$(inpId); if(el2) el2.value=item.codigo;
+        });
+      };
+    }
+    ligarCid('#sqCid1','#sqCid1Busca','cid1','cid1Desc');
+    ligarCid('#sqCid2','#sqCid2Busca','cid2',null);
+    ligarCid('#sqCid3','#sqCid3Busca','cid3',null);
+    ligarCid('#sqCid4','#sqCid4Busca','cid4',null);
+
+    $('#sqTumor').onchange=function(){ s.tumor=this.value; };
+    $('#sqNodulo').onchange=function(){ s.nodulo=this.value; };
+    $('#sqMetastase').onchange=function(){ s.metastase=this.value; };
+    $('#sqNumCiclos').onchange=function(){ s.numCiclosPrevistos=this.value; };
+    $('#sqCicloAtual').onchange=function(){ s.cicloAtual=this.value; };
+    $('#sqNumDiasCiclo').onchange=function(){ s.numDiasCicloAtual=this.value; };
+    $('#sqIntervaloCiclos').onchange=function(){ s.intervaloCiclos=this.value; };
+    $('#sqDataSolicitacao').onchange=function(){ s.dataSolicitacao=this.value; };
+    $('#sqCirurgiaAnt').onchange=function(){ s.cirurgiaAnterior=this.value; };
+    $('#sqDataRealizacao').onchange=function(){ s.dataRealizacaoCirurgia=this.value; };
+    $('#sqAreaIrradiada').onchange=function(){ s.areaIrradiada=this.value; };
+    $('#sqDataAplicacao').onchange=function(){ s.dataAplicacao=this.value; };
+
+    $('#sqJustTec').onchange=function(){ s.justificativaTecnica=this.value; };
+    $('#sqEspecMat').onchange=function(){ s.especificacaoMaterial=this.value; };
+    $('#sqObsOpme').onchange=function(){ s.obsOpme=this.value; };
+
+    var obsImpEl=$('#sqObsImpressa'), obsImpCount=$('#sqObsImpressaCount');
+    obsImpEl.addEventListener('input',function(){ s.obsImpressa=this.value; obsImpCount.textContent=this.value.length+' de 2000 caracteres'; });
+
+    for(var i=0;i<6;i++){
+      (function(idx){
+        var inp=$('#sqAnexo'+idx), lbl=$('#sqAnexo'+idx+'Nome');
+        if(!inp) return;
+        inp.onchange=function(){ lbl.textContent=inp.files&&inp.files[0]?inp.files[0].name:'Nenhum arquivo escolhido'; };
+      })(i);
+    }
+
+    $('#sqAutorizarBtn').onclick=function(){ _autorizarSolicitacaoQuimio(); };
+
+    _renderSolicQuimioSecoes(wrap);
+  }
+
+  function _renderSolicitacaoQuimioTela(wrap){
+    var novo=viewSolicitacaoQuimio();
+    wrap.parentNode.replaceChild(novo, wrap);
+    lcIcons();
+  }
+
+  function _autorizarSolicitacaoQuimio(){
+    var s=_solicQuimio;
+    if(!s.benef){ toast('Selecione o beneficiário (Código/Nome do beneficiário).','err'); return; }
+    if(!s.numGuiaRef){ toast('Informe o Nº da guia referenciada.','err'); return; }
+    if(!s.cid1.trim()){ toast('Informe o CID 10 Principal.','err'); return; }
+    if(!s.tipoQuimio){ toast('Selecione o Tipo de Quimioterapia.','err'); return; }
+    if(!s.profSolicNome.trim()){ toast('Informe o Solicitante.','err'); return; }
+    if(!s.profSolicTelefone.trim()){ toast('Informe o Telefone do profissional solicitante.','err'); return; }
+    if(!s.profSolicEmail.trim()){ toast('Informe o E-mail do profissional solicitante.','err'); return; }
+    if(!s.justificativaTecnica.trim()){ toast('Informe a Justificativa Técnica.','err'); return; }
+    if(_solicQuimioTemOpme(s)){
+      if(!s.especificacaoMaterial.trim()){ toast('Informe a Especificação do material (obrigatório quando há OPME).','err'); return; }
+      if(!s.obsOpme.trim()){ toast('Informe as Observações / Justificativa do OPME (obrigatório quando há OPME).','err'); return; }
+    }
+    var todosItens=[].concat(s.procedimentos,s.taxas,s.medicamentos,s.opmes);
+    if(!todosItens.some(function(it){return it.codigo;})){ toast('Adicione ao menos um procedimento, taxa, medicamento ou OPME.','err'); return; }
+
+    var fluxo=(MOCK.FLUXOS||[]).filter(function(f){ return f.id==='F8'; })[0] || (MOCK.FLUXOS||[])[0];
+    var numero=String(Date.now()).slice(-9);
+    var agora=new Date();
+    var dataEmissao=agora.getFullYear()+'-'+String(agora.getMonth()+1).padStart(2,'0')+'-'+String(agora.getDate()).padStart(2,'0');
+    var horaEmissao=String(agora.getHours()).padStart(2,'0')+':'+String(agora.getMinutes()).padStart(2,'0');
+
+    var etapas=(fluxo.etapas||[]).map(function(nome,i){
+      return { ordem:i+1, nome:nome, ia:(MOCK.IA_POR_ETAPA&&MOCK.IA_POR_ETAPA[nome])||'apoio',
+        status:i===0?'em_execucao':'aguardando',
+        prazoHoras: nome.indexOf('JUNTA')>=0?72:24,
+        horasReais:0, responsavel:(nome.indexOf('MÉDICO')>=0||nome.indexOf('JUNTA')>=0)?'auditor':(nome.indexOf('ENFERMEIRA')>=0?'enfermeiro':'auditor'),
+        inicio:dataEmissao+' '+horaEmissao, fim:'' };
+    });
+
+    function itemsParaGuia(lista){ return lista.filter(function(it){return it.codigo;}).map(function(it){ return {cod:it.codigo, desc:it.descricao||it.codigo, qtd:it.qtd||1, tabela:it.tabela, fornecedor:it.fornecedor, dtPrevAdm:it.dtPrevAdm, doses:it.doses, viaAdm:it.viaAdm, freq:it.freq, unidMedida:it.unidMedida}; }); }
+
+    var indicacao=['Estadiamento: '+(s.estadiamento||'—'), 'Tipo: '+(s.tipoQuimio||'—'), 'Finalidade: '+(s.finalidade||'—'), 'ECOG: '+(s.ecog||'—'),
+      s.numGuiaRef?('Guia referenciada: '+s.numGuiaRef):'', s.planoTerapeutico].filter(Boolean).join(' | ');
+
+    var guia={
+      numero:numero, beneficiario:s.benef, prestadorSol:s.profSolicNome?{id:'',nome:s.profSolicNome,tipo:'Médico'}:null, prestadorExe:null, fluxo:fluxo,
+      tipo:'Quimioterapia', natureza:'Ambulatorial', regime:'Eletivo', status:'Em análise', origem:'Emissão guias',
+      congenere:s.benef.cidade||'—', solicitante:s.profSolicNome||'—',
+      uti:false, opme:_solicQuimioTemOpme(s), dut:false, anexos:false, prio:'Alta',
+      risco:'alto', dataEmissao:dataEmissao, horaEmissao:horaEmissao,
+      internacao:'', alta:'', diasAuditoria:0, prazoVencido:false,
+      procedimentos:itemsParaGuia(s.procedimentos), pacotes:[],
+      matmed:itemsParaGuia(s.medicamentos).concat(itemsParaGuia(s.opmes).map(function(o){o=Object.assign({},o);o.opme=true;return o;})),
+      diariasTaxas:itemsParaGuia(s.taxas),
+      etapas:etapas, anexosLista:[],
+      observacoes:s.justificativaTecnica||s.obsImpressa||'',
+      cidOverride:{codigo:s.cid1||'—', descricao:s.cid1Desc||indicacao||'—'},
+      parecerOperadora:null, parecerIA:null, ultimaSync:dataEmissao+' '+horaEmissao
+    };
+
+    State.guias.push(guia);
+    logAcao('Solicitação de Quimioterapia registrada', 'Guia '+numero+' — '+s.benef.nome);
+    toast('Solicitação registrada com sucesso — guia '+numero+' criada.','ok');
+
+    _solicQuimio={
+      benef:null, acomodacao:'', celContato:'', pessoaContato:'', numGuiaRef:'', obsBenef:'',
+      peso:'', altura:'', superficieCorporal:'',
+      profSolicNome:'', profSolicTelefone:'', profSolicEmail:'',
+      dataDiagnostico:'', cid1:'', cid1Desc:'', cid2:'', cid3:'', cid4:'', estadiamento:'',
+      tipoQuimio:'', finalidade:'', ecog:'', planoTerapeutico:'', diagCitoHisto:'', infoRelevantes:'',
+      tumor:'', nodulo:'', metastase:'', numCiclosPrevistos:'', cicloAtual:'', numDiasCicloAtual:'',
+      intervaloCiclos:'', dataSolicitacao:'',
+      cirurgiaAnterior:'', dataRealizacaoCirurgia:'', areaIrradiada:'', dataAplicacao:'',
+      procedimentos:[], taxas:[], medicamentos:[], opmes:[],
+      justificativaTecnica:'', especificacaoMaterial:'', obsOpme:'',
+      obsImpressa:''
     };
     _solicState.tela='hub';
     render();
