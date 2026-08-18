@@ -3195,6 +3195,15 @@
           if(!numero){ toast('Informe o número da guia principal.','err'); return; }
           var guia=(State.guias||[]).filter(function(g){ return g.numero===numero; })[0];
           if(!guia){ toast('Nenhuma guia encontrada com o número "'+numero+'".','err'); return; }
+          // A guia principal só pode ser uma Internação (qualquer subtipo — Clínica, Cirúrgica, Pediátrica,
+          // Obstétrica, Psiquiátrica) — outros tipos (Quimioterapia, Consulta, Exame, etc.) não podem ser
+          // prorrogados por esta tela.
+          // NOTA: o filtro por "local de atendimento logado" (prestador executante) ainda não é aplicado aqui,
+          // pois o sistema não possui sessão de prestador — ver memória do projeto para essa limitação temporária.
+          if(guia.natureza!=='Internação'){
+            toast('A guia '+numero+' não é uma Internação — não pode ser prorrogada aqui.','err');
+            return;
+          }
           s.numGuiaPrincipal=numero;
           s.guiaPrincipal=guia;
           // Herda os dados principais da guia localizada
