@@ -1727,7 +1727,7 @@
     {id:'opme', nome:'Solicitação de OPME', ico:'bone', pronta:true},
     {id:'quimioterapia', nome:'Solicitação de Quimioterapia', ico:'flask-conical', pronta:true},
     {id:'consulta', nome:'Solicitação de Consulta', ico:'stethoscope', pronta:false},
-    {id:'exames', nome:'Solicitação de Exames e Procedimentos', ico:'clipboard-list', pronta:false}
+    {id:'exames', nome:'Solicitação de Exames e Procedimentos', ico:'clipboard-list', pronta:true}
   ];
   var _solicState={tela:'hub'}; // 'hub' | id do tipo (ex.: 'internacao')
 
@@ -1747,6 +1747,7 @@
       else if(_solicState.tela==='opme') wrap.appendChild(viewSolicitacaoOpme());
       else if(_solicState.tela==='quimioterapia') wrap.appendChild(viewSolicitacaoQuimio());
       else if(_solicState.tela==='prorrogacao') wrap.appendChild(viewSolicitacaoProrrogacao());
+      else if(_solicState.tela==='exames') wrap.appendChild(viewSolicitacaoExames());
       return wrap;
     }
     wrap.appendChild(el('div',{class:'page-title'},'<div><h1>'+ico('clipboard-plus',20)+' Solicitações</h1><p>Escolha o tipo de solicitação que deseja registrar.</p></div>'));
@@ -3500,6 +3501,370 @@
       cid:'', cidDescricao:'', hipoteseDiagnostica:'',
       procedimentos:[], pacotes:[], taxas:[], matmed:[], opmes:[],
       obsGuia:''
+    };
+    _solicState.tela='hub';
+    render();
+  }
+
+  /* === Solicitação de Exames e Procedimentos === */
+  // Sempre cria uma guia NOVA (tipo Exame/Procedimento, natureza Ambulatorial, fluxo F3) — a "Nº da guia
+  // referenciada/principal" é opcional e guardada apenas como referência textual (mesmo padrão da Quimioterapia).
+  var _solicExames={
+    benef:null, acomodacao:'', celContato:'', pessoaContato:'', obsBenef:'',
+    solicitante:null, especSolic:'', executante:null, especExec:'',
+    numGuiaRef:'', regime:'Eletiva', coberturaEspecial:'', tipoAtendimento:'', regimeAtendimento:'',
+    atendimentoRN:'Não', indicadorAcidente:'Não Acidente', procJaRealizado:'',
+    cid:'', cidDescricao:'', hipoteseDiagnostica:'',
+    procedimentos:[], pacotes:[], taxas:[], opmes:[],
+    obsImpressa:''
+  };
+
+  function viewSolicitacaoExames(){
+    var wrap=el('div',{class:'panel',style:'padding:22px;max-width:1000px;margin:0 auto'});
+    var s=_solicExames;
+
+    function secaoTitulo(txt){ return '<div class="solic-sec-hd">'+esc(txt)+'</div>'; }
+    function lblObrig(txt){ return '<label class="solic-lbl-obrig">'+esc(txt)+' <span class="solic-obrig-ast">*</span></label>'; }
+
+    var ESPECS=['',].concat(Object.keys(MOCK.ESPEC_MAP||{}).map(function(k){return MOCK.ESPEC_MAP[k];}).filter(function(v,i,a){return a.indexOf(v)===i;}).sort());
+
+    wrap.innerHTML=
+      secaoTitulo('Dados do beneficiário')+
+      '<div class="solic-benef-row">'+
+        '<div class="solic-benef-campos">'+
+          '<div class="solic-benef-grid" style="align-items:end">'+
+            '<div class="field">'+lblObrig('Código do beneficiário')+
+              '<div class="solic-busca-row"><input id="seBenefCod" type="text" maxlength="10" value="'+esc(s.benef?s.benef.carteirinha:'')+'" placeholder="Carteirinha">'+
+              '<button type="button" class="btn ghost sm" id="seBenefBusca">'+ico('search',13)+'</button></div></div>'+
+            '<div class="field solic-span2"><label>Nome do beneficiário</label>'+
+              '<input id="seBenefNome" type="text" readonly value="'+esc(s.benef?s.benef.nome:'')+'" placeholder="Preenchido automaticamente"></div>'+
+          '</div>'+
+          '<div class="solic-benef-grid">'+
+            '<div class="field"><label>Acomodação</label><input id="seAcomodacao" type="text" readonly value="'+esc(s.acomodacao)+'" placeholder="Preenchido automaticamente"></div>'+
+            '<div class="field"><label>Cel. contato Benef.</label><input id="seCelContato" type="text" value="'+esc(s.celContato)+'" placeholder="(00) 00000-0000"></div>'+
+            '<div class="field"><label>Pessoa p/ contato</label><input id="sePessoaContato" type="text" value="'+esc(s.pessoaContato)+'"></div>'+
+          '</div>'+
+        '</div>'+
+        '<div class="solic-benef-foto" id="seBenefFoto">'+(s.benef&&s.benef.foto?'<img src="'+esc(s.benef.foto)+'" alt="Foto do beneficiário">':'<span>'+ico('image-off',28)+'Foto não<br>disponível</span>')+'</div>'+
+      '</div>'+
+      '<div class="field"><label>Observações do beneficiário</label><textarea id="seObsBenef" rows="2">'+esc(s.obsBenef)+'</textarea></div>'+
+
+      secaoTitulo('Dados da guia')+
+      '<div class="g3" style="align-items:end">'+
+        '<div class="field">'+lblObrig('Solicitante')+
+          '<div class="solic-busca-row"><input id="seSolicNome" type="text" readonly value="'+esc(s.solicitante?s.solicitante.nome:'')+'" placeholder="Buscar solicitante">'+
+          '<button type="button" class="btn ghost sm" id="seSolicBusca">'+ico('search',13)+'</button></div></div>'+
+        '<div class="field">'+lblObrig('Especialidade solicitante')+'<select id="seEspecSolic">'+
+          ESPECS.map(function(v){return '<option value="'+esc(v)+'"'+(s.especSolic===v?' selected':'')+'>'+(v||'Selecione')+'</option>';}).join('')+
+        '</select></div>'+
+        '<div class="field"><label>Executante</label><select id="seExecutante">'+
+          ['<option value="">Selecione o prestador executante</option>'].concat(
+            (MOCK.PRESTADORES||[]).map(function(p){return '<option value="'+p.id+'"'+(s.executante&&s.executante.id===p.id?' selected':'')+'>'+esc(p.nome)+'</option>';})
+          ).join('')+
+        '</select></div>'+
+      '</div>'+
+      '<div class="g2">'+
+        '<div class="field">'+lblObrig('Especialidade')+'<select id="seEspec">'+
+          ESPECS.map(function(v){return '<option value="'+esc(v)+'"'+(s.especExec===v?' selected':'')+'>'+(v||'Selecione')+'</option>';}).join('')+
+        '</select></div>'+
+        '<div class="field"><label>Nº da guia referenciada/principal</label>'+
+          '<div class="solic-busca-row"><input id="seNumGuiaRef" type="text" value="'+esc(s.numGuiaRef)+'" placeholder="Opcional">'+
+          '<button type="button" class="btn ghost sm" id="seNumGuiaRefBusca">'+ico('search',13)+'</button></div></div>'+
+      '</div>'+
+      '<div class="g2">'+
+        '<div class="field"><label>Regime</label><select id="seRegime">'+
+          ['Eletiva','Urgência/Emergência'].map(function(v){return '<option value="'+v+'"'+(s.regime===v?' selected':'')+'>'+v+'</option>';}).join('')+
+        '</select></div>'+
+        '<div class="field"><label>Cobertura especial</label><select id="seCoberturaEsp">'+
+          ['','Nenhuma','Rol ANS','Contratual adicional','Liminar judicial'].map(function(v){return '<option value="'+v+'"'+(s.coberturaEspecial===v?' selected':'')+'>'+(v||'Selecione')+'</option>';}).join('')+
+        '</select></div>'+
+      '</div>'+
+      '<div class="g2">'+
+        '<div class="field">'+lblObrig('Tipo de atendimento')+'<select id="seTipoAtend">'+
+          ['','Exame','Procedimento','Terapia','Consulta'].map(function(v){return '<option value="'+v+'"'+(s.tipoAtendimento===v?' selected':'')+'>'+(v||'Selecione')+'</option>';}).join('')+
+        '</select></div>'+
+        '<div class="field">'+lblObrig('Regime de atendimento')+'<select id="seRegimeAtend">'+
+          ['','Ambulatorial','Domiciliar','Hospitalar'].map(function(v){return '<option value="'+v+'"'+(s.regimeAtendimento===v?' selected':'')+'>'+(v||'Selecione')+'</option>';}).join('')+
+        '</select></div>'+
+      '</div>'+
+      '<div class="g3">'+
+        '<div class="field"><label>Atendimento RN</label><select id="seAtendRN">'+
+          ['Não','Sim'].map(function(v){return '<option value="'+v+'"'+(s.atendimentoRN===v?' selected':'')+'>'+v+'</option>';}).join('')+
+        '</select></div>'+
+        '<div class="field">'+lblObrig('Indicador de acidente')+'<select id="seIndAcidente">'+
+          ['Não Acidente','Acidente de trabalho','Acidente de trânsito','Outros acidentes'].map(function(v){return '<option value="'+v+'"'+(s.indicadorAcidente===v?' selected':'')+'>'+v+'</option>';}).join('')+
+        '</select></div>'+
+        '<div class="field"><label>Procedimento já realizado?</label><select id="seProcRealizado">'+
+          ['','Não','Sim'].map(function(v){return '<option value="'+v+'"'+(s.procJaRealizado===v?' selected':'')+'>'+(v||'Selecione')+'</option>';}).join('')+
+        '</select></div>'+
+      '</div>'+
+
+      secaoTitulo('Indicação Clínica / Hipótese diagnóstica')+
+      '<div class="g2" style="align-items:end">'+
+        '<div class="field"><label>C.I.D</label>'+
+          '<div class="solic-busca-row"><input id="seCid" type="text" style="text-transform:uppercase" value="'+esc(s.cid)+'">'+
+          '<button type="button" class="btn ghost sm" id="seCidBusca">'+ico('search',13)+'</button></div></div>'+
+        '<div class="field">'+lblObrig('Hipótese diagnóstica')+'<input id="seHipotese" type="text" value="'+esc(s.hipoteseDiagnostica||s.cidDescricao)+'"></div>'+
+      '</div>'+
+
+      '<div id="seSecoes"></div>'+
+
+      '<div class="solic-sec-hd">Anexos</div>'+
+      '<div class="solic-anexos">'+
+        [0,1,2,3,4,5].map(function(i){ return '<div class="solic-anexo-row"><label class="btn ghost sm">Escolher arquivo<input type="file" id="seAnexo'+i+'" style="display:none"></label><span id="seAnexo'+i+'Nome" class="solic-anexo-nome">Nenhum arquivo escolhido</span></div>'; }).join('')+
+      '</div>'+
+
+      '<div class="solic-sec-hd">Observação impressa / Justificativa da guia</div>'+
+      '<div class="field"><textarea id="seObsImpressa" maxlength="2000" rows="4">'+esc(s.obsImpressa)+'</textarea>'+
+      '<div class="solic-charcount" id="seObsImpressaCount">'+(s.obsImpressa||'').length+' de 2000 caracteres</div></div>'+
+
+      '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px">'+
+        '<button class="btn-primary" id="seAutorizarBtn">'+ico('check',14)+' Autorizar</button>'+
+      '</div>';
+
+    setTimeout(function(){ _ligarSolicitacaoExames(wrap); },0);
+    return wrap;
+  }
+
+  function _renderSolicExamesSecoes(wrap){
+    var s=_solicExames;
+    var host=wrap.querySelector('#seSecoes');
+    if(!host) return;
+
+    function linhaItem(item, idx, chave, colunas){
+      var cols=colunas.map(function(c){
+        if(c==='tabela'){
+          return '<td style="width:60px"><select class="solic-it-tabela" data-chave="'+chave+'" data-idx="'+idx+'">'+
+            ['00','18','19','20','22'].map(function(t){return '<option value="'+t+'"'+(item.tabela===t?' selected':'')+'>'+t+'</option>';}).join('')+
+          '</select></td>';
+        }
+        if(c==='codigo'){
+          return '<td style="width:150px"><div class="solic-busca-row"><input type="text" class="solic-it-codigo" data-chave="'+chave+'" data-idx="'+idx+'" value="'+esc(item.codigo||'')+'">'+
+            '<button type="button" class="btn ghost sm solic-it-buscabtn" data-chave="'+chave+'" data-idx="'+idx+'">'+ico('search',12)+'</button></div></td>';
+        }
+        if(c==='descricao'){
+          return '<td><input type="text" class="solic-it-desc" data-chave="'+chave+'" data-idx="'+idx+'" value="'+esc(item.descricao||'')+'" readonly></td>';
+        }
+        if(c==='quantidade'){
+          return '<td style="width:80px"><input type="number" min="1" class="solic-it-qtd" data-chave="'+chave+'" data-idx="'+idx+'" value="'+(item.qtd||1)+'"></td>';
+        }
+        if(c==='fornecedor'){
+          return '<td style="width:110px"><select class="solic-it-fornecedor" data-chave="'+chave+'" data-idx="'+idx+'">'+
+            ['Selec','Fornecedor A','Fornecedor B','Fornecedor C'].map(function(f){return '<option value="'+f+'"'+(item.fornecedor===f?' selected':'')+'>'+f+'</option>';}).join('')+
+          '</select></td>';
+        }
+        return '<td></td>';
+      }).join('');
+      return '<tr>'+cols+'<td style="width:34px;text-align:center"><button type="button" class="solic-it-del" data-chave="'+chave+'" data-idx="'+idx+'" title="Remover">'+ico('x',14)+'</button></td></tr>';
+    }
+
+    function secaoTabela(titulo, chave, colunas){
+      var itens=s[chave];
+      var headers={tabela:'Tabela',codigo:'Código',descricao:'Descrição',quantidade:'Quantidade',fornecedor:'Fornecedor'};
+      return '<div class="solic-itsec">'+
+        '<div class="solic-itsec-hd"><span>'+esc(titulo)+'</span></div>'+
+        '<div class="table-wrap"><table class="cfg-table solic-it-tbl"><thead><tr>'+
+          colunas.map(function(c){return '<th'+(c==='descricao'?'':' style="width:auto"')+'>'+headers[c]+'</th>';}).join('')+
+          '<th></th>'+
+        '</tr></thead><tbody>'+
+          itens.map(function(it,i){ return linhaItem(it,i,chave,colunas); }).join('')+
+        '</tbody></table></div>'+
+        '<button type="button" class="btn ghost sm solic-add-btn" data-chave="'+chave+'">'+ico('plus',13)+' Adicionar '+esc(titulo.replace(/s$/,''))+'</button>'+
+      '</div>';
+    }
+
+    host.innerHTML=
+      secaoTabela('Procedimentos','procedimentos',['codigo','descricao','quantidade'])+
+      secaoTabela('Pacotes','pacotes',['codigo','descricao','quantidade'])+
+      secaoTabela('Taxas / Diárias','taxas',['codigo','descricao','quantidade'])+
+      secaoTabela('OPMEs','opmes',['tabela','codigo','descricao','quantidade','fornecedor']);
+
+    $$('.solic-add-btn',host).forEach(function(b){
+      b.onclick=function(){
+        var chave=b.getAttribute('data-chave');
+        var camposExtra=chave==='opmes'?['tabela']:[];
+        var novo=_solicNovoItem(['codigo','descricao'].concat(camposExtra));
+        if(chave==='opmes'){ novo.tabela='00'; novo.fornecedor='Selec'; }
+        s[chave].push(novo);
+        _renderSolicExamesSecoes(wrap);
+      };
+    });
+    $$('.solic-it-del',host).forEach(function(b){
+      b.onclick=function(){
+        var chave=b.getAttribute('data-chave'), idx=+b.getAttribute('data-idx');
+        s[chave].splice(idx,1);
+        _renderSolicExamesSecoes(wrap);
+      };
+    });
+    $$('.solic-it-qtd',host).forEach(function(inp){
+      inp.onchange=function(){ var chave=inp.getAttribute('data-chave'), idx=+inp.getAttribute('data-idx'); s[chave][idx].qtd=Math.max(1,parseInt(inp.value)||1); };
+    });
+    $$('.solic-it-tabela',host).forEach(function(sel){
+      sel.onchange=function(){ var chave=sel.getAttribute('data-chave'), idx=+sel.getAttribute('data-idx'); s[chave][idx].tabela=sel.value; };
+    });
+    $$('.solic-it-fornecedor',host).forEach(function(sel){
+      sel.onchange=function(){ var chave=sel.getAttribute('data-chave'), idx=+sel.getAttribute('data-idx'); s[chave][idx].fornecedor=sel.value; };
+    });
+    $$('.solic-it-codigo',host).forEach(function(inp){
+      inp.onchange=function(){ var chave=inp.getAttribute('data-chave'), idx=+inp.getAttribute('data-idx'); s[chave][idx].codigo=inp.value.trim().toUpperCase(); };
+    });
+    $$('.solic-it-buscabtn',host).forEach(function(b){
+      b.onclick=function(){
+        var chave=b.getAttribute('data-chave'), idx=+b.getAttribute('data-idx');
+        _abrirBuscaItemSolic(chave==='opmes'?'matmed':chave, function(item){
+          s[chave][idx].codigo=item.cod;
+          s[chave][idx].descricao=item.desc;
+          _renderSolicExamesSecoes(wrap);
+        });
+      };
+    });
+  }
+
+  function _ligarSolicitacaoExames(wrap){
+    var s=_solicExames;
+
+    function aplicarBeneficiario(b){
+      s.benef=b;
+      s.acomodacao=b.acomodacao||s.acomodacao;
+      s.celContato=b.celContato||s.celContato;
+      _renderSolicitacaoExamesTela(wrap);
+    }
+    function abrirBuscaBenef(){ _abrirBuscaAvancadaBenef(aplicarBeneficiario); }
+    $('#seBenefBusca').onclick=abrirBuscaBenef;
+
+    var benefCodInp=$('#seBenefCod');
+    function buscarBenefPorCodigo(){
+      var termo=benefCodInp.value.trim().toLowerCase();
+      if(!termo) return;
+      if(s.benef && s.benef.carteirinha && s.benef.carteirinha.toLowerCase()===termo) return;
+      var achado=(MOCK.BENEFICIARIOS||[]).filter(function(b){
+        return (b.carteirinha||'').toLowerCase()===termo || (b.cartao||'').toLowerCase()===termo;
+      })[0];
+      if(achado){ aplicarBeneficiario(achado); }
+      else { toast('Nenhum beneficiário encontrado com este código.','warn'); }
+    }
+    benefCodInp.addEventListener('blur',buscarBenefPorCodigo);
+    benefCodInp.addEventListener('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); buscarBenefPorCodigo(); } });
+
+    $('#seCelContato').onchange=function(){ s.celContato=this.value; };
+    $('#sePessoaContato').onchange=function(){ s.pessoaContato=this.value; };
+    $('#seObsBenef').onchange=function(){ s.obsBenef=this.value; };
+
+    $('#seSolicBusca').onclick=function(){
+      _abrirBuscaGenerica('Buscar solicitante', MOCK.PRESTADORES||[], [
+        {label:'Nome',campo:'nome'},{label:'Tipo',campo:'tipo'}
+      ], function(p){ s.solicitante=p; _renderSolicitacaoExamesTela(wrap); });
+    };
+    $('#seEspecSolic').onchange=function(){ s.especSolic=this.value; };
+    $('#seExecutante').onchange=function(){ var id=this.value; s.executante=(MOCK.PRESTADORES||[]).filter(function(p){return p.id===id;})[0]||null; };
+    $('#seEspec').onchange=function(){ s.especExec=this.value; };
+    $('#seNumGuiaRef').onchange=function(){ s.numGuiaRef=this.value.trim(); };
+    $('#seNumGuiaRefBusca').onclick=function(){
+      toast('Digite o número da guia principal diretamente no campo — é apenas uma referência opcional.','ok');
+    };
+    $('#seRegime').onchange=function(){ s.regime=this.value; };
+    $('#seCoberturaEsp').onchange=function(){ s.coberturaEspecial=this.value; };
+    $('#seTipoAtend').onchange=function(){ s.tipoAtendimento=this.value; };
+    $('#seRegimeAtend').onchange=function(){ s.regimeAtendimento=this.value; };
+    $('#seAtendRN').onchange=function(){ s.atendimentoRN=this.value; };
+    $('#seIndAcidente').onchange=function(){ s.indicadorAcidente=this.value; };
+    $('#seProcRealizado').onchange=function(){ s.procJaRealizado=this.value; };
+
+    $('#seCid').onchange=async function(){
+      var v=this.value.trim().toUpperCase(); s.cid=v;
+      if(!v){ s.cidDescricao=''; return; }
+      var desc=await resolverSignificadoCid(v);
+      s.cidDescricao=desc||'';
+      var hip=$('#seHipotese'); if(hip && !hip.value.trim()) hip.value=s.cidDescricao;
+    };
+    $('#seCidBusca').onclick=function(){
+      _abrirBuscaAvancadaCid(function(item){
+        s.cid=item.codigo; s.cidDescricao=item.descricao||'';
+        var cidInp=$('#seCid'); if(cidInp) cidInp.value=s.cid;
+        var hip=$('#seHipotese'); if(hip){ hip.value=s.cidDescricao; s.hipoteseDiagnostica=s.cidDescricao; }
+      });
+    };
+    $('#seHipotese').onchange=function(){ s.hipoteseDiagnostica=this.value; };
+
+    var obsImpEl=$('#seObsImpressa'), obsImpCount=$('#seObsImpressaCount');
+    obsImpEl.addEventListener('input',function(){ s.obsImpressa=this.value; obsImpCount.textContent=this.value.length+' de 2000 caracteres'; });
+
+    for(var i=0;i<6;i++){
+      (function(idx){
+        var inp=$('#seAnexo'+idx), lbl=$('#seAnexo'+idx+'Nome');
+        if(!inp) return;
+        inp.onchange=function(){ lbl.textContent=inp.files&&inp.files[0]?inp.files[0].name:'Nenhum arquivo escolhido'; };
+      })(i);
+    }
+
+    $('#seAutorizarBtn').onclick=function(){ _autorizarSolicitacaoExames(); };
+
+    _renderSolicExamesSecoes(wrap);
+  }
+
+  function _renderSolicitacaoExamesTela(wrap){
+    var novo=viewSolicitacaoExames();
+    wrap.parentNode.replaceChild(novo, wrap);
+    lcIcons();
+  }
+
+  function _autorizarSolicitacaoExames(){
+    var s=_solicExames;
+    if(!s.benef){ toast('Selecione o beneficiário (Código do beneficiário).','err'); return; }
+    if(!s.solicitante){ toast('Selecione o Solicitante.','err'); return; }
+    if(!s.especSolic){ toast('Selecione a Especialidade solicitante.','err'); return; }
+    if(!s.especExec){ toast('Selecione a Especialidade.','err'); return; }
+    if(!s.tipoAtendimento){ toast('Selecione o Tipo de atendimento.','err'); return; }
+    if(!s.regimeAtendimento){ toast('Selecione o Regime de atendimento.','err'); return; }
+    if(!s.hipoteseDiagnostica.trim()){ toast('Informe a Hipótese diagnóstica.','err'); return; }
+    var todosItens=[].concat(s.procedimentos,s.pacotes,s.taxas,s.opmes);
+    if(!todosItens.some(function(it){return it.codigo;})){ toast('Adicione ao menos um procedimento, pacote, taxa ou OPME.','err'); return; }
+
+    var fluxo=(MOCK.FLUXOS||[]).filter(function(f){ return f.id==='F3'; })[0] || (MOCK.FLUXOS||[])[0];
+    var numero=String(Date.now()).slice(-9);
+    var agora=new Date();
+    var dataEmissao=agora.getFullYear()+'-'+String(agora.getMonth()+1).padStart(2,'0')+'-'+String(agora.getDate()).padStart(2,'0');
+    var horaEmissao=String(agora.getHours()).padStart(2,'0')+':'+String(agora.getMinutes()).padStart(2,'0');
+
+    var etapas=(fluxo.etapas||[]).map(function(nome,i){
+      return { ordem:i+1, nome:nome, ia:(MOCK.IA_POR_ETAPA&&MOCK.IA_POR_ETAPA[nome])||'apoio',
+        status:i===0?'em_execucao':'aguardando',
+        prazoHoras: nome.indexOf('URG')>=0?4:(nome.indexOf('JUNTA')>=0?72:24),
+        horasReais:0, responsavel:(nome.indexOf('MÉDICO')>=0||nome.indexOf('JUNTA')>=0)?'auditor':(nome.indexOf('ENFERMEIRA')>=0?'enfermeiro':'auditor'),
+        inicio:dataEmissao+' '+horaEmissao, fim:'' };
+    });
+
+    function itemsParaGuia(lista){ return lista.filter(function(it){return it.codigo;}).map(function(it){ return {cod:it.codigo, desc:it.descricao||it.codigo, qtd:it.qtd||1, tabela:it.tabela, fornecedor:it.fornecedor}; }); }
+
+    var guia={
+      numero:numero, beneficiario:s.benef, prestadorSol:s.solicitante, prestadorExe:s.executante, fluxo:fluxo,
+      tipo:'Exame', natureza:'Ambulatorial', regime:s.regime==='Urgência/Emergência'?'Urgência':'Eletivo', status:'Em análise', origem:'Emissão guias',
+      congenere:s.benef.cidade||'—', solicitante:(s.solicitante&&s.solicitante.nome)||'—',
+      uti:false, opme:s.opmes.some(function(it){return it.codigo;}), dut:false, anexos:false, prio:'Baixa',
+      risco:'baixo', dataEmissao:dataEmissao, horaEmissao:horaEmissao,
+      internacao:'', alta:'', diasAuditoria:0, prazoVencido:false,
+      procedimentos:itemsParaGuia(s.procedimentos), pacotes:itemsParaGuia(s.pacotes),
+      matmed:itemsParaGuia(s.opmes).map(function(o){o=Object.assign({},o);o.opme=true;return o;}),
+      diariasTaxas:itemsParaGuia(s.taxas),
+      etapas:etapas, anexosLista:[],
+      observacoes:(s.numGuiaRef?('Guia referenciada: '+s.numGuiaRef+'. '):'')+(s.obsImpressa||''),
+      guiaReferenciadaRef:s.numGuiaRef||'',
+      cidOverride:{codigo:s.cid||'—', descricao:s.hipoteseDiagnostica||s.cidDescricao||'—'},
+      parecerOperadora:null, parecerIA:null, ultimaSync:dataEmissao+' '+horaEmissao
+    };
+
+    State.guias.push(guia);
+    logAcao('Solicitação de Exames e Procedimentos registrada', 'Guia '+numero+' — '+s.benef.nome);
+    toast('Solicitação registrada com sucesso — guia '+numero+' criada.','ok');
+
+    _solicExames={
+      benef:null, acomodacao:'', celContato:'', pessoaContato:'', obsBenef:'',
+      solicitante:null, especSolic:'', executante:null, especExec:'',
+      numGuiaRef:'', regime:'Eletiva', coberturaEspecial:'', tipoAtendimento:'', regimeAtendimento:'',
+      atendimentoRN:'Não', indicadorAcidente:'Não Acidente', procJaRealizado:'',
+      cid:'', cidDescricao:'', hipoteseDiagnostica:'',
+      procedimentos:[], pacotes:[], taxas:[], opmes:[],
+      obsImpressa:''
     };
     _solicState.tela='hub';
     render();
