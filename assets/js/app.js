@@ -120,7 +120,10 @@
     kanbanFiltros: { colunas:[], uti:'', regime:'', tipo:'', especialidade:'' },
     fluxoSLAConfig: JSON.parse(localStorage.getItem('regula_fluxo_sla')||'null') || {},
     fluxoWeights: JSON.parse(localStorage.getItem('regula_fluxo_weights')||'null') || {},
-    permOverrides: JSON.parse(localStorage.getItem('regula_perm_overrides')||'null') || {}
+    permOverrides: JSON.parse(localStorage.getItem('regula_perm_overrides')||'null') || {},
+    // Tipos de Solicitação (ids de SOLICITACOES_TIPOS) que o perfil Prestador pode registrar.
+    // Padrão: todos habilitados — configurável em Configurações → Permissões.
+    prestadorTiposPermitidos: JSON.parse(localStorage.getItem('regula_prestador_tipos')||'null')
   };
 
   var DEFAULT_PESOS={documental:6,dut:8,procedimento:7,pacote:5,matmed:7,diaria:5,contratual:7,historico:4};
@@ -374,8 +377,13 @@
     auditor:    {nome:'Dr. Marcos Vinícius',cor:'#066b34', perms:['ver','triagem','complemento','parecer','aprovar','reprovar','junta','config','parametrizar']},
     gestor:     {nome:'Patrícia Andrade',  cor:'#054f27', perms:['ver','triagem','complemento','parecer','aprovar','reprovar','junta','config','parametrizar','logs']},
     // Administrador: tudo que o gestor faz + gerenciar usuários + chave de IA (acima de todos)
-    admin:      {nome:'Administrador',     cor:'#021f10', perms:['ver','triagem','complemento','parecer','aprovar','reprovar','junta','config','parametrizar','logs','usuarios','configIA']}
+    admin:      {nome:'Administrador',     cor:'#021f10', perms:['ver','triagem','complemento','parecer','aprovar','reprovar','junta','config','parametrizar','logs','usuarios','configIA']},
+    // Prestador: acesso restrito só a Solicitações (tipos configuráveis via Permissões) e visualização
+    // limitada do Kanban (sem abrir guia, sem risco/aderência/fluxo-etapa — ver ROTAS_PRESTADOR abaixo).
+    prestador:  {nome:'Prestador',         cor:'#0a8a43', perms:[]}
   };
+  // Rotas de navegação que o perfil Prestador pode acessar — controla nav, clique e roteamento central.
+  var ROTAS_PRESTADOR=['solicitacoes','kanban'];
   function can(act){ var d=perfilDef[State.perfil]; return !!d && d.perms.indexOf(act)>=0; }
   // Admin e Gestor compartilham os mesmos poderes (exceto "usuarios", só do admin)
   // Aplica modo somente-leitura num container: desativa inputs/selects/botões e
@@ -1070,10 +1078,19 @@
     document.body.classList.remove('modal-aberto');
   }
 
-  // Oculta itens do menu conforme a permissão do perfil ativo (ex.: Logs só Gestor/Admin)
+  // true se o perfil ativo pode acessar a rota informada — só o Prestador tem allowlist restrita hoje
+  // (ROTAS_PRESTADOR); os demais perfis seguem as regras existentes (ex.: "logs" via can()).
+  function podeAcessarRota(rota){
+    if(State.perfil==='prestador') return ROTAS_PRESTADOR.indexOf(rota)>=0;
+    if(rota==='logs') return can('logs');
+    return true;
+  }
+  // Oculta itens do menu conforme a permissão do perfil ativo (ex.: Logs só Gestor/Admin;
+  // Prestador só enxerga Solicitações e Kanban).
   function aplicarVisibilidadeNav(){
-    var logsItem=document.querySelector('.nav-item[data-route="logs"]');
-    if(logsItem) logsItem.style.display=can('logs')?'':'none';
+    $$('.nav-item[data-route]').forEach(function(a){
+      a.style.display=podeAcessarRota(a.getAttribute('data-route'))?'':'none';
+    });
   }
 
   /* === Sidebar / nav === */
@@ -1083,8 +1100,8 @@
       if(a.id==='chatToggleBtn') return; // tratado pelo initChat (não fecha modal)
       a.onclick=function(){
         var rota=a.getAttribute('data-route');
-        // Bloqueio de rota: Logs exige permissão (Gestor/Admin)
-        if(rota==='logs' && !can('logs')){ toast('Acesso restrito ao Gestor/Administrador','err'); return; }
+        // Bloqueio de rota: Logs exige permissão (Gestor/Admin); Prestador só acessa ROTAS_PRESTADOR
+        if(!podeAcessarRota(rota)){ toast(State.perfil==='prestador'?'Este perfil só tem acesso a Solicitações e Kanban':'Acesso restrito ao Gestor/Administrador','err'); return; }
         fecharModais(); // ao trocar de página, fecha qualquer modal aberto
         State.route=rota;
         $$('.nav-item').forEach(function(x){x.classList.remove('active')});
@@ -1152,6 +1169,9 @@
       } else if(profile==='auditor'){
         users=[{nome:perfilDef.auditor.nome, cor:perfilDef.auditor.cor, profile:'auditor', enfId:'', sub:'Auditoria médica'}];
         label='Auditor';
+      } else if(profile==='prestador'){
+        users=[{nome:perfilDef.prestador.nome, cor:perfilDef.prestador.cor, profile:'prestador', enfId:'', sub:'Acesso restrito a Solicitações'}];
+        label='Prestador';
       } else {
         users=ENFERMEIROS.map(function(e){ return {nome:e.nome, cor:e.cor, profile:'enfermeiro', enfId:e.id, sub:e.especialidade}; });
         label='Enfermeiro';
@@ -1183,8 +1203,9 @@
             }
             State.perfil=u.profile; State.visaoPerfil=''; State.visaoEnfermeiros=[];
             localStorage.setItem('regula_perfil',State.perfil);
-            // Se o perfil perdeu acesso à rota atual (ex.: Logs), volta ao Dashboard
+            // Se o perfil perdeu acesso à rota atual (ex.: Logs, ou virou Prestador numa rota fora da allowlist), volta ao Dashboard
             if(State.route==='logs' && !can('logs')){ State.route='dashboard'; }
+            if(State.perfil==='prestador' && ROTAS_PRESTADOR.indexOf(State.route)<0){ State.route='solicitacoes'; }
             fabClose(); renderUserChip(); aplicarVisibilidadeNav(); render();
             toast('Perfil: '+u.nome,'ok');
           };
@@ -1230,7 +1251,7 @@
     });
   }
 
-  var PERFIL_NOMES={admin:'Administrador',gestor:'Gestor',auditor:'Auditor',enfermeiro:'Enfermeiro'};
+  var PERFIL_NOMES={admin:'Administrador',gestor:'Gestor',auditor:'Auditor',enfermeiro:'Enfermeiro',prestador:'Prestador'};
   function renderUserChip(){
     var u=perfilDef[State.perfil];
     $('#userName').textContent=u.nome;
@@ -1840,8 +1861,17 @@
   ];
   var _solicState={tela:'hub'}; // 'hub' | id do tipo (ex.: 'internacao')
 
+  // Ids de SOLICITACOES_TIPOS que o perfil ativo pode registrar. Só o Prestador tem restrição —
+  // configurável em Configurações → Permissões (State.prestadorTiposPermitidos; null = todos liberados).
+  function _solicTiposPermitidos(){
+    if(State.perfil!=='prestador') return SOLICITACOES_TIPOS.map(function(t){return t.id;});
+    return State.prestadorTiposPermitidos!==null ? State.prestadorTiposPermitidos : SOLICITACOES_TIPOS.map(function(t){return t.id;});
+  }
+
   function viewSolicitacoes(){
     var wrap=el('div');
+    var permitidos=_solicTiposPermitidos();
+    if(_solicState.tela!=='hub' && permitidos.indexOf(_solicState.tela)<0){ _solicState.tela='hub'; }
     if(_solicState.tela!=='hub'){
       var tipo=SOLICITACOES_TIPOS.filter(function(t){return t.id===_solicState.tela;})[0];
       wrap.appendChild(el('div',{class:'page-title'},
@@ -1863,12 +1893,13 @@
     wrap.appendChild(el('div',{class:'page-title'},'<div><h1>'+ico('clipboard-plus',20)+' Solicitações</h1><p>Escolha o tipo de solicitação que deseja registrar.</p></div>'));
     var grid=el('div',{class:'solic-grid'});
     SOLICITACOES_TIPOS.forEach(function(t){
-      var card=el('div',{class:'panel solic-card'+(t.pronta?'':' solic-card-disabled')});
+      var liberado=t.pronta && permitidos.indexOf(t.id)>=0;
+      var card=el('div',{class:'panel solic-card'+(liberado?'':' solic-card-disabled')});
       card.innerHTML=
         '<div class="solic-card-ico">'+ico(t.ico,22)+'</div>'+
         '<div class="solic-card-nome">'+esc(t.nome)+'</div>'+
-        (t.pronta?'':'<span class="badge muted solic-card-badge">Em breve</span>');
-      if(t.pronta){ card.onclick=function(){ _solicState.tela=t.id; render(); }; }
+        (!t.pronta?'<span class="badge muted solic-card-badge">Em breve</span>':(!liberado?'<span class="badge muted solic-card-badge">Não disponível para este perfil</span>':''));
+      if(liberado){ card.onclick=function(){ _solicState.tela=t.id; render(); }; }
       grid.appendChild(card);
     });
     wrap.appendChild(grid);
@@ -4393,6 +4424,9 @@
   /* === Views === */
   function render(){
     var v=$('#view'); v.innerHTML='';
+    // Prestador: guarda central de rota — se por qualquer caminho State.route ficou fora da allowlist, força Solicitações
+    if(State.perfil==='prestador' && ROTAS_PRESTADOR.indexOf(State.route)<0){ State.route='solicitacoes'; }
+    $$('.nav-item[data-route]').forEach(function(x){x.classList.toggle('active',x.getAttribute('data-route')===State.route);});
     var isManual=State.route==='manual';
     v.style.padding=isManual?'0':'';
     v.style.maxWidth=isManual?'none':'';
@@ -5714,6 +5748,7 @@
       if(!lst.length){
         body.innerHTML='<div class="k-empty">'+ico('inbox',22)+'<br>Sem guias</div>';
       }
+      var ehPrestador=State.perfil==='prestador';
       lst.forEach(function(g){
         var ad=guiaAderencia(g);
         var et=etapaAtualDe(g);
@@ -5723,22 +5758,24 @@
         var badges=(g.opme?'<span class="badge warn" style="font-size:10px">OPME</span>':'')+
                    (g.uti?'<span class="badge info" style="font-size:10px">UTI</span>':'');
 
-        var c=el('div',{class:'k-card'});
+        // Perfil Prestador: sem risco/aderência regulatória e sem o fluxo/etapa atual do processo —
+        // informações internas de auditoria que não devem ser expostas ao prestador de serviço.
+        var c=el('div',{class:'k-card'+(ehPrestador?' k-card-prestador':'')});
         c.innerHTML=
           '<div class="k-card-top">'+
             '<span class="k-num">'+esc(g.numero)+'</span>'+
-            riskPill(g.risco)+
+            (ehPrestador?'':riskPill(g.risco))+
           '</div>'+
           '<div class="k-beneficiario">'+ico('user',11)+' '+esc(g.beneficiario.nome)+'</div>'+
           '<div class="k-tipo">'+esc(g.tipo.toUpperCase())+
             (badges?'<div class="k-badges">'+badges+'</div>':'')+
           '</div>'+
-          '<div class="k-etapa">'+ico('git-branch',10)+' '+esc(g.fluxo.nome)+' &rsaquo; <b>'+etapaLabel+'</b></div>'+
+          (ehPrestador?'':'<div class="k-etapa">'+ico('git-branch',10)+' '+esc(g.fluxo.nome)+' &rsaquo; <b>'+etapaLabel+'</b></div>')+
           '<div class="k-card-foot">'+
-            aderenciaBar(ad,g)+
+            (ehPrestador?'<span></span>':aderenciaBar(ad,g))+
             '<span class="k-regime'+(g.regime==='Urgência'?' urgente':'')+'">'+esc(g.regime)+'</span>'+
           '</div>';
-        c.onclick=function(){openGuia(g,'resumo')};
+        if(!ehPrestador) c.onclick=function(){openGuia(g,'resumo')};
         body.appendChild(c);
       });
     });
@@ -7318,7 +7355,7 @@
     {key:'usuarios',     label:'Gerenciar usuários',                     desc:'Cadastrar, editar e inativar usuários — exclusivo do Administrador',      p:['admin'],                                 v:[]},
     {key:'configIA',     label:'Configurar chave de API (Assistente IA)',desc:'Inserir/editar a chave do provedor de IA — exclusivo do Administrador',   p:['admin'],                                 v:[]},
   ];
-  var PERM_PROFILES=['admin','gestor','auditor','enfermeiro'];
+  var PERM_PROFILES=['admin','gestor','auditor','enfermeiro','prestador'];
   var PERM_LEVELS=['edit','view','none']; // ciclo ao clicar
   function _permBaseLevel(perm,profile){
     if(perm.p.indexOf(profile)>=0) return 'edit';
@@ -7332,7 +7369,7 @@
   }
   function _buildPermMatrix(){
     var editable=ehGestor();
-    var profileColors={admin:'#021f10',gestor:'#054f27',auditor:'#066b34',enfermeiro:'#0a8a43'};
+    var profileColors={admin:'#021f10',gestor:'#054f27',auditor:'#066b34',enfermeiro:'#0a8a43',prestador:'#15803d'};
     var LEVEL_ICO={edit:'check-circle',view:'eye',none:'minus'};
     var LEVEL_COLOR={edit:'var(--g-600)',view:'#64748b',none:'var(--g-200)'};
     var LEVEL_LABEL={edit:'Acesso total',view:'Somente leitura',none:'Sem acesso'};
@@ -7395,6 +7432,38 @@
           _pmWrap.replaceWith(newWrap);
           lcIcons();
           toast('Permissão atualizada','ok');
+        };
+      });
+    }
+    // Seção extra — só o Prestador tem acesso ao módulo Solicitações; aqui se configura quais dos 6
+    // tipos ele pode registrar (lista binária, não se encaixa nos 3 níveis edit/view/none da matriz acima).
+    var permitidosAtual=State.prestadorTiposPermitidos!==null ? State.prestadorTiposPermitidos : SOLICITACOES_TIPOS.map(function(t){return t.id;});
+    var secTipos=el('div',{style:'margin-top:22px;padding-top:18px;border-top:1.5px solid var(--g-100)'});
+    secTipos.innerHTML='<div style="font-size:13px;font-weight:700;color:var(--ink);margin-bottom:3px">'+ico('clipboard-plus',14)+' Tipos de Solicitação — perfil Prestador</div>'+
+      '<div style="font-size:11.5px;color:var(--muted);margin-bottom:12px;line-height:1.5">Define quais dos tipos abaixo o perfil Prestador pode registrar no módulo Solicitações.</div>'+
+      '<div class="solic-permtipos-grid" style="display:flex;flex-wrap:wrap;gap:8px">'+
+        SOLICITACOES_TIPOS.map(function(t){
+          var on=permitidosAtual.indexOf(t.id)>=0;
+          return '<label class="solic-permtipo-chip'+(on?' on':'')+'" data-tipo="'+esc(t.id)+'" style="display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:20px;border:1.5px solid '+(on?'var(--g-600)':'var(--g-200)')+';background:'+(on?'var(--g-50)':'#fff')+';cursor:'+(editable?'pointer':'default')+';font-size:12.5px;font-weight:600;color:'+(on?'var(--g-700)':'var(--muted)')+'">'+
+            '<input type="checkbox" class="solic-permtipo-chk" data-tipo="'+esc(t.id)+'"'+(on?' checked':'')+(editable?'':' disabled')+' style="accent-color:var(--g-600)">'+
+            ico(t.ico,13)+' '+esc(t.nome)+
+          '</label>';
+        }).join('')+
+      '</div>';
+    _pmWrap.appendChild(secTipos);
+    if(editable){
+      $$('.solic-permtipo-chk',secTipos).forEach(function(chk){
+        chk.onchange=function(){
+          var tipoId=chk.getAttribute('data-tipo');
+          var atual=State.prestadorTiposPermitidos!==null ? State.prestadorTiposPermitidos.slice() : SOLICITACOES_TIPOS.map(function(t){return t.id;});
+          var idx=atual.indexOf(tipoId);
+          if(chk.checked){ if(idx<0) atual.push(tipoId); } else { if(idx>=0) atual.splice(idx,1); }
+          State.prestadorTiposPermitidos=atual;
+          localStorage.setItem('regula_prestador_tipos',JSON.stringify(atual));
+          var newWrap=_buildPermMatrix();
+          _pmWrap.replaceWith(newWrap);
+          lcIcons();
+          toast('Tipos de Solicitação do Prestador atualizados','ok');
         };
       });
     }
