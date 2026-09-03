@@ -10814,7 +10814,11 @@
     }
 
     document.addEventListener('mouseover',function(e){
-      if(fabIsOpen()){_vis=false;tip.classList.remove('gtip--vis');return;}
+      // FAB aberto: ainda mostra o tooltip para os próprios botões do leque (nome do perfil, já
+      // que eles só têm 1-2 letras) — só suprime tooltips de elementos FORA do FAB, que poderiam
+      // sobrepor a seleção de perfil.
+      var fw=document.getElementById('fabWrap');
+      if(fabIsOpen() && !(fw&&fw.contains(e.target))){_vis=false;tip.classList.remove('gtip--vis');return;}
       var txt=findTip(e.target);
       if(txt){tip.textContent=txt;_vis=true;tip.classList.add('gtip--vis');}
       else{_vis=false;tip.classList.remove('gtip--vis');}
