@@ -8144,15 +8144,29 @@
     document.body.style.overflow='hidden';
     document.body.classList.add('modal-aberto');
     var _focoAnterior=document.activeElement;
-    function closeModal(){
-      bd.remove();
+    var _limpo=false;
+    function limparEstadoModal(){
+      if(_limpo) return;
+      _limpo=true;
       if(!document.querySelector('.modal-backdrop')){
         document.body.style.overflow='';
         document.body.classList.remove('modal-aberto');
       }
       document.removeEventListener('keydown',onKeydown,true);
       if(_focoAnterior && _focoAnterior.focus) _focoAnterior.focus();
+      _obs.disconnect();
     }
+    function closeModal(){
+      bd.remove();
+    }
+    // Alguns pontos do código fecham o modal removendo o backdrop diretamente
+    // (bd.closest('.modal-backdrop').remove()) em vez de chamar closeModal() —
+    // este observer garante que overflow/modal-aberto/foco sejam sempre
+    // restaurados independentemente de como o backdrop saiu do DOM.
+    var _obs=new MutationObserver(function(){
+      if(!document.body.contains(bd)) limparEstadoModal();
+    });
+    _obs.observe($('#modalRoot'),{childList:true});
     function focaveis(){
       return $$('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])',m)
         .filter(function(el2){ return el2.offsetParent!==null; });
