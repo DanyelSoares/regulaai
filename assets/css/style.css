@@ -279,6 +279,10 @@ body.pl--blurring .pl--blur-target{filter:blur(5px)}
 .kpi.param{background-color:#85c9a8;background-image:linear-gradient(170deg,#eaf6ef 0%,#b2dfc8 52%,#6cc492 100%)}
 .kpi h4{margin:0;font-size:11.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--g-700);font-weight:600;opacity:.8}
 .kpi .v{font-size:24px;font-weight:700;margin-top:5px;color:var(--g-800)}
+.kpi-selo{display:inline-flex;align-items:center;gap:3px;margin-top:6px;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--g-700);opacity:.65}
+.kpi-selo-live{color:#8a6300}
+.kpi-selo-live svg{color:#c0392b;animation:kpi-live-pulse 1.8s ease-in-out infinite}
+@keyframes kpi-live-pulse{0%,100%{opacity:1}50%{opacity:.35}}
 
 .panels{display:grid;grid-template-columns:2fr 1fr;gap:14px}
 .panel{background:#fff;border:1.5px solid var(--g-100);border-radius:11px;padding:16px;box-shadow:0 2px 8px rgba(10,138,67,.06);min-width:0;display:flex;flex-direction:column}

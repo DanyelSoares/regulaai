@@ -4461,11 +4461,18 @@
     var dp=State.dashboardPeriodo;
     var dpLo=(dp.de&&dp.ate)?(dp.de<dp.ate?dp.de:dp.ate):(dp.de||dp.ate);
     var dpHi=(dp.de&&dp.ate)?(dp.de<dp.ate?dp.ate:dp.de):(dp.de||dp.ate);
+    // Base "por período" (respeita o seletor de data — padrão últimos 30 dias): usada pelos KPIs
+    // que descrevem volume/resultado ao longo do tempo (Total, Liberadas, Negadas, Com OPME,
+    // Baixa aderência, Tempo médio, Etapa com gargalo).
     var guias=guiasVisiveis().filter(function(g){
       if(dpLo&&g.dataEmissao<dpLo) return false;
       if(dpHi&&g.dataEmissao>dpHi) return false;
       return true;
     });
+    // Base "tempo real" (ignora o seletor de período): usada pelos KPIs de status atual do
+    // processo (Em análise, Em junta médica, Aguardando complemento, Analisadas, Cotação de OPME)
+    // — mostram o estado agora, não uma janela histórica.
+    var guiasAgora=guiasVisiveis();
     var tituloExtra='';
     if(ehGestor() && State.visaoPerfil) tituloExtra=' <span class="badge info">Visão: '+State.visaoPerfil+'</span>';
     var hdr=el('div',{class:'page-title'},'<div><h1>Dashboard Executivo'+tituloExtra+'</h1><p>Visão consolidada de auditoria assistencial e indicadores operacionais.</p></div>');
@@ -4494,26 +4501,28 @@
     // Seletor de visão para Gestor/Admin
     if(ehGestor()) renderVisaoBar(wrap);
 
-    function count(fn){ return guias.filter(fn).length; }
+    function count(base,fn){ return base.filter(fn).length; }
     var refreshDuracao=null;
     var tempoMedio=guias.length?( guias.reduce(function(a,g){return a+g.diasAuditoria},0)/guias.length).toFixed(1):'—';
+    // "periodo": respeita o seletor de data do Dashboard (volume/resultado ao longo do tempo).
+    // "tempoReal": ignora o período — sempre reflete o status atual das guias, agora mesmo.
     var kpis=[
-      {t:'Total de guias',          v:guias.length,                                              cls:'',       fn:function(g){return true;}},
-      {t:'Em análise',              v:count(function(g){return g.status==='Em análise'}),         cls:'',       fn:function(g){return g.status==='Em análise';}},
-      {t:'Em junta médica',         v:count(function(g){return g.status==='Em junta médica'}),    cls:'info',   fn:function(g){return g.status==='Em junta médica';}},
-      {t:'Aguardando complemento',  v:count(function(g){return g.status==='Aguardando complemento'}), cls:'warn', fn:function(g){return g.status==='Aguardando complemento';}},
-      {t:'Analisadas',              v:count(function(g){return g.status==='Analisada'}),          cls:'info',   fn:function(g){return g.status==='Analisada';}},
-      {t:'Liberadas',               v:count(function(g){return g.status==='Liberada'}),           cls:'',       fn:function(g){return g.status==='Liberada';}},
-      {t:'Negadas',                 v:count(function(g){return g.status==='Negada'}),             cls:'danger', fn:function(g){return g.status==='Negada';}},
-      {t:'Com OPME',                v:count(function(g){return g.opme}),                          cls:'warn',   fn:function(g){return !!g.opme;},                                  extra:'opme'},
-      {t:'Cotação de OPME',         v:count(function(g){return g.status==='Cotação de OPME'}),    cls:'warn',   fn:function(g){return g.status==='Cotação de OPME';},              extra:'opme'},
-      {t:'Baixa aderência',         v:count(function(g){return guiaAderencia(g)<70}),             cls:'danger', fn:function(g){return guiaAderencia(g)<70;},                       extra:'aderencia'},
-      {t:'Tempo médio (dias)',       v:tempoMedio,                                                 cls:'info',   fn:function(g){return true;},                                      extra:'tempo'},
-      {t:'Etapa com gargalo',        v:'Aud. Prévia',                                              cls:'warn',   fn:function(g){var et=g.etapas&&g.etapas.filter(function(e){return e.status==='Em andamento';})[0]; return !!(et&&et.nome&&et.nome.indexOf('AUD')>=0);}, extra:'etapa'}
+      {t:'Total de guias',          v:guias.length,                                              cls:'',       base:guias,     fn:function(g){return true;},                                      periodo:true},
+      {t:'Em análise',              v:count(guiasAgora,function(g){return g.status==='Em análise'}),         cls:'',       base:guiasAgora, fn:function(g){return g.status==='Em análise';}},
+      {t:'Em junta médica',         v:count(guiasAgora,function(g){return g.status==='Em junta médica'}),    cls:'info',   base:guiasAgora, fn:function(g){return g.status==='Em junta médica';}},
+      {t:'Aguardando complemento',  v:count(guiasAgora,function(g){return g.status==='Aguardando complemento'}), cls:'warn', base:guiasAgora, fn:function(g){return g.status==='Aguardando complemento';}},
+      {t:'Analisadas',              v:count(guiasAgora,function(g){return g.status==='Analisada'}),          cls:'info',   base:guiasAgora, fn:function(g){return g.status==='Analisada';}},
+      {t:'Liberadas',               v:count(guias,function(g){return g.status==='Liberada'}),           cls:'',       base:guias,     fn:function(g){return g.status==='Liberada';},                     periodo:true},
+      {t:'Negadas',                 v:count(guias,function(g){return g.status==='Negada'}),             cls:'danger', base:guias,     fn:function(g){return g.status==='Negada';},                       periodo:true},
+      {t:'Com OPME',                v:count(guias,function(g){return g.opme}),                          cls:'warn',   base:guias,     fn:function(g){return !!g.opme;},                                  extra:'opme',      periodo:true},
+      {t:'Cotação de OPME',         v:count(guiasAgora,function(g){return g.status==='Cotação de OPME'}), cls:'warn',   base:guiasAgora, fn:function(g){return g.status==='Cotação de OPME';},              extra:'opme'},
+      {t:'Baixa aderência',         v:count(guias,function(g){return guiaAderencia(g)<70}),             cls:'danger', base:guias,     fn:function(g){return guiaAderencia(g)<70;},                       extra:'aderencia', periodo:true},
+      {t:'Tempo médio (dias)',       v:tempoMedio,                                                 cls:'info',   base:guias,     fn:function(g){return true;},                                      extra:'tempo',     periodo:true},
+      {t:'Etapa com gargalo',        v:'Aud. Prévia',                                              cls:'warn',   base:guias,     fn:function(g){var et=g.etapas&&g.etapas.filter(function(e){return e.status==='Em andamento';})[0]; return !!(et&&et.nome&&et.nome.indexOf('AUD')>=0);}, extra:'etapa', periodo:true}
     ];
 
     function kpiModal(k){
-      var list=guias.filter(k.fn).slice().sort(function(a,b){return b.diasAuditoria-a.diasAuditoria;});
+      var list=(k.base||guias).filter(k.fn).slice().sort(function(a,b){return b.diasAuditoria-a.diasAuditoria;});
       var prest=function(g){return ((g.prestadorExe||g.prestadorSol)||{}).nome||'—';};
       var fluxoNome=function(g){return (g.fluxo||{}).nome||'—';};
       var adBadge=function(g){
@@ -4693,7 +4702,10 @@
 
     var grid=el('div',{class:'kpi-grid'});
     kpis.forEach(function(k){
-      var card=el('div',{class:'kpi '+k.cls},'<h4>'+esc(k.t)+'</h4><div class="v">'+esc(k.v)+'</div>');
+      var selo=k.periodo
+        ?'<span class="kpi-selo" title="Considera o período selecionado acima">'+ico('calendar-range',10)+' período</span>'
+        :'<span class="kpi-selo kpi-selo-live" title="Status atual das guias, agora — não é afetado pelo período selecionado">'+ico('radio',10)+' tempo real</span>';
+      var card=el('div',{class:'kpi '+k.cls},'<h4>'+esc(k.t)+'</h4><div class="v">'+esc(k.v)+'</div>'+selo);
       // Distingue clique de arrastar (seleção de texto)
       var _mx=0,_my=0;
       card.addEventListener('mousedown',function(e){_mx=e.clientX;_my=e.clientY;});
@@ -4712,7 +4724,7 @@
     var pa=el('div',{class:'panel'},'<h3>Distribuição por status</h3>');
     var bars=el('div',{class:'bars'});
     MOCK.STATUS.forEach(function(s){
-      var c=count(function(g){return g.status===s}); if(c===0) return;
+      var c=count(guias,function(g){return g.status===s}); if(c===0) return;
       var pct=Math.round(c/guias.length*100);
       var row=el('div',{class:'bar-row',style:'cursor:pointer',title:'Clique: ver guias com status "'+esc(s)+'"'},'<div>'+esc(s)+'</div><div class="bar-track"><div class="bar-fill" style="width:'+pct+'%"></div></div><div>'+c+'</div>');
       row.onclick=function(){
@@ -10941,30 +10953,40 @@
       if(dtab==='visao'){
         dashContent=
           manualBox('Visão Geral',
-            '<p>O Dashboard apresenta os principais indicadores do processo de auditoria em tempo real, com base nas guias visíveis para o perfil ativo.</p>'+
+            '<p>O Dashboard apresenta o andamento das guias em processo — da solicitação até a liberação — com base nas guias visíveis para o perfil ativo. Os 12 cards de indicador se dividem em dois grupos, sinalizados por um selo no rodapé de cada card:</p>'+
+            '<ul>'+
+              '<li>'+ico('calendar-range',12)+' <b>Período</b> — respeita o seletor de período do topo (histórico/volume ao longo do tempo).</li>'+
+              '<li>'+ico('radio',12)+' <b>Tempo real</b> — sempre mostra o status atual das guias, agora, independente do período selecionado.</li>'+
+            '</ul>'+
             manualScreen('dashboard'))+
           manualBox('Filtro de Período',
-            '<p>No canto superior direito do título há um <b>seletor de período</b>. Por padrão, exibe os últimos <b>30 dias</b> a partir da data atual. O período pode ser alterado livremente — todas as métricas são recalculadas automaticamente.</p>');
+            '<p>No canto superior direito do título há um <b>seletor de período</b> (calendário com intervalo livre de datas — inclusive é possível selecionar um mês inteiro manualmente). Por padrão, exibe os últimos <b>30 dias</b> a partir da data atual.</p>'+
+            '<p>O período <b>só afeta os cards marcados como "período"</b> (ver aba KPIs). Os cards marcados como "tempo real" continuam mostrando o status atual das guias mesmo trocando o período — eles descrevem o que está acontecendo agora no processo, não uma janela histórica.</p>');
       }
       else if(dtab==='kpis'){
         dashContent=
-          manualBox('KPIs disponíveis',
+          manualBox('KPIs — Por Período',
+            '<p>Respeitam o seletor de período do topo (padrão: últimos 30 dias). Descrevem volume e resultado ao longo do tempo.</p>'+
             manualTable(['Indicador','Descrição'],[
-              ['Total de guias','Quantidade total de guias no período filtrado'],
-              ['Em análise','Guias com status "Em análise"'],
-              ['Em junta médica','Guias encaminhadas para junta médica'],
-              ['Aguardando complemento','Guias aguardando documentação adicional'],
-              ['Analisadas','Guias com análise concluída'],
-              ['Liberadas','Guias com parecer de aprovação'],
-              ['Negadas','Guias com parecer de reprovação'],
-              ['Com OPME','Guias que contêm itens OPME'],
-              ['Cotação de OPME','Guias em processo de cotação'],
-              ['Baixa aderência','Guias com aderência à DUT abaixo do limiar'],
-              ['Tempo médio','Média de dias em auditoria no período'],
-              ['Etapa com gargalo','Etapa com maior concentração de guias paradas'],
+              ['Total de guias','Quantidade total de guias emitidas no período selecionado'],
+              ['Liberadas','Guias com parecer de aprovação, emitidas no período selecionado'],
+              ['Negadas','Guias com parecer de reprovação, emitidas no período selecionado'],
+              ['Com OPME','Guias que contêm itens OPME, emitidas no período selecionado'],
+              ['Baixa aderência','Guias com aderência à DUT abaixo do limiar, emitidas no período selecionado'],
+              ['Tempo médio (dias)','Média de dias em auditoria das guias do período selecionado'],
+              ['Etapa com gargalo','Etapa com maior tempo médio de permanência, considerando as guias do período selecionado'],
+            ]))+
+          manualBox('KPIs — Tempo Real',
+            '<p>Ignoram o seletor de período — sempre mostram o status atual do processo, no exato momento em que o Dashboard é visualizado.</p>'+
+            manualTable(['Indicador','Descrição'],[
+              ['Em análise','Guias com status "Em análise" neste momento'],
+              ['Em junta médica','Guias encaminhadas para junta médica, neste momento'],
+              ['Aguardando complemento','Guias aguardando documentação adicional, neste momento'],
+              ['Analisadas','Guias com análise concluída, neste momento'],
+              ['Cotação de OPME','Guias em processo de cotação de OPME, neste momento'],
             ]))+
           manualBox('Ações nos KPIs',
-            '<p>Clicar em qualquer card de KPI abre um modal com a <b>lista detalhada</b> das guias que compõem aquele indicador. A partir do modal é possível clicar em qualquer guia para abrir seus detalhes completos.</p>');
+            '<p>Clicar em qualquer card de KPI abre um modal com a <b>lista detalhada</b> das guias que compõem aquele indicador (respeitando a base do card — período ou tempo real). A partir do modal é possível clicar em qualquer guia para abrir seus detalhes completos.</p>');
       }
       else if(dtab==='gargalos'){
         dashContent=
@@ -11794,7 +11816,7 @@
       ' - Assistente IA: provedor (Gemini/Claude/OpenAI) + chave de API + modelo.\n'+
       'PARAMETRIZAÇÃO: selecione um fluxo e use as abas internas. Os PESOS do cálculo de aderência ficam na aba "Pesos IA" (ícone de cérebro) DENTRO do fluxo selecionado — lá há um campo de peso (0 a 10) para cada critério: Documental, DUT, Procedimentos, Pacotes, Mat/Med, Diárias/Taxas, Contratual/Histórico. As Regras DUT ficam na aba "Regras DUT". As vinculações (Procedimentos, Pacotes, Mat/Med, Diárias/Taxas) têm suas próprias abas, cada uma com campo de peso por item.\n'+
       'GUIAS: a relação tem filtros rápidos e o "Filtro aprofundado"; clicar numa guia abre o modal de detalhes com abas (Cabeçalho, Resumo, Beneficiário, Solicitação, Etapas, Procedimentos, Pacotes, Mat/Med, Diárias/Taxas, OPME, Anexos, Críticas, Parecer Técnico, Parecer Operadora, Obs. Impressas, Obs. Não Impressas, Histórico, Logs). O Resumo mostra beneficiário, prestador solicitante/executante, especialidade e os riscos. No rodapé do modal: botão "Reprocessar" e "Parecer da Operadora".\n'+
-      'DASHBOARD: KPIs clicáveis; o KPI "Etapa com gargalo" abre o "Ranking de Gargalos".\n';
+      'DASHBOARD: KPIs clicáveis; o KPI "Etapa com gargalo" abre o "Ranking de Gargalos". Os KPIs se dividem em "período" (Total de guias, Liberadas, Negadas, Com OPME, Baixa aderência, Tempo médio, Etapa com gargalo — respeitam o seletor de período do topo, padrão últimos 30 dias) e "tempo real" (Em análise, Em junta médica, Aguardando complemento, Analisadas, Cotação de OPME — sempre mostram o status atual, ignorando o período selecionado).\n';
 
     // Modo "Uso do sistema" — manual + dúvidas de usabilidade
     var CTX_SISTEMA=CTX_BASE+
