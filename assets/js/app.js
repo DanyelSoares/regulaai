@@ -6221,7 +6221,13 @@
                   'td{padding:7px 12px;border:1px solid #c8e6d4;vertical-align:top}'+
                   'tr:nth-child(even) td{background:#f2faf6}';
                 var header='<tr><th>Código</th><th>Descrição</th>'+(hasOpme?'<th>OPME</th>':'')+'<th>Peso (0-10)</th><th>Instrução IA</th>'+(temAnexos?'<th>Anexos Obrigatórios</th>':'')+'</tr>';
-                var rowsHtml=header;
+                var totalCols=2+(hasOpme?1:0)+1+1+(temAnexos?1:0);
+                var orientacoes=[
+                  'ORIENTAÇÕES DE PREENCHIMENTO — não apague esta linha nem o cabeçalho ao reimportar; adicione/edite apenas as linhas de código.',
+                  '• Instrução IA: texto livre, até 3000 caracteres. Descreva critérios de análise, exceções e o que a IA deve observar ao avaliar este item.',
+                  temAnexos?'• Anexos Obrigatórios: nomes dos documentos exigidos, separados por ponto e vírgula ( ; ) — NÃO use vírgula, pois o separador de coluna do arquivo CSV é a vírgula (ou ponto e vírgula) e isso quebraria a planilha. Ex.: Laudo médico assinado; Termo de consentimento':''
+                ].filter(Boolean).join(' ');
+                var rowsHtml=header+'<tr><td colspan="'+totalCols+'" style="background:#fff7e0;color:#7a5b00;font-style:italic;font-size:9.5pt">'+esc(orientacoes)+'</td></tr>';
                 d.forEach(function(r){
                   var cod=String(r.cod);
                   var cfg=State.vincConfig[vk+'|'+cod]||{};
@@ -6296,7 +6302,7 @@
                   // Build lookup map from existing data
                   var codMap={};
                   d.forEach(function(r){ codMap[String(r.cod).toLowerCase()]=String(r.cod); });
-                  var parsed=rows.slice(startRow).filter(function(r){return r[0]&&r[0].length>0;}).map(function(r){
+                  var parsed=rows.slice(startRow).filter(function(r){return r[0]&&r[0].length>0&&r[0].toUpperCase().indexOf('ORIENTAÇ')!==0&&r[0].toUpperCase().indexOf('ORIENTAC')!==0;}).map(function(r){
                     var cod=(r[0]||'').trim();
                     var instr=(r[instrCol]||'').trim();
                     var pesoRaw=(r[pesoCol]||'').trim();
