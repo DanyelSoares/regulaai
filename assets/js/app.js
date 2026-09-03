@@ -1780,6 +1780,75 @@
     obsImpressa:''
   };
   function _solicNovoItem(campos){ var o={qtd:1}; (campos||[]).forEach(function(c){o[c]='';}); return o; }
+
+  // ── Anexos obrigatórios por código (parametrizados em Parametrização → Procedimentos/Pacotes) ──
+  // Varre os itens de "procedimentos" e "pacotes" preenchidos na solicitação e retorna a lista
+  // deduplicada (por nome, case-insensitive) de anexos exigidos por pelo menos um dos códigos inseridos.
+  function _solicAnexosObrigPendentes(itensProc, itensPac){
+    var vistos={}, lista=[];
+    function coletar(itens, vk){
+      (itens||[]).forEach(function(it){
+        if(!it.codigo) return;
+        var cfg=State.vincConfig[vk+'|'+it.codigo];
+        var arr=(cfg&&cfg.anexosObrig)||[];
+        arr.forEach(function(nome){
+          var k=nome.toLowerCase();
+          if(!vistos[k]){ vistos[k]=true; lista.push(nome); }
+        });
+      });
+    }
+    coletar(itensProc,'proc');
+    coletar(itensPac,'pac');
+    return lista;
+  }
+
+  // Monta o HTML da seção de Anexos: um slot nomeado (com *) por anexo obrigatório pendente dos códigos
+  // inseridos, seguido pelos slots genéricos remanescentes até completar 6 no total (mínimo 1 genérico).
+  // idPrefix identifica os inputs por tela (siAnexo/soAnexo/sqAnexo/spAnexo/seAnexo).
+  function _solicAnexosSecaoHTML(idPrefix, anexosObrig, anexosArquivos){
+    var nomeados=anexosObrig.map(function(nome,i){
+      var temArquivo=!!(anexosArquivos&&anexosArquivos[nome]);
+      return '<div class="solic-anexo-row solic-anexo-obrig'+(temArquivo?' solic-anexo-ok':'')+'">'+
+        '<label class="btn ghost sm">Escolher arquivo<input type="file" class="solic-anexo-obrig-inp" data-nome="'+esc(nome)+'" id="'+idPrefix+'ObrigInp'+i+'" style="display:none"></label>'+
+        '<span class="solic-anexo-nome-obrig">'+esc(nome)+' <span class="solic-obrig-ast">*</span></span>'+
+        '<span class="solic-anexo-status" id="'+idPrefix+'ObrigStatus'+i+'">'+(temArquivo?ico('check-circle-2',13):'Nenhum arquivo escolhido')+'</span>'+
+      '</div>';
+    }).join('');
+    var qtdGenericos=Math.max(1,6-anexosObrig.length);
+    var genericos=[];
+    for(var i=0;i<qtdGenericos;i++){
+      genericos.push('<div class="solic-anexo-row"><label class="btn ghost sm">Escolher arquivo<input type="file" id="'+idPrefix+i+'" style="display:none"></label><span id="'+idPrefix+i+'Nome" class="solic-anexo-nome">Nenhum arquivo escolhido</span></div>');
+    }
+    return nomeados+genericos.join('');
+  }
+
+  // Liga os eventos dos slots nomeados (obrigatórios) de uma seção de Anexos e retorna um getter
+  // do estado atual {nome: File} para a validação do botão Autorizar consultar a qualquer momento.
+  function _solicLigarAnexosObrig(wrap, idPrefix, anexosObrig, onMudou){
+    var arquivos={};
+    anexosObrig.forEach(function(nome,i){
+      var inp=wrap.querySelector('#'+idPrefix+'ObrigInp'+i);
+      if(!inp) return;
+      inp.onchange=function(){
+        var f=inp.files&&inp.files[0];
+        var statusEl=wrap.querySelector('#'+idPrefix+'ObrigStatus'+i);
+        var rowEl=inp.closest('.solic-anexo-row');
+        if(f){ arquivos[nome]=f; if(statusEl) statusEl.innerHTML=ico('check-circle-2',13); if(rowEl) rowEl.classList.add('solic-anexo-ok'); }
+        else { delete arquivos[nome]; if(statusEl) statusEl.textContent='Nenhum arquivo escolhido'; if(rowEl) rowEl.classList.remove('solic-anexo-ok'); }
+        lcIcons();
+        if(onMudou) onMudou(arquivos);
+      };
+    });
+    return arquivos;
+  }
+
+  // Habilita/desabilita o botão Autorizar conforme todos os anexos obrigatórios pendentes tenham arquivo.
+  function _solicAtualizarBotaoAutorizar(btnEl, anexosObrig, arquivos){
+    if(!btnEl) return;
+    var faltam=anexosObrig.filter(function(nome){ return !arquivos[nome]; });
+    btnEl.disabled=faltam.length>0;
+    btnEl.title=faltam.length?('Anexe: '+faltam.join(', ')):'';
+  }
   // Especificação do material / Observações do OPME só fazem sentido (e só são obrigatórias) quando há ao menos um OPME adicionado
   function _solicTemOpme(s){ return (s.opmes||[]).some(function(it){return it.codigo;}); }
 
@@ -1894,9 +1963,7 @@
         '<textarea id="siObsOpme" rows="2"'+(_solicTemOpme(s)?'':' disabled placeholder="Disponível apenas quando houver OPME adicionado"')+'>'+esc(s.obsOpme)+'</textarea></div>'+
 
       '<div class="solic-sec-hd">Anexos</div>'+
-      '<div class="solic-anexos">'+
-        [0,1,2,3,4,5].map(function(i){ return '<div class="solic-anexo-row"><label class="btn ghost sm">Escolher arquivo<input type="file" id="siAnexo'+i+'" style="display:none"></label><span id="siAnexo'+i+'Nome" class="solic-anexo-nome">Nenhum arquivo escolhido</span></div>'; }).join('')+
-      '</div>'+
+      '<div class="solic-anexos" id="siAnexosWrap">'+_solicAnexosSecaoHTML('siAnexo',_solicAnexosObrigPendentes(s.procedimentos,s.pacotes))+'</div>'+
 
       '<div class="solic-sec-hd">Observação impressa / Justificativa da guia</div>'+
       '<div class="field"><textarea id="siObsImpressa" maxlength="2000" rows="4">'+esc(s.obsImpressa)+'</textarea>'+
@@ -1967,6 +2034,7 @@
 
     _ligarSolicSecoes(wrap);
     _atualizarCamposOpme(wrap);
+    if(s._siAtualizarAnexos) s._siAtualizarAnexos();
   }
 
   // Habilita/exige "Especificação do material" e "Observações/Justificativa do OPME" somente quando
@@ -2028,6 +2096,7 @@
       inp.onchange=function(){
         var chave=inp.getAttribute('data-chave'), idx=+inp.getAttribute('data-idx');
         s[chave][idx].codigo=inp.value.trim().toUpperCase();
+        if(s._siAtualizarAnexos) s._siAtualizarAnexos();
       };
     });
     $$('.solic-it-buscabtn',host).forEach(function(b){
@@ -2271,13 +2340,29 @@
     var obsImp=$('#siObsImpressa'), obsCount=$('#siObsImpressaCount');
     obsImp.addEventListener('input',function(){ s.obsImpressa=this.value; obsCount.textContent=this.value.length+' de 2000 caracteres'; });
 
-    for(var i=0;i<6;i++){
-      (function(idx){
-        var inp=$('#siAnexo'+idx), lbl=$('#siAnexo'+idx+'Nome');
-        if(!inp) return;
-        inp.onchange=function(){ lbl.textContent=inp.files&&inp.files[0]?inp.files[0].name:'Nenhum arquivo escolhido'; };
-      })(i);
+    // Reconstrói a seção de Anexos (slots nomeados obrigatórios + genéricos restantes) sempre que os
+    // Procedimentos/Pacotes mudam, e revalida o botão Autorizar conforme os anexos exigidos pendentes.
+    function _siAtualizarAnexos(){
+      var anexosObrig=_solicAnexosObrigPendentes(s.procedimentos,s.pacotes);
+      var anexosWrap=$('#siAnexosWrap');
+      if(!anexosWrap) return;
+      anexosWrap.innerHTML=_solicAnexosSecaoHTML('siAnexo',anexosObrig);
+      lcIcons();
+      var qtdGenericos=Math.max(1,6-anexosObrig.length);
+      for(var i=0;i<qtdGenericos;i++){
+        (function(idx){
+          var inp=$('#siAnexo'+idx), lbl=$('#siAnexo'+idx+'Nome');
+          if(!inp) return;
+          inp.onchange=function(){ lbl.textContent=inp.files&&inp.files[0]?inp.files[0].name:'Nenhum arquivo escolhido'; };
+        })(i);
+      }
+      var btn=$('#siAutorizarBtn');
+      var arquivosObrig=_solicLigarAnexosObrig(wrap,'siAnexo',anexosObrig,function(arq){ _solicAtualizarBotaoAutorizar(btn,anexosObrig,arq); });
+      _solicAtualizarBotaoAutorizar(btn,anexosObrig,arquivosObrig);
+      s._anexosObrigArquivos=arquivosObrig; // consultado na validação final do Autorizar
     }
+    _siAtualizarAnexos();
+    s._siAtualizarAnexos=_siAtualizarAnexos; // exposto para _renderSolicSecoes chamar após alterar itens
 
     $('#siAutorizarBtn').onclick=function(){ _autorizarSolicitacaoInternacao(); };
 
@@ -2293,6 +2378,10 @@
 
   function _autorizarSolicitacaoInternacao(){
     var s=_solicInt;
+    // Anexos obrigatórios dos códigos de Procedimentos/Pacotes inseridos (parametrizados em Parametrização)
+    var anexosObrig=_solicAnexosObrigPendentes(s.procedimentos,s.pacotes);
+    var faltamAnexos=anexosObrig.filter(function(nome){ return !(s._anexosObrigArquivos&&s._anexosObrigArquivos[nome]); });
+    if(faltamAnexos.length){ toast('Anexe os documentos obrigatórios: '+faltamAnexos.join(', ')+'.','err'); return; }
     // Campos marcados com * no formulário (rótulo vermelho) — validação alinhada à sinalização visual
     if(!s.benef){ toast('Selecione o beneficiário (Código/Nome do beneficiário).','err'); return; }
     if(!s.celContato.trim()){ toast('Informe o Cel. contato Benef.','err'); return; }
@@ -2794,9 +2883,7 @@
       '<div class="field"><label>Observações / Justificativa do OPME</label><textarea id="sqObsOpme" rows="2" disabled placeholder="Disponível apenas quando houver OPME adicionado">'+esc(s.obsOpme)+'</textarea></div>'+
 
       '<div class="solic-sec-hd">Anexos complementares</div>'+
-      '<div class="solic-anexos">'+
-        [0,1,2,3,4,5].map(function(i){ return '<div class="solic-anexo-row"><label class="btn ghost sm">Escolher arquivo<input type="file" id="sqAnexo'+i+'" style="display:none"></label><span id="sqAnexo'+i+'Nome" class="solic-anexo-nome">Nenhum arquivo escolhido</span></div>'; }).join('')+
-      '</div>'+
+      '<div class="solic-anexos" id="sqAnexosWrap">'+_solicAnexosSecaoHTML('sqAnexo',_solicAnexosObrigPendentes(s.procedimentos,null))+'</div>'+
 
       '<div class="solic-sec-hd">Observação impressa / Justificativa da guia</div>'+
       '<div class="field"><textarea id="sqObsImpressa" maxlength="2000" rows="4">'+esc(s.obsImpressa)+'</textarea>'+
@@ -2940,7 +3027,11 @@
       sel.onchange=function(){ var chave=sel.getAttribute('data-chave'), idx=+sel.getAttribute('data-idx'); s[chave][idx].unidMedida=sel.value; };
     });
     $$('.solic-it-codigo',host).forEach(function(inp){
-      inp.onchange=function(){ var chave=inp.getAttribute('data-chave'), idx=+inp.getAttribute('data-idx'); s[chave][idx].codigo=inp.value.trim().toUpperCase(); };
+      inp.onchange=function(){
+        var chave=inp.getAttribute('data-chave'), idx=+inp.getAttribute('data-idx');
+        s[chave][idx].codigo=inp.value.trim().toUpperCase();
+        if(s._sqAtualizarAnexos) s._sqAtualizarAnexos();
+      };
     });
     $$('.solic-it-buscabtn',host).forEach(function(b){
       b.onclick=function(){
@@ -2955,6 +3046,7 @@
     });
 
     _atualizarCamposOpmeQuimio(wrap);
+    if(s._sqAtualizarAnexos) s._sqAtualizarAnexos();
   }
 
   function _ligarSolicitacaoQuimio(wrap){
@@ -3067,13 +3159,27 @@
     var obsImpEl=$('#sqObsImpressa'), obsImpCount=$('#sqObsImpressaCount');
     obsImpEl.addEventListener('input',function(){ s.obsImpressa=this.value; obsImpCount.textContent=this.value.length+' de 2000 caracteres'; });
 
-    for(var i=0;i<6;i++){
-      (function(idx){
-        var inp=$('#sqAnexo'+idx), lbl=$('#sqAnexo'+idx+'Nome');
-        if(!inp) return;
-        inp.onchange=function(){ lbl.textContent=inp.files&&inp.files[0]?inp.files[0].name:'Nenhum arquivo escolhido'; };
-      })(i);
+    function _sqAtualizarAnexos(){
+      var anexosObrig=_solicAnexosObrigPendentes(s.procedimentos,null);
+      var anexosWrap=$('#sqAnexosWrap');
+      if(!anexosWrap) return;
+      anexosWrap.innerHTML=_solicAnexosSecaoHTML('sqAnexo',anexosObrig);
+      lcIcons();
+      var qtdGenericos=Math.max(1,6-anexosObrig.length);
+      for(var i=0;i<qtdGenericos;i++){
+        (function(idx){
+          var inp=$('#sqAnexo'+idx), lbl=$('#sqAnexo'+idx+'Nome');
+          if(!inp) return;
+          inp.onchange=function(){ lbl.textContent=inp.files&&inp.files[0]?inp.files[0].name:'Nenhum arquivo escolhido'; };
+        })(i);
+      }
+      var btn=$('#sqAutorizarBtn');
+      var arquivosObrig=_solicLigarAnexosObrig(wrap,'sqAnexo',anexosObrig,function(arq){ _solicAtualizarBotaoAutorizar(btn,anexosObrig,arq); });
+      _solicAtualizarBotaoAutorizar(btn,anexosObrig,arquivosObrig);
+      s._anexosObrigArquivos=arquivosObrig;
     }
+    _sqAtualizarAnexos();
+    s._sqAtualizarAnexos=_sqAtualizarAnexos;
 
     $('#sqAutorizarBtn').onclick=function(){ _autorizarSolicitacaoQuimio(); };
 
@@ -3088,6 +3194,9 @@
 
   function _autorizarSolicitacaoQuimio(){
     var s=_solicQuimio;
+    var anexosObrig=_solicAnexosObrigPendentes(s.procedimentos,null);
+    var faltamAnexos=anexosObrig.filter(function(nome){ return !(s._anexosObrigArquivos&&s._anexosObrigArquivos[nome]); });
+    if(faltamAnexos.length){ toast('Anexe os documentos obrigatórios: '+faltamAnexos.join(', ')+'.','err'); return; }
     if(!s.benef){ toast('Selecione o beneficiário (Código/Nome do beneficiário).','err'); return; }
     if(!s.numGuiaRef){ toast('Informe o Nº da guia referenciada.','err'); return; }
     if(!s.cid1.trim()){ toast('Informe o CID 10 Principal.','err'); return; }
@@ -3278,9 +3387,7 @@
       '<div id="spSecoes"></div>'+
 
       '<div class="solic-sec-hd">Anexos</div>'+
-      '<div class="solic-anexos">'+
-        [0,1,2,3,4,5].map(function(i){ return '<div class="solic-anexo-row"><label class="btn ghost sm">Escolher arquivo<input type="file" id="spAnexo'+i+'" style="display:none"></label><span id="spAnexo'+i+'Nome" class="solic-anexo-nome">Nenhum arquivo escolhido</span></div>'; }).join('')+
-      '</div>'+
+      '<div class="solic-anexos" id="spAnexosWrap">'+_solicAnexosSecaoHTML('spAnexo',_solicAnexosObrigPendentes(s.procedimentos,s.pacotes))+'</div>'+
 
       '<div class="solic-sec-hd">Observações da guia</div>'+
       '<div class="field"><textarea id="spObsGuia" maxlength="2000" rows="4">'+esc(s.obsGuia)+'</textarea>'+
@@ -3376,7 +3483,11 @@
       sel.onchange=function(){ var chave=sel.getAttribute('data-chave'), idx=+sel.getAttribute('data-idx'); s[chave][idx].fornecedor=sel.value; };
     });
     $$('.solic-it-codigo',host).forEach(function(inp){
-      inp.onchange=function(){ var chave=inp.getAttribute('data-chave'), idx=+inp.getAttribute('data-idx'); s[chave][idx].codigo=inp.value.trim().toUpperCase(); };
+      inp.onchange=function(){
+        var chave=inp.getAttribute('data-chave'), idx=+inp.getAttribute('data-idx');
+        s[chave][idx].codigo=inp.value.trim().toUpperCase();
+        if(s._spAtualizarAnexos) s._spAtualizarAnexos();
+      };
     });
     $$('.solic-it-buscabtn',host).forEach(function(b){
       b.onclick=function(){
@@ -3388,6 +3499,7 @@
         });
       };
     });
+    if(s._spAtualizarAnexos) s._spAtualizarAnexos();
   }
 
   function _ligarSolicitacaoProrrogacao(wrap){
@@ -3427,13 +3539,27 @@
     var obsGuiaEl=$('#spObsGuia'), obsGuiaCount=$('#spObsGuiaCount');
     obsGuiaEl.addEventListener('input',function(){ s.obsGuia=this.value; obsGuiaCount.textContent=this.value.length+' de 2000 caracteres'; });
 
-    for(var i=0;i<6;i++){
-      (function(idx){
-        var inp=$('#spAnexo'+idx), lbl=$('#spAnexo'+idx+'Nome');
-        if(!inp) return;
-        inp.onchange=function(){ lbl.textContent=inp.files&&inp.files[0]?inp.files[0].name:'Nenhum arquivo escolhido'; };
-      })(i);
+    function _spAtualizarAnexos(){
+      var anexosObrig=_solicAnexosObrigPendentes(s.procedimentos,s.pacotes);
+      var anexosWrap=$('#spAnexosWrap');
+      if(!anexosWrap) return;
+      anexosWrap.innerHTML=_solicAnexosSecaoHTML('spAnexo',anexosObrig);
+      lcIcons();
+      var qtdGenericos=Math.max(1,6-anexosObrig.length);
+      for(var i=0;i<qtdGenericos;i++){
+        (function(idx){
+          var inp=$('#spAnexo'+idx), lbl=$('#spAnexo'+idx+'Nome');
+          if(!inp) return;
+          inp.onchange=function(){ lbl.textContent=inp.files&&inp.files[0]?inp.files[0].name:'Nenhum arquivo escolhido'; };
+        })(i);
+      }
+      var btn=$('#spAutorizarBtn');
+      var arquivosObrig=_solicLigarAnexosObrig(wrap,'spAnexo',anexosObrig,function(arq){ _solicAtualizarBotaoAutorizar(btn,anexosObrig,arq); });
+      _solicAtualizarBotaoAutorizar(btn,anexosObrig,arquivosObrig);
+      s._anexosObrigArquivos=arquivosObrig;
     }
+    _spAtualizarAnexos();
+    s._spAtualizarAnexos=_spAtualizarAnexos;
 
     $('#spAutorizarBtn').onclick=function(){ _autorizarSolicitacaoProrrogacao(); };
 
@@ -3448,6 +3574,9 @@
 
   function _autorizarSolicitacaoProrrogacao(){
     var s=_solicProrrog;
+    var anexosObrig=_solicAnexosObrigPendentes(s.procedimentos,s.pacotes);
+    var faltamAnexos=anexosObrig.filter(function(nome){ return !(s._anexosObrigArquivos&&s._anexosObrigArquivos[nome]); });
+    if(faltamAnexos.length){ toast('Anexe os documentos obrigatórios: '+faltamAnexos.join(', ')+'.','err'); return; }
     if(!s.guiaPrincipal){ toast('Localize a guia principal antes de autorizar.','err'); return; }
     if(!s.hipoteseDiagnostica.trim()){ toast('Informe a Hipótese diagnóstica.','err'); return; }
     var todosItens=[].concat(s.procedimentos,s.pacotes,s.taxas,s.matmed,s.opmes);
@@ -3610,9 +3739,7 @@
       '<div id="seSecoes"></div>'+
 
       '<div class="solic-sec-hd">Anexos</div>'+
-      '<div class="solic-anexos">'+
-        [0,1,2,3,4,5].map(function(i){ return '<div class="solic-anexo-row"><label class="btn ghost sm">Escolher arquivo<input type="file" id="seAnexo'+i+'" style="display:none"></label><span id="seAnexo'+i+'Nome" class="solic-anexo-nome">Nenhum arquivo escolhido</span></div>'; }).join('')+
-      '</div>'+
+      '<div class="solic-anexos" id="seAnexosWrap">'+_solicAnexosSecaoHTML('seAnexo',_solicAnexosObrigPendentes(s.procedimentos,s.pacotes))+'</div>'+
 
       '<div class="solic-sec-hd">Observação impressa / Justificativa da guia</div>'+
       '<div class="field"><textarea id="seObsImpressa" maxlength="2000" rows="4">'+esc(s.obsImpressa)+'</textarea>'+
@@ -3687,6 +3814,7 @@
         if(chave==='opmes'){ novo.tabela='00'; novo.fornecedor='Selec'; }
         s[chave].push(novo);
         _renderSolicExamesSecoes(wrap);
+        if(s._seAtualizarAnexos) s._seAtualizarAnexos();
       };
     });
     $$('.solic-it-del',host).forEach(function(b){
@@ -3694,6 +3822,7 @@
         var chave=b.getAttribute('data-chave'), idx=+b.getAttribute('data-idx');
         s[chave].splice(idx,1);
         _renderSolicExamesSecoes(wrap);
+        if(s._seAtualizarAnexos) s._seAtualizarAnexos();
       };
     });
     $$('.solic-it-qtd',host).forEach(function(inp){
@@ -3706,7 +3835,11 @@
       sel.onchange=function(){ var chave=sel.getAttribute('data-chave'), idx=+sel.getAttribute('data-idx'); s[chave][idx].fornecedor=sel.value; };
     });
     $$('.solic-it-codigo',host).forEach(function(inp){
-      inp.onchange=function(){ var chave=inp.getAttribute('data-chave'), idx=+inp.getAttribute('data-idx'); s[chave][idx].codigo=inp.value.trim().toUpperCase(); };
+      inp.onchange=function(){
+        var chave=inp.getAttribute('data-chave'), idx=+inp.getAttribute('data-idx');
+        s[chave][idx].codigo=inp.value.trim().toUpperCase();
+        if(s._seAtualizarAnexos) s._seAtualizarAnexos();
+      };
     });
     $$('.solic-it-buscabtn',host).forEach(function(b){
       b.onclick=function(){
@@ -3715,6 +3848,7 @@
           s[chave][idx].codigo=item.cod;
           s[chave][idx].descricao=item.desc;
           _renderSolicExamesSecoes(wrap);
+          if(s._seAtualizarAnexos) s._seAtualizarAnexos();
         });
       };
     });
@@ -3789,13 +3923,29 @@
     var obsImpEl=$('#seObsImpressa'), obsImpCount=$('#seObsImpressaCount');
     obsImpEl.addEventListener('input',function(){ s.obsImpressa=this.value; obsImpCount.textContent=this.value.length+' de 2000 caracteres'; });
 
-    for(var i=0;i<6;i++){
-      (function(idx){
-        var inp=$('#seAnexo'+idx), lbl=$('#seAnexo'+idx+'Nome');
-        if(!inp) return;
-        inp.onchange=function(){ lbl.textContent=inp.files&&inp.files[0]?inp.files[0].name:'Nenhum arquivo escolhido'; };
-      })(i);
+    function _seAtualizarAnexos(){
+      var anexosObrig=_solicAnexosObrigPendentes(s.procedimentos,s.pacotes);
+      var wrapEl=wrap.querySelector('#seAnexosWrap');
+      if(!wrapEl) return;
+      wrapEl.innerHTML=_solicAnexosSecaoHTML('seAnexo',anexosObrig,s._anexosObrigArquivos);
+      var qtdGenericos=Math.max(1,6-anexosObrig.length);
+      for(var i=0;i<qtdGenericos;i++){
+        (function(idx){
+          var inp=wrap.querySelector('#seAnexo'+idx), lbl=wrap.querySelector('#seAnexo'+idx+'Nome');
+          if(!inp) return;
+          inp.onchange=function(){ lbl.textContent=inp.files&&inp.files[0]?inp.files[0].name:'Nenhum arquivo escolhido'; };
+        })(i);
+      }
+      var btnEl=wrap.querySelector('#seAutorizarBtn');
+      s._anexosObrigArquivos=_solicLigarAnexosObrig(wrap,'seAnexo',anexosObrig,function(arquivos){
+        s._anexosObrigArquivos=arquivos;
+        _solicAtualizarBotaoAutorizar(btnEl,anexosObrig,arquivos);
+      });
+      _solicAtualizarBotaoAutorizar(btnEl,anexosObrig,s._anexosObrigArquivos);
+      lcIcons();
     }
+    s._seAtualizarAnexos=_seAtualizarAnexos;
+    _seAtualizarAnexos();
 
     $('#seAutorizarBtn').onclick=function(){ _autorizarSolicitacaoExames(); };
 
@@ -3810,6 +3960,9 @@
 
   function _autorizarSolicitacaoExames(){
     var s=_solicExames;
+    var anexosObrig=_solicAnexosObrigPendentes(s.procedimentos,s.pacotes);
+    var faltamAnexos=anexosObrig.filter(function(nome){ return !(s._anexosObrigArquivos&&s._anexosObrigArquivos[nome]); });
+    if(faltamAnexos.length){ toast('Anexe os documentos obrigatórios: '+faltamAnexos.join(', ')+'.','err'); return; }
     if(!s.benef){ toast('Selecione o beneficiário (Código do beneficiário).','err'); return; }
     if(!s.solicitante){ toast('Selecione o Solicitante.','err'); return; }
     if(!s.especSolic){ toast('Selecione a Especialidade solicitante.','err'); return; }
@@ -5632,10 +5785,12 @@
           }).join('')+PROC_SELECTS.map(function(s){
             return '<th style="width:'+s.width+'">'+s.label+'</th>';
           }).join('');
+          var _temAnexosObrigCol=(vkey==='proc'||vkey==='pac');
           tv.innerHTML='<thead><tr>'+thCols+
             '<th style="width:70px;text-align:center">Peso</th>'+
             '<th style="width:90px;text-align:center">Status</th>'+
             '<th style="width:140px;text-align:center">Instrução IA</th>'+
+            (_temAnexosObrigCol?'<th style="width:140px;text-align:center">Anexos Obrig.</th>':'')+
             '</tr></thead>';
           var tbv=el('tbody');
           // Helper — botão Instrução IA idêntico ao padrão DUT/Documental
@@ -5644,12 +5799,19 @@
               (hasInstr?'background:var(--g-100);color:var(--g-700);border-color:var(--g-300)':'background:#fff;color:var(--muted);border-color:var(--g-200)')+'">'+
               ico('sparkles',11)+' '+(hasInstr?'Ler instrução':'Adicionar')+'</button>';
           }
+          // Helper — botão Anexos Obrigatórios (mesmo padrão visual, cor de alerta quando há exigências cadastradas)
+          function _vincAnexosBtn(vk,cod,qtd){
+            return '<button class="vinc-anexos-btn" data-vkey="'+vk+'" data-cod="'+esc(cod)+'" style="font-size:11px;padding:3px 10px;border-radius:12px;border:1.5px solid;cursor:pointer;font-weight:600;white-space:nowrap;'+
+              (qtd?'background:#fff7e0;color:#92400e;border-color:#f0dca0':'background:#fff;color:var(--muted);border-color:var(--g-200)')+'">'+
+              ico('paperclip',11)+' '+(qtd?qtd+' anexo(s)':'Adicionar')+'</button>';
+          }
           data.forEach(function(r){
             var cfg_key=vkey+'|'+r.cod;
             var cfg=State.vincConfig[cfg_key]||{};
             var peso=cfg.peso!=null?cfg.peso:r.peso;
             var status=cfg.status||'ativo';
             var instr=cfg.instr||'';
+            var anexosObrig=cfg.anexosObrig||[];
             var trv=el('tr');
             var staticCols=cols.map(function(c){
               var val=r[c];
@@ -5668,7 +5830,8 @@
             trv.innerHTML=staticCols+procSelCols+
               '<td style="text-align:center"><input type="number" class="vinc-peso" min="0" max="10" data-vkey="'+vkey+'" data-cod="'+esc(r.cod)+'" value="'+peso+'" style="width:52px;text-align:center;border:1.5px solid var(--g-200);border-radius:6px;padding:3px 5px;font-size:12px"></td>'+
               '<td style="text-align:center"><button class="vinc-status-btn '+(status==='ativo'?'active':'')+'" data-vkey="'+vkey+'" data-cod="'+esc(r.cod)+'" data-status="'+status+'" style="font-size:11px;padding:3px 10px;border-radius:12px;border:1.5px solid;cursor:pointer;font-weight:600;background:'+(status==='ativo'?'var(--g-700)':'#fff')+';color:'+(status==='ativo'?'#fff':'var(--muted)')+';border-color:'+(status==='ativo'?'var(--g-700)':'var(--g-200)')+'">'+esc(status==='ativo'?'Ativo':'Inativo')+'</button></td>'+
-              '<td style="text-align:center">'+_vincInstrBtn(vkey,r.cod,!!instr)+'</td>';
+              '<td style="text-align:center">'+_vincInstrBtn(vkey,r.cod,!!instr)+'</td>'+
+              (_temAnexosObrigCol?'<td style="text-align:center">'+_vincAnexosBtn(vkey,r.cod,anexosObrig.length)+'</td>':'');
             tbv.appendChild(trv);
           });
           tv.appendChild(tbv); box.appendChild(tv);
@@ -5709,6 +5872,68 @@
                 lcIcons();
               };
               setTimeout(function(){ mta.focus(); mta.setSelectionRange(mta.value.length,mta.value.length); },50);
+              return;
+            }
+            // Anexos Obrigatórios — abre modal com lista editável de nomes de anexo exigidos para o item
+            var aBtn=e.target.closest('.vinc-anexos-btn');
+            if(aBtn){
+              var vkA=aBtn.getAttribute('data-vkey'), codA=aBtn.getAttribute('data-cod');
+              var kA=vkA+'|'+codA;
+              var descTdA=aBtn.closest('tr').cells[1];
+              var descTxtA=descTdA?descTdA.textContent.trim():codA;
+              var listaAtual=(State.vincConfig[kA]&&State.vincConfig[kA].anexosObrig)||[];
+              function renderListaAnexos(lista){
+                return lista.length?lista.map(function(nome,i){
+                  return '<div class="vinc-anexo-item" data-idx="'+i+'" style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--g-100);border-radius:7px;margin-bottom:6px;background:var(--g-50)">'+
+                    '<span style="flex:1;font-size:13px;color:var(--ink)">'+esc(nome)+'</span>'+
+                    '<button type="button" class="vinc-anexo-del" data-idx="'+i+'" style="border:none;background:transparent;color:#dc2626;cursor:pointer;padding:2px">'+ico('trash-2',13)+'</button>'+
+                  '</div>';
+                }).join('') : '<div style="font-size:12.5px;color:var(--muted);padding:8px 0">Nenhum anexo obrigatório cadastrado para este item.</div>';
+              }
+              var bodyHTMLA=
+                '<div style="margin-bottom:10px;font-size:12.5px;color:var(--muted)">Item: <b>'+esc(descTxtA)+'</b></div>'+
+                '<div id="vincAnexosLista">'+renderListaAnexos(listaAtual)+'</div>'+
+                '<div style="display:flex;gap:8px;margin-top:10px">'+
+                  '<input type="text" id="vincAnexoNovoInput" placeholder="Ex.: Laudo médico assinado" style="flex:1;border:1.5px solid var(--g-200);border-radius:7px;padding:8px 10px;font-size:13px">'+
+                  '<button type="button" class="btn ghost" id="vincAnexoAddBtn">'+ico('plus',13)+' Adicionar</button>'+
+                '</div>';
+              var footHTMLA='<button class="btn ghost" id="vincAnexosCancel">'+ico('x',13)+' Fechar</button>'+
+                '<button class="btn" id="vincAnexosSave">'+ico('save',13)+' Salvar</button>';
+              var mA=modal(ico('paperclip')+' Anexos Obrigatórios','Documentos exigidos para autorizar solicitações com este item',bodyHTMLA,footHTMLA);
+              var listaLocal=listaAtual.slice(); // cópia de trabalho — só persiste ao clicar Salvar
+              var listaEl=mA.querySelector('#vincAnexosLista');
+              var novoInp=mA.querySelector('#vincAnexoNovoInput');
+              function redraw(){ listaEl.innerHTML=renderListaAnexos(listaLocal); lcIcons(); }
+              function addItem(){
+                var v=novoInp.value.trim();
+                if(!v) return;
+                if(listaLocal.some(function(x){return x.toLowerCase()===v.toLowerCase();})){ toast('Este anexo já está na lista.','warn'); return; }
+                listaLocal.push(v);
+                novoInp.value='';
+                redraw();
+              }
+              mA.querySelector('#vincAnexoAddBtn').onclick=addItem;
+              novoInp.addEventListener('keydown',function(ev){ if(ev.key==='Enter'){ ev.preventDefault(); addItem(); } });
+              listaEl.addEventListener('click',function(ev){
+                var delB=ev.target.closest('.vinc-anexo-del');
+                if(!delB) return;
+                listaLocal.splice(+delB.getAttribute('data-idx'),1);
+                redraw();
+              });
+              mA.querySelector('#vincAnexosCancel').onclick=function(){ mA.closest('.modal-backdrop').remove(); };
+              mA.querySelector('#vincAnexosSave').onclick=function(){
+                if(!State.vincConfig[kA]) State.vincConfig[kA]={};
+                State.vincConfig[kA].anexosObrig=listaLocal.slice();
+                localStorage.setItem('regula_vinc_cfg',JSON.stringify(State.vincConfig));
+                aBtn.innerHTML=ico('paperclip',11)+' '+(listaLocal.length?listaLocal.length+' anexo(s)':'Adicionar');
+                aBtn.style.background=listaLocal.length?'#fff7e0':'#fff';
+                aBtn.style.color=listaLocal.length?'#92400e':'var(--muted)';
+                aBtn.style.borderColor=listaLocal.length?'#f0dca0':'var(--g-200)';
+                mA.closest('.modal-backdrop').remove();
+                toast('Anexos obrigatórios salvos','ok');
+                lcIcons();
+              };
+              setTimeout(function(){ novoInp.focus(); },50);
               return;
             }
             // Status toggle
@@ -5755,28 +5980,29 @@
             var _vfInput=el('input',{type:'file',accept:'.csv,.xls,.xlsx',style:'display:none'});
             var _btnExp=el('button',{class:'btn ghost',style:'display:flex;align-items:center;gap:6px;font-size:12.5px',title:'Exportar lista com instruções IA cadastradas'},
               ico('download',14)+' Exportar planilha');
-            var _btnImp=el('button',{class:'btn ghost',style:'display:flex;align-items:center;gap:6px;font-size:12.5px',title:'Importar instruções IA de uma planilha preenchida'},
-              ico('upload',14)+' Importar instruções IA');
+            var _btnImp=el('button',{class:'btn ghost',style:'display:flex;align-items:center;gap:6px;font-size:12.5px',title:_temAnexosObrigCol?'Importar instruções IA e anexos obrigatórios de uma planilha preenchida':'Importar instruções IA de uma planilha preenchida'},
+              ico('upload',14)+(_temAnexosObrigCol?' Importar instruções + anexos':' Importar instruções IA'));
             _vincToolbar=el('div',{style:'display:flex;align-items:center;gap:8px;padding:10px 12px 0;flex-wrap:wrap'});
             _vincToolbar.appendChild(_btnExp);
             _vincToolbar.appendChild(_btnImp);
             _vincToolbar.appendChild(_vfInput);
 
             // Export
-            (function(vk,d,hasOpme,fname,tlabel){
+            (function(vk,d,hasOpme,fname,tlabel,temAnexos){
               _btnExp.onclick=function(){
                 var css2='table{border-collapse:collapse;font-family:Calibri,sans-serif;font-size:11pt}'+
                   'th{background:#0a8a43;color:#fff;padding:8px 12px;border:1px solid #066b34;font-weight:700;text-align:left}'+
                   'td{padding:7px 12px;border:1px solid #c8e6d4;vertical-align:top}'+
                   'tr:nth-child(even) td{background:#f2faf6}';
-                var header='<tr><th>Código</th><th>Descrição</th>'+(hasOpme?'<th>OPME</th>':'')+'<th>Peso (0-10)</th><th>Instrução IA</th></tr>';
+                var header='<tr><th>Código</th><th>Descrição</th>'+(hasOpme?'<th>OPME</th>':'')+'<th>Peso (0-10)</th><th>Instrução IA</th>'+(temAnexos?'<th>Anexos Obrigatórios</th>':'')+'</tr>';
                 var rowsHtml=header;
                 d.forEach(function(r){
                   var cod=String(r.cod);
                   var cfg=State.vincConfig[vk+'|'+cod]||{};
                   var instr=cfg.instr||'';
                   var peso=cfg.peso!=null?cfg.peso:r.peso!=null?r.peso:'';
-                  rowsHtml+='<tr><td>'+esc(cod)+'</td><td>'+esc(r.desc||'')+'</td>'+(hasOpme?'<td>'+esc(r.opme?'Sim':'Não')+'</td>':'')+'<td>'+esc(String(peso))+'</td><td>'+esc(instr)+'</td></tr>';
+                  var anexosTxt=(cfg.anexosObrig||[]).join('; ');
+                  rowsHtml+='<tr><td>'+esc(cod)+'</td><td>'+esc(r.desc||'')+'</td>'+(hasOpme?'<td>'+esc(r.opme?'Sim':'Não')+'</td>':'')+'<td>'+esc(String(peso))+'</td><td>'+esc(instr)+'</td>'+(temAnexos?'<td>'+esc(anexosTxt)+'</td>':'')+'</tr>';
                 });
                 var html2='<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">'+
                   '<head><meta charset="UTF-8"><style>'+css2+'</style></head>'+
@@ -5788,12 +6014,12 @@
                 document.body.appendChild(a2); a2.click();
                 setTimeout(function(){ document.body.removeChild(a2); URL.revokeObjectURL(a2.href); },200);
               };
-            })(vkey,data,_hasOpme,_fileNames[vkey],_tabLabels[vkey]);
+            })(vkey,data,_hasOpme,_fileNames[vkey],_tabLabels[vkey],_temAnexosObrigCol);
 
             // Import
             _btnImp.onclick=function(){ _vfInput.value=''; _vfInput.click(); };
 
-            (function(vk,d,hasOpme){
+            (function(vk,d,hasOpme,temAnexos){
               _vfInput.onchange=function(){
                 var file=_vfInput.files[0];
                 if(!file) return;
@@ -5830,13 +6056,15 @@
                   var startRow=0;
                   var instrCol=hasOpme?4:3;
                   var pesoCol=hasOpme?3:2;
+                  var anexosCol=-1; // só detectado se o cabeçalho existir — sem cabeçalho, não há como distinguir a coluna
                   var firstCell=(rows[0][0]||'').toLowerCase().replace(/[^a-záéíóúãõç]/g,'');
                   if(firstCell==='codigo'||firstCell==='código'||firstCell==='cod'){
                     startRow=1;
                     for(var ci=0;ci<rows[0].length;ci++){
                       var h=(rows[0][ci]||'').toLowerCase();
                       if(h.indexOf('peso')>=0){ pesoCol=ci; }
-                      if(h.indexOf('instr')>=0||h.indexOf('ia')>=0){ instrCol=ci; }
+                      if(h.indexOf('anexo')>=0){ anexosCol=ci; }
+                      else if(h.indexOf('instr')>=0||h.indexOf('ia')>=0){ instrCol=ci; }
                     }
                   }
                   // Build lookup map from existing data
@@ -5847,13 +6075,16 @@
                     var instr=(r[instrCol]||'').trim();
                     var pesoRaw=(r[pesoCol]||'').trim();
                     var peso=pesoRaw!==''?Math.min(10,Math.max(0,parseFloat(pesoRaw.replace(',','.'))||0)):null;
+                    var anexosRaw=(temAnexos&&anexosCol>=0)?(r[anexosCol]||'').trim():'';
+                    var anexos=anexosRaw?anexosRaw.split(/[;|]/).map(function(x){return x.trim();}).filter(Boolean):null;
                     var realCod=codMap[cod.toLowerCase()];
-                    return {cod:cod,realCod:realCod,instr:instr,peso:peso,found:!!realCod};
+                    return {cod:cod,realCod:realCod,instr:instr,peso:peso,anexos:anexos,found:!!realCod};
                   });
                   if(!parsed.length){ toast('Nenhum item encontrado no arquivo','danger'); return; }
                   var withInstr=parsed.filter(function(r){return r.found&&r.instr;});
                   var withPeso=parsed.filter(function(r){return r.found&&r.peso!=null;});
-                  var toImport=parsed.filter(function(r){return r.found&&(r.instr||r.peso!=null);});
+                  var withAnexos=parsed.filter(function(r){return r.found&&r.anexos&&r.anexos.length;});
+                  var toImport=parsed.filter(function(r){return r.found&&(r.instr||r.peso!=null||(r.anexos&&r.anexos.length));});
                   var notFound=parsed.filter(function(r){return !r.found;}).length;
                   // Preview modal
                   var prevRows=parsed.slice(0,8);
@@ -5863,6 +6094,7 @@
                     '<th style="padding:6px 10px;text-align:left">Situação</th>'+
                     '<th style="padding:6px 10px;text-align:center">Peso</th>'+
                     '<th style="padding:6px 10px;text-align:left">Instrução IA</th>'+
+                    (temAnexos?'<th style="padding:6px 10px;text-align:left">Anexos Obrigatórios</th>':'')+
                     '</tr></thead><tbody>'+
                     prevRows.map(function(r,i){
                       return '<tr style="background:'+(r.found?i%2===0?'#f6fdf8':'#fff':'#fff7ed')+'">'+
@@ -5870,6 +6102,7 @@
                         '<td style="padding:5px 10px;border:1px solid var(--g-100)">'+(r.found?'<span style="color:var(--g-600)">'+ico('check',11)+' Encontrado</span>':'<span style="color:#ea580c">'+ico('x',11)+' Não encontrado</span>')+'</td>'+
                         '<td style="padding:5px 10px;border:1px solid var(--g-100);text-align:center;font-weight:600;color:var(--g-700)">'+(r.peso!=null?r.peso:'—')+'</td>'+
                         '<td style="padding:5px 10px;border:1px solid var(--g-100);color:var(--muted)">'+esc(r.instr?(r.instr.length>50?r.instr.slice(0,50)+'…':r.instr):'—')+'</td>'+
+                        (temAnexos?'<td style="padding:5px 10px;border:1px solid var(--g-100);color:var(--muted)">'+esc(r.anexos&&r.anexos.length?r.anexos.join('; '):'—')+'</td>':'')+
                         '</tr>';
                     }).join('')+
                     '</tbody></table>'+(parsed.length>8?'<div style="font-size:11px;color:var(--muted);margin-top:6px;text-align:right">+ '+(parsed.length-8)+' linhas não exibidas</div>':'');
@@ -5877,12 +6110,13 @@
                     '<span>'+ico('file-text',13)+' <b>'+parsed.length+'</b> linhas lidas</span>'+
                     '<span style="color:var(--g-600)">'+ico('check-circle',13)+' <b>'+withInstr.length+'</b> com instrução</span>'+
                     '<span style="color:var(--g-600)">'+ico('hash',13)+' <b>'+withPeso.length+'</b> com peso</span>'+
+                    (temAnexos?'<span style="color:var(--g-600)">'+ico('paperclip',13)+' <b>'+withAnexos.length+'</b> com anexos obrigatórios</span>':'')+
                     (notFound?'<span style="color:#ea580c">'+ico('alert-circle',13)+' <b>'+notFound+'</b> código(s) não encontrado(s) — ignorados</span>':'')+'</div>'+
                     (!toImport.length?'<div style="background:#fff7ed;border:1.5px solid #fcd34d;border-radius:8px;padding:10px 14px;font-size:12.5px;color:#92400e;margin-bottom:10px;display:flex;align-items:center;gap:8px">'+
-                      ico('alert-triangle',14)+' <span>Nenhum dado válido encontrado. Verifique se as colunas "Peso" e/ou "Instrução IA" estão preenchidas e os códigos correspondem.</span></div>':'');
+                      ico('alert-triangle',14)+' <span>Nenhum dado válido encontrado. Verifique se as colunas "Peso"'+(temAnexos?', "Instrução IA" e/ou "Anexos Obrigatórios" estão':' e/ou "Instrução IA" estão')+' preenchidas e os códigos correspondem.</span></div>':'');
                   var footHtml='<button class="btn ghost" id="vincImpCancel">'+ico('x',13)+' Fechar</button>'+
                     (toImport.length?'<button class="btn" id="vincImpConfirm">'+ico('upload',13)+' Importar '+toImport.length+' item(ns)</button>':'');
-                  var m=modal(ico('upload')+' Importar Instruções IA','Prévia: '+esc(file.name),resumo+tHtml,footHtml);
+                  var m=modal(ico('upload')+(temAnexos?' Importar Instruções IA e Anexos Obrigatórios':' Importar Instruções IA'),'Prévia: '+esc(file.name),resumo+tHtml,footHtml);
                   m.querySelector('#vincImpCancel').onclick=function(){ m.closest('.modal-backdrop').remove(); };
                   var confirmBtn=m.querySelector('#vincImpConfirm');
                   if(confirmBtn) confirmBtn.onclick=function(){
@@ -5891,20 +6125,22 @@
                       if(!State.vincConfig[k]) State.vincConfig[k]={};
                       if(r.instr) State.vincConfig[k].instr=r.instr;
                       if(r.peso!=null) State.vincConfig[k].peso=r.peso;
+                      if(r.anexos) State.vincConfig[k].anexosObrig=r.anexos;
                     });
                     localStorage.setItem('regula_vinc_cfg',JSON.stringify(State.vincConfig));
                     m.closest('.modal-backdrop').remove();
-                    var msg=(withInstr.length?withInstr.length+' instrução(ões)':'')+
-                      (withInstr.length&&withPeso.length?' e ':'')+
-                      (withPeso.length?withPeso.length+' peso(s)':'')+' importado(s)';
-                    toast(msg,'ok');
+                    var partes=[];
+                    if(withInstr.length) partes.push(withInstr.length+' instrução(ões)');
+                    if(withPeso.length) partes.push(withPeso.length+' peso(s)');
+                    if(withAnexos.length) partes.push(withAnexos.length+' anexo(s) obrigatório(s)');
+                    toast(partes.join(', ')+' importado(s)','ok');
                     showVinc(vk);
                   };
                   lcIcons();
                 };
                 reader.readAsText(file,'UTF-8');
               };
-            })(vkey,data,_hasOpme);
+            })(vkey,data,_hasOpme,_temAnexosObrigCol);
           }
 
           var srchVinc=el('input',{class:'param-search',type:'text',placeholder:'Filtrar por código ou descrição...'});
