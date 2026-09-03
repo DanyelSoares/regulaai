@@ -9542,12 +9542,14 @@
       arr.forEach(function(a){
         var nAnot=(a.anotacoes||[]).length;
         var extA=extratosG[a.id];
+        var reqNome=a.anexoObrigNome||(extA&&extA.anexoObrigNome)||'';
         var badgeCorresp='';
-        if(extA && extA.anexoObrigNome){
-          var corr=(''+extA.correspondeAoEsperado).toLowerCase();
-          if(corr==='nao') badgeCorresp='<span class="badge danger" title="Exigido: '+esc(extA.anexoObrigNome)+(extA.motivoDivergencia?(' — '+esc(extA.motivoDivergencia)):'')+'">'+ico('alert-triangle',12)+' Não corresponde ao exigido</span>';
-          else if(corr==='parcial') badgeCorresp='<span class="badge warn" title="Exigido: '+esc(extA.anexoObrigNome)+(extA.motivoDivergencia?(' — '+esc(extA.motivoDivergencia)):'')+'">'+ico('alert-triangle',12)+' Corresponde parcialmente</span>';
-          else if(corr==='sim') badgeCorresp='<span class="badge anx-ia-ok" title="Exigido: '+esc(extA.anexoObrigNome)+'">'+ico('check',12)+' Corresponde ao exigido</span>';
+        if(reqNome){
+          var corr=extA?(''+extA.correspondeAoEsperado).toLowerCase():'';
+          if(corr==='nao') badgeCorresp='<span class="badge danger" title="'+(extA.motivoDivergencia?esc(extA.motivoDivergencia):'')+'">'+ico('alert-triangle',12)+' Não corresponde ao exigido</span>';
+          else if(corr==='parcial') badgeCorresp='<span class="badge warn" title="'+(extA.motivoDivergencia?esc(extA.motivoDivergencia):'')+'">'+ico('alert-triangle',12)+' Corresponde parcialmente</span>';
+          else if(corr==='sim') badgeCorresp='<span class="badge anx-ia-ok">'+ico('check',12)+' Corresponde ao exigido</span>';
+          else badgeCorresp='<span class="badge muted" title="A IA ainda não leu o conteúdo deste anexo para confirmar se corresponde">'+ico('clock',12)+' Aguardando validação da IA</span>';
         }
         var card=el('div',{style:'padding:10px;border:1px solid var(--line);border-radius:10px;margin-bottom:8px;background:#fff'});
         card.innerHTML=
@@ -9556,6 +9558,7 @@
             '<div style="flex:1;min-width:200px">'+
               '<div style="font-weight:600">'+esc(a.nome)+'</div>'+
               '<div style="font-size:12px;color:var(--muted)">'+esc(a.tamanho)+' · '+a.paginas+' pág. · enviado em '+esc(a.enviadoEm)+'</div>'+
+              (reqNome?'<div style="font-size:12px;color:var(--g-700);margin-top:2px">'+ico('paperclip',11)+' Exigido para: <b>'+esc(reqNome)+'</b></div>':'')+
             '</div>'+
             '<span class="badge '+catColor(a.categoria)+'">'+esc(a.categoria)+'</span>'+
             '<span class="badge muted">'+a.tipo.toUpperCase()+'</span>'+
