@@ -1078,6 +1078,12 @@
     document.body.classList.remove('modal-aberto');
   }
 
+  // true se o FAB "Simular perfil" está aberto (leque de botões ou lista de usuários) — usado para
+  // suprimir tooltips concorrentes (gtip, donut-tip) que poderiam sobrepor a seleção de perfil.
+  function fabIsOpen(){
+    var fw=document.getElementById('fabWrap'), up=document.getElementById('fabUserPick');
+    return (fw&&fw.classList.contains('fab-open'))||(up&&up.style.display==='block');
+  }
   // true se o perfil ativo pode acessar a rota informada — só o Prestador tem allowlist restrita hoje
   // (ROTAS_PRESTADOR); os demais perfis seguem as regras existentes (ex.: "logs" via can()).
   function podeAcessarRota(rota){
@@ -1159,6 +1165,8 @@
       fw.classList.remove('fab-open');
       var ic2=$('#fabBtn [data-lucide]');
       if(ic2){ ic2.setAttribute('data-lucide','users'); lcIcons(); }
+      // Lista de usuários do perfil ficará visível — não deixar tooltips concorrentes sobrepondo.
+      $$('.donut-tip.visible').forEach(function(dt){ dt.classList.remove('visible'); });
       var users, label;
       if(profile==='admin'){
         users=[{nome:perfilDef.admin.nome, cor:perfilDef.admin.cor, profile:'admin', enfId:'', sub:'Acesso total + Usuários'}];
@@ -1241,6 +1249,9 @@
       var isOpen=fw.classList.toggle('fab-open');
       var ic=this.querySelector('[data-lucide]');
       if(ic){ ic.setAttribute('data-lucide',isOpen?'x':'users'); lcIcons(); }
+      // Fecha qualquer tooltip concorrente (ex.: donut de aderência do Dashboard) que
+      // possa ter ficado visível de um hover anterior, para não sobrepor o leque de perfis.
+      if(isOpen){ $$('.donut-tip.visible').forEach(function(dt){ dt.classList.remove('visible'); }); }
     };
     document.addEventListener('click',function(e){
       var fw=$('#fabWrap'), up=$('#fabUserPick');
@@ -4827,14 +4838,19 @@
     var _isTouchDevice=window.matchMedia&&window.matchMedia('(hover: none)').matches;
     if(!_isTouchDevice){
       pb.addEventListener('mouseenter',function(){
+        if(fabIsOpen()) return; // FAB de simular perfil aberto — não sobrepor com este tooltip
         donutTip.innerHTML=buildDonutTip(_tipGuias);
         donutTip.classList.add('visible');
       });
-      pb.addEventListener('mousemove',function(e){ positionDonutTip(e.clientX,e.clientY); });
+      pb.addEventListener('mousemove',function(e){
+        if(fabIsOpen()){ donutTip.classList.remove('visible'); return; }
+        positionDonutTip(e.clientX,e.clientY);
+      });
       pb.addEventListener('mouseleave',function(){ donutTip.classList.remove('visible'); });
     } else {
       // Mobile/touch: cada toque na div alterna a tooltip (abre/fecha); toque fora fecha.
       pb.addEventListener('click',function(e){
+        if(fabIsOpen()) return; // FAB de simular perfil aberto — não sobrepor com este tooltip
         e.stopPropagation();
         var willOpen=!donutTip.classList.contains('visible');
         donutTip.classList.remove('visible');
@@ -10797,10 +10813,6 @@
       tip.style.setProperty('--arr',arrLeft+'%');
     }
 
-    function fabIsOpen(){
-      var fw=document.getElementById('fabWrap'), up=document.getElementById('fabUserPick');
-      return (fw&&fw.classList.contains('fab-open'))||(up&&up.style.display==='block');
-    }
     document.addEventListener('mouseover',function(e){
       if(fabIsOpen()){_vis=false;tip.classList.remove('gtip--vis');return;}
       var txt=findTip(e.target);
