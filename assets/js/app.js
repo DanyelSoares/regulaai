@@ -1726,7 +1726,7 @@
     {id:'prorrogacao', nome:'Solicitação de Prorrogação de Internação', ico:'calendar-clock', pronta:true},
     {id:'opme', nome:'Solicitação de OPME', ico:'bone', pronta:true},
     {id:'quimioterapia', nome:'Solicitação de Quimioterapia', ico:'flask-conical', pronta:true},
-    {id:'consulta', nome:'Solicitação de Consulta', ico:'stethoscope', pronta:false},
+    {id:'consulta', nome:'Solicitação de Consulta', ico:'stethoscope', pronta:true},
     {id:'exames', nome:'Solicitação de Exames e Procedimentos', ico:'clipboard-list', pronta:true}
   ];
   var _solicState={tela:'hub'}; // 'hub' | id do tipo (ex.: 'internacao')
@@ -1748,6 +1748,7 @@
       else if(_solicState.tela==='quimioterapia') wrap.appendChild(viewSolicitacaoQuimio());
       else if(_solicState.tela==='prorrogacao') wrap.appendChild(viewSolicitacaoProrrogacao());
       else if(_solicState.tela==='exames') wrap.appendChild(viewSolicitacaoExames());
+      else if(_solicState.tela==='consulta') wrap.appendChild(viewSolicitacaoConsulta());
       return wrap;
     }
     wrap.appendChild(el('div',{class:'page-title'},'<div><h1>'+ico('clipboard-plus',20)+' Solicitações</h1><p>Escolha o tipo de solicitação que deseja registrar.</p></div>'));
@@ -4017,6 +4018,231 @@
       atendimentoRN:'Não', indicadorAcidente:'Não Acidente', procJaRealizado:'',
       cid:'', cidDescricao:'', hipoteseDiagnostica:'',
       procedimentos:[], pacotes:[], taxas:[], opmes:[],
+      obsImpressa:''
+    };
+    _solicState.tela='hub';
+    render();
+  }
+
+  /* === Solicitação de Consulta === */
+  var _solicConsulta={
+    benef:null, acomodacao:'', celContato:'', pessoaContato:'', obsBenef:'',
+    executante:null, especialidade:'', regime:'Eletiva', tipoConsulta:'', coberturaEspecial:'',
+    regimeAtendimento:'', atendimentoRN:'Não', indicadorAcidente:'Não Acidente',
+    cid:'', cidDescricao:'', hipoteseDiagnostica:'',
+    obsImpressa:''
+  };
+
+  function viewSolicitacaoConsulta(){
+    var wrap=el('div',{class:'panel',style:'padding:22px;max-width:1000px;margin:0 auto'});
+    var s=_solicConsulta;
+
+    function secaoTitulo(txt){ return '<div class="solic-sec-hd">'+esc(txt)+'</div>'; }
+    function lblObrig(txt){ return '<label class="solic-lbl-obrig">'+esc(txt)+' <span class="solic-obrig-ast">*</span></label>'; }
+
+    var ESPECS=['',].concat(Object.keys(MOCK.ESPEC_MAP||{}).map(function(k){return MOCK.ESPEC_MAP[k];}).filter(function(v,i,a){return a.indexOf(v)===i;}).sort());
+
+    wrap.innerHTML=
+      secaoTitulo('Dados do beneficiário')+
+      '<div class="solic-benef-row">'+
+        '<div class="solic-benef-campos">'+
+          '<div class="solic-benef-grid" style="align-items:end">'+
+            '<div class="field">'+lblObrig('Código do beneficiário')+
+              '<div class="solic-busca-row"><input id="scBenefCod" type="text" maxlength="10" value="'+esc(s.benef?s.benef.carteirinha:'')+'" placeholder="Carteirinha">'+
+              '<button type="button" class="btn ghost sm" id="scBenefBusca">'+ico('search',13)+'</button></div></div>'+
+            '<div class="field solic-span2"><label>Nome do beneficiário</label>'+
+              '<input id="scBenefNome" type="text" readonly value="'+esc(s.benef?s.benef.nome:'')+'" placeholder="Preenchido automaticamente"></div>'+
+          '</div>'+
+          '<div class="solic-benef-grid">'+
+            '<div class="field"><label>Acomodação</label><input id="scAcomodacao" type="text" readonly value="'+esc(s.acomodacao)+'" placeholder="Preenchido automaticamente"></div>'+
+            '<div class="field"><label>Cel. contato Benef.</label><input id="scCelContato" type="text" value="'+esc(s.celContato)+'" placeholder="(00) 00000-0000"></div>'+
+            '<div class="field"><label>Pessoa p/ contato</label><input id="scPessoaContato" type="text" value="'+esc(s.pessoaContato)+'"></div>'+
+          '</div>'+
+        '</div>'+
+        '<div class="solic-benef-foto" id="scBenefFoto">'+(s.benef&&s.benef.foto?'<img src="'+esc(s.benef.foto)+'" alt="Foto do beneficiário">':'<span>'+ico('image-off',28)+'Foto não<br>disponível</span>')+'</div>'+
+      '</div>'+
+      '<div class="field"><label>Observações do beneficiário</label><textarea id="scObsBenef" rows="2">'+esc(s.obsBenef)+'</textarea></div>'+
+
+      secaoTitulo('Dados da guia')+
+      '<div class="g2">'+
+        '<div class="field">'+lblObrig('Executante')+'<select id="scExecutante">'+
+          ['<option value="">Selecione o prestador executante</option>'].concat(
+            (MOCK.PRESTADORES||[]).map(function(p){return '<option value="'+p.id+'"'+(s.executante&&s.executante.id===p.id?' selected':'')+'>'+esc(p.nome)+'</option>';})
+          ).join('')+
+        '</select></div>'+
+        '<div class="field">'+lblObrig('Especialidade')+'<select id="scEspecialidade">'+
+          ESPECS.map(function(v){return '<option value="'+esc(v)+'"'+(s.especialidade===v?' selected':'')+'>'+(v||'Selecione')+'</option>';}).join('')+
+        '</select></div>'+
+      '</div>'+
+      '<div class="g2">'+
+        '<div class="field"><label>Regime</label><select id="scRegime">'+
+          ['Eletiva','Urgência/Emergência'].map(function(v){return '<option value="'+v+'"'+(s.regime===v?' selected':'')+'>'+v+'</option>';}).join('')+
+        '</select></div>'+
+        '<div class="field"><label>Tipo de consulta</label><select id="scTipoConsulta">'+
+          ['','Primeira consulta','Retorno','Segunda opinião'].map(function(v){return '<option value="'+v+'"'+(s.tipoConsulta===v?' selected':'')+'>'+(v||'Selecione')+'</option>';}).join('')+
+        '</select></div>'+
+      '</div>'+
+      '<div class="g2">'+
+        '<div class="field"><label>Cobertura especial</label><select id="scCoberturaEsp">'+
+          ['','Nenhuma','Rol ANS','Contratual adicional','Liminar judicial'].map(function(v){return '<option value="'+v+'"'+(s.coberturaEspecial===v?' selected':'')+'>'+(v||'Selecione')+'</option>';}).join('')+
+        '</select></div>'+
+        '<div class="field">'+lblObrig('Regime de atendimento')+'<select id="scRegimeAtend">'+
+          ['','Ambulatorial','Domiciliar','Hospitalar'].map(function(v){return '<option value="'+v+'"'+(s.regimeAtendimento===v?' selected':'')+'>'+(v||'Selecione')+'</option>';}).join('')+
+        '</select></div>'+
+      '</div>'+
+      '<div class="g2">'+
+        '<div class="field"><label>Atendimento RN</label><select id="scAtendRN">'+
+          ['Não','Sim'].map(function(v){return '<option value="'+v+'"'+(s.atendimentoRN===v?' selected':'')+'>'+v+'</option>';}).join('')+
+        '</select></div>'+
+        '<div class="field"><label>Indicador de acidente</label><select id="scIndAcidente">'+
+          ['Não Acidente','Acidente de trabalho','Acidente de trânsito','Outros acidentes'].map(function(v){return '<option value="'+v+'"'+(s.indicadorAcidente===v?' selected':'')+'>'+v+'</option>';}).join('')+
+        '</select></div>'+
+      '</div>'+
+
+      secaoTitulo('Indicação Clínica / Hipótese diagnóstica')+
+      '<div class="g2" style="align-items:end">'+
+        '<div class="field"><label>C.I.D</label>'+
+          '<div class="solic-busca-row"><input id="scCid" type="text" style="text-transform:uppercase" value="'+esc(s.cid)+'">'+
+          '<button type="button" class="btn ghost sm" id="scCidBusca">'+ico('search',13)+'</button></div></div>'+
+        '<div class="field">'+lblObrig('Hipótese diagnóstica')+'<input id="scHipotese" type="text" value="'+esc(s.hipoteseDiagnostica||s.cidDescricao)+'"></div>'+
+      '</div>'+
+
+      '<div class="solic-sec-hd">Anexos</div>'+
+      '<div class="solic-anexos" id="scAnexosWrap">'+_solicAnexosSecaoHTML('scAnexo',[])+'</div>'+
+
+      '<div class="solic-sec-hd">Observação impressa / Justificativa da guia</div>'+
+      '<div class="field"><textarea id="scObsImpressa" maxlength="2000" rows="4">'+esc(s.obsImpressa)+'</textarea>'+
+      '<div class="solic-charcount" id="scObsImpressaCount">'+(s.obsImpressa||'').length+' de 2000 caracteres</div></div>'+
+
+      '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px">'+
+        '<button class="btn-primary" id="scAutorizarBtn">'+ico('check',14)+' Autorizar</button>'+
+      '</div>';
+
+    setTimeout(function(){ _ligarSolicitacaoConsulta(wrap); },0);
+    return wrap;
+  }
+
+  function _ligarSolicitacaoConsulta(wrap){
+    var s=_solicConsulta;
+
+    function aplicarBeneficiario(b){
+      s.benef=b;
+      s.acomodacao=b.acomodacao||s.acomodacao;
+      s.celContato=b.celContato||s.celContato;
+      _renderSolicitacaoConsultaTela(wrap);
+    }
+    function abrirBuscaBenef(){ _abrirBuscaAvancadaBenef(aplicarBeneficiario); }
+    $('#scBenefBusca').onclick=abrirBuscaBenef;
+
+    var benefCodInp=$('#scBenefCod');
+    function buscarBenefPorCodigo(){
+      var termo=benefCodInp.value.trim().toLowerCase();
+      if(!termo) return;
+      if(s.benef && s.benef.carteirinha && s.benef.carteirinha.toLowerCase()===termo) return;
+      var achado=(MOCK.BENEFICIARIOS||[]).filter(function(b){
+        return (b.carteirinha||'').toLowerCase()===termo || (b.cartao||'').toLowerCase()===termo;
+      })[0];
+      if(achado){ aplicarBeneficiario(achado); }
+      else { toast('Nenhum beneficiário encontrado com este código.','warn'); }
+    }
+    benefCodInp.addEventListener('blur',buscarBenefPorCodigo);
+    benefCodInp.addEventListener('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); buscarBenefPorCodigo(); } });
+
+    $('#scCelContato').onchange=function(){ s.celContato=this.value; };
+    $('#scPessoaContato').onchange=function(){ s.pessoaContato=this.value; };
+    $('#scObsBenef').onchange=function(){ s.obsBenef=this.value; };
+
+    $('#scExecutante').onchange=function(){ var id=this.value; s.executante=(MOCK.PRESTADORES||[]).filter(function(p){return p.id===id;})[0]||null; };
+    $('#scEspecialidade').onchange=function(){ s.especialidade=this.value; };
+    $('#scRegime').onchange=function(){ s.regime=this.value; };
+    $('#scTipoConsulta').onchange=function(){ s.tipoConsulta=this.value; };
+    $('#scCoberturaEsp').onchange=function(){ s.coberturaEspecial=this.value; };
+    $('#scRegimeAtend').onchange=function(){ s.regimeAtendimento=this.value; };
+    $('#scAtendRN').onchange=function(){ s.atendimentoRN=this.value; };
+    $('#scIndAcidente').onchange=function(){ s.indicadorAcidente=this.value; };
+
+    $('#scCid').onchange=async function(){
+      var v=this.value.trim().toUpperCase(); s.cid=v;
+      if(!v){ s.cidDescricao=''; return; }
+      var desc=await resolverSignificadoCid(v);
+      s.cidDescricao=desc||'';
+      var hip=$('#scHipotese'); if(hip && !hip.value.trim()) hip.value=s.cidDescricao;
+    };
+    $('#scCidBusca').onclick=function(){
+      _abrirBuscaAvancadaCid(function(item){
+        s.cid=item.codigo; s.cidDescricao=item.descricao||'';
+        var cidInp=$('#scCid'); if(cidInp) cidInp.value=s.cid;
+        var hip=$('#scHipotese'); if(hip){ hip.value=s.cidDescricao; s.hipoteseDiagnostica=s.cidDescricao; }
+      });
+    };
+    $('#scHipotese').onchange=function(){ s.hipoteseDiagnostica=this.value; };
+
+    var obsImpEl=$('#scObsImpressa'), obsImpCount=$('#scObsImpressaCount');
+    obsImpEl.addEventListener('input',function(){ s.obsImpressa=this.value; obsImpCount.textContent=this.value.length+' de 2000 caracteres'; });
+
+    for(var i=0;i<6;i++){
+      (function(idx){
+        var inp=$('#scAnexo'+idx), lbl=$('#scAnexo'+idx+'Nome');
+        if(!inp) return;
+        inp.onchange=function(){ lbl.textContent=inp.files&&inp.files[0]?inp.files[0].name:'Nenhum arquivo escolhido'; };
+      })(i);
+    }
+
+    $('#scAutorizarBtn').onclick=function(){ _autorizarSolicitacaoConsulta(); };
+  }
+
+  function _renderSolicitacaoConsultaTela(wrap){
+    var novo=viewSolicitacaoConsulta();
+    wrap.parentNode.replaceChild(novo, wrap);
+    lcIcons();
+  }
+
+  function _autorizarSolicitacaoConsulta(){
+    var s=_solicConsulta;
+    if(!s.benef){ toast('Selecione o beneficiário (Código do beneficiário).','err'); return; }
+    if(!s.executante){ toast('Selecione o Executante.','err'); return; }
+    if(!s.especialidade){ toast('Selecione a Especialidade.','err'); return; }
+    if(!s.regimeAtendimento){ toast('Selecione o Regime de atendimento.','err'); return; }
+    if(!s.hipoteseDiagnostica.trim()){ toast('Informe a Hipótese diagnóstica.','err'); return; }
+
+    var fluxo=(MOCK.FLUXOS||[]).filter(function(f){ return f.id===(s.regime==='Urgência/Emergência'?'F1':'F4'); })[0] || (MOCK.FLUXOS||[])[0];
+    var numero=String(Date.now()).slice(-9);
+    var agora=new Date();
+    var dataEmissao=agora.getFullYear()+'-'+String(agora.getMonth()+1).padStart(2,'0')+'-'+String(agora.getDate()).padStart(2,'0');
+    var horaEmissao=String(agora.getHours()).padStart(2,'0')+':'+String(agora.getMinutes()).padStart(2,'0');
+
+    var etapas=(fluxo.etapas||[]).map(function(nome,i){
+      return { ordem:i+1, nome:nome, ia:(MOCK.IA_POR_ETAPA&&MOCK.IA_POR_ETAPA[nome])||'apoio',
+        status:i===0?'em_execucao':'aguardando',
+        prazoHoras: nome.indexOf('URG')>=0?4:(nome.indexOf('JUNTA')>=0?72:24),
+        horasReais:0, responsavel:(nome.indexOf('MÉDICO')>=0||nome.indexOf('JUNTA')>=0)?'auditor':(nome.indexOf('ENFERMEIRA')>=0?'enfermeiro':'auditor'),
+        inicio:dataEmissao+' '+horaEmissao, fim:'' };
+    });
+
+    var guia={
+      numero:numero, beneficiario:s.benef, prestadorSol:s.executante, prestadorExe:s.executante, fluxo:fluxo,
+      tipo:'Consulta', natureza:'Ambulatorial', regime:s.regime==='Urgência/Emergência'?'Urgência':'Eletivo', status:'Em análise', origem:'Emissão guias',
+      congenere:s.benef.cidade||'—', solicitante:(s.executante&&s.executante.nome)||'—',
+      uti:false, opme:false, dut:false, anexos:false, prio:'Baixa',
+      risco:'baixo', dataEmissao:dataEmissao, horaEmissao:horaEmissao,
+      internacao:'', alta:'', diasAuditoria:0, prazoVencido:false,
+      procedimentos:[], pacotes:[], matmed:[], diariasTaxas:[],
+      etapas:etapas, anexosLista:[],
+      observacoes:(s.tipoConsulta?('Tipo de consulta: '+s.tipoConsulta+'. '):'')+(s.obsImpressa||''),
+      guiaReferenciadaRef:'',
+      cidOverride:{codigo:s.cid||'—', descricao:s.hipoteseDiagnostica||s.cidDescricao||'—'},
+      parecerOperadora:null, parecerIA:null, ultimaSync:dataEmissao+' '+horaEmissao
+    };
+
+    State.guias.push(guia);
+    logAcao('Solicitação de Consulta registrada', 'Guia '+numero+' — '+s.benef.nome);
+    toast('Solicitação registrada com sucesso — guia '+numero+' criada.','ok');
+
+    _solicConsulta={
+      benef:null, acomodacao:'', celContato:'', pessoaContato:'', obsBenef:'',
+      executante:null, especialidade:'', regime:'Eletiva', tipoConsulta:'', coberturaEspecial:'',
+      regimeAtendimento:'', atendimentoRN:'Não', indicadorAcidente:'Não Acidente',
+      cid:'', cidDescricao:'', hipoteseDiagnostica:'',
       obsImpressa:''
     };
     _solicState.tela='hub';
