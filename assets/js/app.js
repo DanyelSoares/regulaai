@@ -186,6 +186,38 @@
     try{ localStorage.setItem(key, JSON.stringify(set)); }catch(e){}
     return stamp;
   }
+  // ── Checagem RASA de anexo obrigatório — roda ainda na tela de Solicitação, assim que o arquivo é
+  // escolhido, para liberar o botão Autorizar sem esperar a análise completa (que só roda depois, ao
+  // abrir a guia, via extrairAnexoOCR). Prompt mínimo (só pede sim/nao/parcial), sem OCR de paciente/
+  // extrato — prioriza velocidade sobre precisão; pequena margem de erro é aceitável aqui.
+  // Retorna {ok:true, corresponde:'sim'|'nao'|'parcial'} ou {ok:false} (sem IA configurada/erro — não bloqueia).
+  async function _solicChecagemRasaAnexo(file, anexoObrigNome){
+    if(!file || !window.getIaCfg || !window.callIAComSistemaEAnexo) return {ok:false};
+    var cfg=window.getIaCfg();
+    if(!cfg.key) return {ok:false}; // sem IA configurada — não bloqueia o prestador
+    var ext=(file.name.split('.').pop()||'').toLowerCase();
+    var mimeMap={jpg:'image/jpeg',jpeg:'image/jpeg',png:'image/png',gif:'image/gif',webp:'image/webp',pdf:'application/pdf'};
+    var mime=mimeMap[ext];
+    if(!mime) return {ok:false}; // formato sem leitura de visão (doc/docx etc.) — não bloqueia
+    try{
+      var base64=await new Promise(function(resolve,reject){
+        var r=new FileReader();
+        r.onload=function(){ resolve((''+r.result).split(',')[1]||''); };
+        r.onerror=reject;
+        r.readAsDataURL(file);
+      });
+      var sistema='Você faz uma triagem RÁPIDA e superficial de documentos. Responda SOMENTE com o JSON pedido, sem texto antes ou depois, sem markdown.';
+      var prompt='O documento anexado deveria ser: "'+anexoObrigNome+'". Olhe rapidamente e diga se o documento parece ser esse tipo de documento. '+
+        'Responda em JSON válido, exatamente: {"corresponde":"<sim|nao|parcial>"}';
+      var resp=await window.callIAComSistemaEAnexo(cfg, sistema, prompt, {mime:mime, base64:base64, nome:file.name});
+      if(!resp || !resp.ok) return {ok:false};
+      var txt=resp.text.trim().replace(/^```json/i,'').replace(/^```/,'').replace(/```$/,'').trim();
+      var o=JSON.parse(txt);
+      var corresponde=(o.corresponde||'').toLowerCase();
+      if(corresponde!=='sim'&&corresponde!=='nao'&&corresponde!=='parcial') return {ok:false};
+      return {ok:true, corresponde:corresponde};
+    }catch(e){ return {ok:false}; }
+  }
   // ── OCR dedicado: extrai o conteúdo de um anexo assim que ele é enviado (upload), sem esperar o chat.
   // O resultado fica no mesmo cache (regula_anx_extrato_<guia>) já usado pelo chat/análise automática,
   // que passam a encontrar o extrato pronto e pular a releitura (fallback: se não houver extrato, leem como antes).
@@ -1902,8 +1934,11 @@
 
   // Liga os eventos dos slots nomeados (obrigatórios) de uma seção de Anexos e retorna um getter
   // do estado atual {nome: File} para a validação do botão Autorizar consultar a qualquer momento.
+  // Também dispara, para cada arquivo escolhido, a checagem RASA (_solicChecagemRasaAnexo) — o
+  // resultado fica em checagens[nome] ('sim'|'nao'|'parcial'|undefined-ainda rodando|null-sem IA/erro)
+  // e é consultado por _solicAtualizarBotaoAutorizar para bloquear o Autorizar quando vier 'nao'.
   function _solicLigarAnexosObrig(wrap, idPrefix, anexosObrig, onMudou){
-    var arquivos={};
+    var arquivos={}, checagens={};
     anexosObrig.forEach(function(nome,i){
       var inp=wrap.querySelector('#'+idPrefix+'ObrigInp'+i);
       if(!inp) return;
@@ -1911,10 +1946,34 @@
         var f=inp.files&&inp.files[0];
         var statusEl=wrap.querySelector('#'+idPrefix+'ObrigStatus'+i);
         var rowEl=inp.closest('.solic-anexo-row');
-        if(f){ arquivos[nome]=f; if(statusEl) statusEl.innerHTML=ico('check-circle-2',13); if(rowEl) rowEl.classList.add('solic-anexo-ok'); }
-        else { delete arquivos[nome]; if(statusEl) statusEl.textContent='Nenhum arquivo escolhido'; if(rowEl) rowEl.classList.remove('solic-anexo-ok'); }
-        lcIcons();
-        if(onMudou) onMudou(arquivos);
+        delete checagens[nome];
+        if(f){
+          arquivos[nome]=f;
+          if(rowEl) rowEl.classList.add('solic-anexo-ok');
+          if(statusEl) statusEl.innerHTML='<span class="solic-anexo-verificando">'+ico('loader',13)+' Verificando...</span>';
+          lcIcons();
+          if(onMudou) onMudou(arquivos, checagens);
+          _solicChecagemRasaAnexo(f, nome).then(function(res){
+            if(arquivos[nome]!==f) return; // arquivo já foi trocado/removido enquanto a checagem rodava
+            checagens[nome]=res.ok?res.corresponde:null;
+            var stEl=wrap.querySelector('#'+idPrefix+'ObrigStatus'+i);
+            var rowEl2=inp.closest('.solic-anexo-row');
+            if(rowEl2) rowEl2.classList.toggle('solic-anexo-alerta', checagens[nome]==='nao'||checagens[nome]==='parcial');
+            if(stEl){
+              if(checagens[nome]==='nao') stEl.innerHTML='<span class="solic-anexo-naobate" title="A IA identificou que este arquivo não parece ser o documento pedido">'+ico('alert-triangle',13)+' Não parece corresponder</span>';
+              else if(checagens[nome]==='parcial') stEl.innerHTML='<span class="solic-anexo-parcial" title="A IA identificou correspondência parcial">'+ico('alert-triangle',13)+' Corresponde parcialmente</span>';
+              else stEl.innerHTML=ico('check-circle-2',13);
+            }
+            lcIcons();
+            if(onMudou) onMudou(arquivos, checagens);
+          });
+        } else {
+          delete arquivos[nome];
+          if(statusEl) statusEl.textContent='Nenhum arquivo escolhido';
+          if(rowEl){ rowEl.classList.remove('solic-anexo-ok'); rowEl.classList.remove('solic-anexo-alerta'); }
+          lcIcons();
+          if(onMudou) onMudou(arquivos, checagens);
+        }
       };
     });
     return arquivos;
@@ -1939,12 +1998,18 @@
     return lista;
   }
 
-  // Habilita/desabilita o botão Autorizar conforme todos os anexos obrigatórios pendentes tenham arquivo.
-  function _solicAtualizarBotaoAutorizar(btnEl, anexosObrig, arquivos){
+  // Habilita/desabilita o botão Autorizar conforme: (1) todos os anexos obrigatórios pendentes tenham
+  // arquivo, e (2) nenhum deles tenha sido marcado pela checagem RASA (_solicChecagemRasaAnexo) como
+  // "não corresponde" ao documento pedido. Sem IA configurada, ou enquanto a checagem ainda não voltou,
+  // NÃO bloqueia — só bloqueia num "não" explícito, para não travar o prestador por indisponibilidade da IA.
+  function _solicAtualizarBotaoAutorizar(btnEl, anexosObrig, arquivos, checagens){
     if(!btnEl) return;
     var faltam=anexosObrig.filter(function(nome){ return !arquivos[nome]; });
-    btnEl.disabled=faltam.length>0;
-    btnEl.title=faltam.length?('Anexe: '+faltam.join(', ')):'';
+    var naoBatem=checagens?anexosObrig.filter(function(nome){ return arquivos[nome] && checagens[nome]==='nao'; }):[];
+    btnEl.disabled=faltam.length>0 || naoBatem.length>0;
+    if(naoBatem.length) btnEl.title='A IA identificou que este(s) anexo(s) não correspondem ao pedido: '+naoBatem.join(', ')+'. Corrija o arquivo para continuar.';
+    else if(faltam.length) btnEl.title='Anexe: '+faltam.join(', ');
+    else btnEl.title='';
   }
   // Especificação do material / Observações do OPME só fazem sentido (e só são obrigatórias) quando há ao menos um OPME adicionado
   function _solicTemOpme(s){ return (s.opmes||[]).some(function(it){return it.codigo;}); }
@@ -2448,7 +2513,7 @@
       var qtdGenericos=Math.max(1,6-anexosObrig.length);
       s._anexosGenericos=_solicLigarAnexosGenericos(wrap,'siAnexo',qtdGenericos);
       var btn=$('#siAutorizarBtn');
-      var arquivosObrig=_solicLigarAnexosObrig(wrap,'siAnexo',anexosObrig,function(arq){ _solicAtualizarBotaoAutorizar(btn,anexosObrig,arq); });
+      var arquivosObrig=_solicLigarAnexosObrig(wrap,'siAnexo',anexosObrig,function(arq,chk){ s._anexosObrigChecagens=chk; _solicAtualizarBotaoAutorizar(btn,anexosObrig,arq,chk); });
       _solicAtualizarBotaoAutorizar(btn,anexosObrig,arquivosObrig);
       s._anexosObrigArquivos=arquivosObrig; // consultado na validação final do Autorizar
     }
@@ -2473,6 +2538,8 @@
     var anexosObrig=_solicAnexosObrigPendentes(s.procedimentos,s.pacotes);
     var faltamAnexos=anexosObrig.filter(function(nome){ return !(s._anexosObrigArquivos&&s._anexosObrigArquivos[nome]); });
     if(faltamAnexos.length){ toast('Anexe os documentos obrigatórios: '+faltamAnexos.join(', ')+'.','err'); return; }
+    var anexosNaoBatem=anexosObrig.filter(function(nome){ return s._anexosObrigArquivos&&s._anexosObrigArquivos[nome]&&s._anexosObrigChecagens&&s._anexosObrigChecagens[nome]==='nao'; });
+    if(anexosNaoBatem.length){ toast('A IA identificou que este(s) anexo(s) não correspondem ao documento pedido: '+anexosNaoBatem.join(', ')+'. Corrija antes de autorizar.','err'); return; }
     // Campos marcados com * no formulário (rótulo vermelho) — validação alinhada à sinalização visual
     if(!s.benef){ toast('Selecione o beneficiário (Código/Nome do beneficiário).','err'); return; }
     if(!s.celContato.trim()){ toast('Informe o Cel. contato Benef.','err'); return; }
@@ -3256,7 +3323,7 @@
       var qtdGenericos=Math.max(1,6-anexosObrig.length);
       s._anexosGenericos=_solicLigarAnexosGenericos(wrap,'sqAnexo',qtdGenericos);
       var btn=$('#sqAutorizarBtn');
-      var arquivosObrig=_solicLigarAnexosObrig(wrap,'sqAnexo',anexosObrig,function(arq){ _solicAtualizarBotaoAutorizar(btn,anexosObrig,arq); });
+      var arquivosObrig=_solicLigarAnexosObrig(wrap,'sqAnexo',anexosObrig,function(arq,chk){ s._anexosObrigChecagens=chk; _solicAtualizarBotaoAutorizar(btn,anexosObrig,arq,chk); });
       _solicAtualizarBotaoAutorizar(btn,anexosObrig,arquivosObrig);
       s._anexosObrigArquivos=arquivosObrig;
     }
@@ -3279,6 +3346,8 @@
     var anexosObrig=_solicAnexosObrigPendentes(s.procedimentos,null);
     var faltamAnexos=anexosObrig.filter(function(nome){ return !(s._anexosObrigArquivos&&s._anexosObrigArquivos[nome]); });
     if(faltamAnexos.length){ toast('Anexe os documentos obrigatórios: '+faltamAnexos.join(', ')+'.','err'); return; }
+    var anexosNaoBatem=anexosObrig.filter(function(nome){ return s._anexosObrigArquivos&&s._anexosObrigArquivos[nome]&&s._anexosObrigChecagens&&s._anexosObrigChecagens[nome]==='nao'; });
+    if(anexosNaoBatem.length){ toast('A IA identificou que este(s) anexo(s) não correspondem ao documento pedido: '+anexosNaoBatem.join(', ')+'. Corrija antes de autorizar.','err'); return; }
     if(!s.benef){ toast('Selecione o beneficiário (Código/Nome do beneficiário).','err'); return; }
     if(!s.numGuiaRef){ toast('Informe o Nº da guia referenciada.','err'); return; }
     if(!s.cid1.trim()){ toast('Informe o CID 10 Principal.','err'); return; }
@@ -3631,7 +3700,7 @@
       var qtdGenericos=Math.max(1,6-anexosObrig.length);
       s._anexosGenericos=_solicLigarAnexosGenericos(wrap,'spAnexo',qtdGenericos);
       var btn=$('#spAutorizarBtn');
-      var arquivosObrig=_solicLigarAnexosObrig(wrap,'spAnexo',anexosObrig,function(arq){ _solicAtualizarBotaoAutorizar(btn,anexosObrig,arq); });
+      var arquivosObrig=_solicLigarAnexosObrig(wrap,'spAnexo',anexosObrig,function(arq,chk){ s._anexosObrigChecagens=chk; _solicAtualizarBotaoAutorizar(btn,anexosObrig,arq,chk); });
       _solicAtualizarBotaoAutorizar(btn,anexosObrig,arquivosObrig);
       s._anexosObrigArquivos=arquivosObrig;
     }
@@ -3654,6 +3723,8 @@
     var anexosObrig=_solicAnexosObrigPendentes(s.procedimentos,s.pacotes);
     var faltamAnexos=anexosObrig.filter(function(nome){ return !(s._anexosObrigArquivos&&s._anexosObrigArquivos[nome]); });
     if(faltamAnexos.length){ toast('Anexe os documentos obrigatórios: '+faltamAnexos.join(', ')+'.','err'); return; }
+    var anexosNaoBatem=anexosObrig.filter(function(nome){ return s._anexosObrigArquivos&&s._anexosObrigArquivos[nome]&&s._anexosObrigChecagens&&s._anexosObrigChecagens[nome]==='nao'; });
+    if(anexosNaoBatem.length){ toast('A IA identificou que este(s) anexo(s) não correspondem ao documento pedido: '+anexosNaoBatem.join(', ')+'. Corrija antes de autorizar.','err'); return; }
     if(!s.guiaPrincipal){ toast('Localize a guia principal antes de autorizar.','err'); return; }
     if(!s.hipoteseDiagnostica.trim()){ toast('Informe a Hipótese diagnóstica.','err'); return; }
     var todosItens=[].concat(s.procedimentos,s.pacotes,s.taxas,s.matmed,s.opmes);
@@ -4009,9 +4080,10 @@
       var qtdGenericos=Math.max(1,6-anexosObrig.length);
       s._anexosGenericos=_solicLigarAnexosGenericos(wrap,'seAnexo',qtdGenericos);
       var btnEl=wrap.querySelector('#seAutorizarBtn');
-      s._anexosObrigArquivos=_solicLigarAnexosObrig(wrap,'seAnexo',anexosObrig,function(arquivos){
+      s._anexosObrigArquivos=_solicLigarAnexosObrig(wrap,'seAnexo',anexosObrig,function(arquivos,chk){
         s._anexosObrigArquivos=arquivos;
-        _solicAtualizarBotaoAutorizar(btnEl,anexosObrig,arquivos);
+        s._anexosObrigChecagens=chk;
+        _solicAtualizarBotaoAutorizar(btnEl,anexosObrig,arquivos,chk);
       });
       _solicAtualizarBotaoAutorizar(btnEl,anexosObrig,s._anexosObrigArquivos);
       lcIcons();
@@ -4035,6 +4107,8 @@
     var anexosObrig=_solicAnexosObrigPendentes(s.procedimentos,s.pacotes);
     var faltamAnexos=anexosObrig.filter(function(nome){ return !(s._anexosObrigArquivos&&s._anexosObrigArquivos[nome]); });
     if(faltamAnexos.length){ toast('Anexe os documentos obrigatórios: '+faltamAnexos.join(', ')+'.','err'); return; }
+    var anexosNaoBatem=anexosObrig.filter(function(nome){ return s._anexosObrigArquivos&&s._anexosObrigArquivos[nome]&&s._anexosObrigChecagens&&s._anexosObrigChecagens[nome]==='nao'; });
+    if(anexosNaoBatem.length){ toast('A IA identificou que este(s) anexo(s) não correspondem ao documento pedido: '+anexosNaoBatem.join(', ')+'. Corrija antes de autorizar.','err'); return; }
     if(!s.benef){ toast('Selecione o beneficiário (Código do beneficiário).','err'); return; }
     if(!s.solicitante){ toast('Selecione o Solicitante.','err'); return; }
     if(!s.especSolic){ toast('Selecione a Especialidade solicitante.','err'); return; }

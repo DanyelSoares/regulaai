@@ -2240,6 +2240,11 @@ body.sidebar-collapsed .modal-backdrop{left:66px}
 .solic-anexo-nome-obrig{font-size:12.5px;color:var(--ink);font-weight:600}
 .solic-anexo-status{font-size:12px;color:var(--muted);margin-left:auto;display:flex;align-items:center;gap:4px}
 .solic-anexo-obrig.solic-anexo-ok .solic-anexo-status{color:#1e7e42}
+.solic-anexo-verificando{display:inline-flex;align-items:center;gap:4px;color:var(--muted)}
+.solic-anexo-verificando svg{animation:idcod-spin 1s linear infinite}
+.solic-anexo-naobate{display:inline-flex;align-items:center;gap:4px;color:#a01b14;font-weight:600}
+.solic-anexo-parcial{display:inline-flex;align-items:center;gap:4px;color:#8a6300;font-weight:600}
+.solic-anexo-obrig.solic-anexo-alerta{border-color:#f4b7b3;background:#fdf2f1}
 .solic-charcount{font-size:11px;color:var(--muted);text-align:right;margin-top:4px}
 
 /* ID Código — tradutor de solicitação médica para código TUSS */
