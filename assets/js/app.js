@@ -1116,7 +1116,6 @@
         window.scrollTo({top:0,behavior:'instant'});
       };
     });
-    $('#globalSearch').oninput=function(){ State.filtros.q=this.value.toLowerCase(); if(State.route==='guias'||State.route==='dashboard') render(); };
 
     document.getElementById('sidebarToggle').onclick=function(){
       if(window.innerWidth<=640) return;
@@ -5491,7 +5490,7 @@
       $('#btnClear').onclick=function(){
         State.filtros={q:'',status:'',fluxo:'',origem:'',risco:'',benef:'',prest:'',tipo:'',natureza:'',congenere:'',solicitante:'',opme:'',uti:'',especialidade:'',dataDeEmissao:'',dataAteEmissao:'',sortCol:'',sortDir:''};
         if(_drpInstance) _drpInstance.clear();
-        $('#globalSearch').value=''; render();
+        render();
       };
       var _exportBtn=$('#btnExport');
       if(_exportBtn) _exportBtn.onclick=function(){

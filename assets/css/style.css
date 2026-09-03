@@ -214,20 +214,6 @@ body.pl--blurring .pl--blur-target{filter:blur(5px)}
 .tbc-current{color:rgba(255,255,255,.9);font-weight:600}
 /* Lado direito */
 .topbar-right{display:flex;align-items:center;gap:14px}
-/* Campo de busca integrado */
-.topbar-search{
-  display:flex;align-items:center;gap:7px;
-  background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);
-  border-radius:8px;padding:6px 12px;
-  transition:background .15s,border-color .15s;
-}
-.topbar-search i{color:rgba(255,255,255,.6);flex-shrink:0}
-.topbar-search input{
-  background:transparent;border:0;outline:none;
-  color:#fff;font-size:12.5px;width:220px;
-}
-.topbar-search input::placeholder{color:rgba(255,255,255,.5)}
-.topbar-search:focus-within{background:rgba(255,255,255,.2);border-color:rgba(255,255,255,.4);box-shadow:0 0 0 2px rgba(255,255,255,.5)}
 /* Usuário */
 .topbar-user{display:flex;align-items:center;gap:9px;padding:5px 10px;border-left:1px solid rgba(255,255,255,.15);min-width:140px;max-width:220px}
 .topbar-avatar{
@@ -1487,7 +1473,6 @@ body.sidebar-collapsed .modal-backdrop{left:66px}
   .topbar-breadcrumb .tbc-sep{display:none}
   .topbar-breadcrumb .tbc-current{color:#fff;font-weight:800;font-size:17px}
   .topbar-user-info{display:none}
-  .topbar-search{display:none}
   #userAvatar{width:28px!important;height:28px!important;font-size:11px!important}
 
   /* Marca R AI no topbar mobile */
