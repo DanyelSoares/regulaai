@@ -200,10 +200,17 @@
     if(!cfg.key) return; // sem IA configurada — anexo fica sem OCR até o usuário configurar uma chave
     var hash=_hashConteudoG(base64.slice(0,4096)+'|'+base64.length);
     var nomeGuia=(g.beneficiario&&g.beneficiario.nome)||'';
+    // Quando o anexo veio de um slot de "anexo obrigatório" nomeado (Parametrização), pedimos também
+    // à IA que confira se o conteúdo do documento corresponde ao que foi exigido (ex.: "Laudo de
+    // ultrassom do abdome" vs. o usuário ter anexado, por engano, uma nota fiscal).
+    var reqNome=anexo.anexoObrigNome||'';
     var sistema='Você é um assistente de extração de documentos médicos/administrativos (OCR + interpretação). Responda SOMENTE com o JSON solicitado, sem texto antes ou depois, sem markdown.';
     var prompt='Leia o documento anexado (arquivo "'+(anexo.nome||'')+'") e extraia as informações a seguir. '+
       'Identifique o NOME DO PACIENTE constante no documento e confira se é o mesmo da guia ("'+nomeGuia+'"). '+
-      'Responda em JSON válido, exatamente neste formato: {"pacienteDoc":"<nome do paciente no documento ou vazio>","confereNome":"<sim|nao|?>","extrato":"<1-2 frases com o achado principal do documento>"}';
+      (reqNome?('Este anexo foi enviado para atender à exigência cadastrada: "'+reqNome+'". Avalie se o documento realmente CORRESPONDE a esse tipo de documento (ex.: se foi pedido um "laudo de ultrassom do abdome", confira se o documento é de fato esse laudo, e não outro tipo de documento). '):'')+
+      'Responda em JSON válido, exatamente neste formato: {"pacienteDoc":"<nome do paciente no documento ou vazio>","confereNome":"<sim|nao|?>","extrato":"<1-2 frases com o achado principal do documento>"'+
+      (reqNome?',"correspondeAoEsperado":"<sim|nao|parcial>","motivoDivergencia":"<vazio se corresponder, senão explique em 1 frase o que o documento realmente é>"':'')+
+      '}';
     try{
       var resp=await window.callIAComSistemaEAnexo(cfg, sistema, prompt, {mime:mime, base64:base64, nome:anexo.nome});
       if(!resp || !resp.ok) return;
@@ -211,6 +218,11 @@
       var o=JSON.parse(txt);
       var extratos=getAnxExtratosG(g.numero);
       extratos[anexo.id]={hash:hash, nome:anexo.nome||'', pacienteDoc:o.pacienteDoc||'', confereNome:(o.confereNome||'?'), extrato:o.extrato||'', ts:new Date().toISOString().slice(0,16).replace('T',' ')};
+      if(reqNome){
+        extratos[anexo.id].anexoObrigNome=reqNome;
+        extratos[anexo.id].correspondeAoEsperado=o.correspondeAoEsperado||'?';
+        extratos[anexo.id].motivoDivergencia=o.motivoDivergencia||'';
+      }
       saveAnxExtratoG(g.numero, extratos);
       anexo.analisadoIA=marcarAnexoAnalisadoG(g.numero, anexo.id);
       g._cache=null; // força reanálise considerando o novo extrato
@@ -231,6 +243,13 @@
         var al='⚠️ DIVERGÊNCIA DE NOME no anexo "'+nome+'": documento em nome de '+(e.pacienteDoc||'—')+', guia de '+((g.beneficiario&&g.beneficiario.nome)||'—')+' — possível anexo trocado.';
         if(ia.alertas.indexOf(al)<0) ia.alertas.unshift(al);
       }
+      if(e.anexoObrigNome && (''+e.correspondeAoEsperado).toLowerCase()==='nao'){
+        var alDiv='⚠️ ANEXO NÃO CORRESPONDE ao exigido: "'+nome+'" foi enviado para atender "'+e.anexoObrigNome+'", mas '+(e.motivoDivergencia||'o conteúdo do documento não corresponde ao esperado')+'.';
+        if(ia.alertas.indexOf(alDiv)<0) ia.alertas.unshift(alDiv);
+      } else if(e.anexoObrigNome && (''+e.correspondeAoEsperado).toLowerCase()==='parcial'){
+        var alPar='Anexo "'+nome+'" corresponde apenas parcialmente ao exigido ("'+e.anexoObrigNome+'")'+(e.motivoDivergencia?(': '+e.motivoDivergencia):'')+' — confirmar manualmente.';
+        if(ia.pendencias.indexOf(alPar)<0) ia.pendencias.push(alPar);
+      }
       if(e.extrato){
         var nota='Anexo "'+nome+'" (lido pela IA): '+e.extrato;
         if(ia.pendencias.indexOf(nota)<0 && ia.alertas.indexOf(nota)<0) ia.pendencias.push(nota);
@@ -247,6 +266,64 @@
     sv[numeroGuia]=arr;
     try{ localStorage.setItem('regula_anexos_novos',JSON.stringify(sv)); }
     catch(e){ toast('Arquivo grande demais para armazenar localmente (limite do navegador).','warn'); }
+  }
+
+  // Lê um File (nativo do <input type="file">) e devolve uma Promise com o objeto de anexo pronto
+  // para entrar em guia.anexosLista — mesmo formato usado pelo upload manual (openAnexoUpload).
+  // anexoObrigNome: quando o arquivo veio de um slot de "anexo obrigatório" nomeado, o nome exigido
+  // (ex.: "Laudo de ultrassom do abdome"), usado depois pela OCR para checar correspondência.
+  function _solicFileParaAnexoObj(numeroGuia, file, categoria, anexoObrigNome){
+    return new Promise(function(resolve){
+      var ext=(file.name.split('.').pop()||'').toLowerCase();
+      var tipo=/(jpg|jpeg|png|gif|webp)/.test(ext)?'img':(ext==='pdf'?'pdf':'doc');
+      var reader=new FileReader();
+      reader.onload=function(){
+        var ax={
+          id:numeroGuia+'-S'+Date.now()+Math.floor(Math.random()*1000),
+          nome:file.name, tipo:tipo, categoria:categoria||'Outros',
+          tamanho:(file.size/1024>=1024?(file.size/1048576).toFixed(2)+' MB':Math.round(file.size/1024)+' KB'),
+          enviadoEm:new Date().toISOString().slice(0,16).replace('T',' '),
+          enviadoPor:perfilDef[State.perfil].nome,
+          paginas:1, anotacoes:[],
+          dataURL:reader.result,
+          adicionado:true
+        };
+        if(anexoObrigNome) ax.anexoObrigNome=anexoObrigNome;
+        resolve(ax);
+      };
+      reader.onerror=function(){ resolve(null); };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // true se há ao menos um arquivo selecionado (obrigatório nomeado ou genérico) na tela de Solicitação —
+  // usado para marcar guia.anexos=true de forma síncrona ao criar a guia (a transferência em si é assíncrona).
+  function _solicTemAnexos(s){
+    var obrig=s._anexosObrigArquivos||{};
+    if(Object.keys(obrig).some(function(k){return !!obrig[k];})) return true;
+    return (s._anexosGenericos||[]).some(Boolean);
+  }
+
+  // Transfere os arquivos escolhidos na tela de Solicitação (obrigatórios nomeados + genéricos) para
+  // a guia recém-criada: popula guia.anexosLista e dispara a leitura OCR/IA de cada um (que, para os
+  // obrigatórios, também confere se o documento corresponde ao nome exigido). guia.anexos já deve ter
+  // sido marcado true de forma síncrona pelo chamador — aqui só preenchemos a lista, de forma assíncrona.
+  // s._anexosObrigArquivos: {nomeExigido: File}; s._anexosGenericos: File[] (pode ter buracos/undefined).
+  function _solicTransferirAnexosParaGuia(guia, s){
+    var obrig=s._anexosObrigArquivos||{}, genericos=(s._anexosGenericos||[]).filter(Boolean);
+    var pares=[]; // [{file, categoria, anexoObrigNome}]
+    Object.keys(obrig).forEach(function(nome){ if(obrig[nome]) pares.push({file:obrig[nome], categoria:'Outros', anexoObrigNome:nome}); });
+    genericos.forEach(function(f){ pares.push({file:f, categoria:'Outros', anexoObrigNome:null}); });
+    if(!pares.length) return;
+    Promise.all(pares.map(function(p){ return _solicFileParaAnexoObj(guia.numero,p.file,p.categoria,p.anexoObrigNome); }))
+      .then(function(objs){
+        objs.filter(Boolean).forEach(function(ax){
+          guia.anexosLista.unshift(ax);
+          persistAnexoNovo(guia.numero, ax);
+          if(ax.tipo==='img'||ax.tipo==='pdf') extrairAnexoOCR(guia, ax);
+        });
+        guia._cache=null;
+      });
   }
 
   // Cadastro de enfermeiras — cada uma atende a um subconjunto de fluxos
@@ -1843,6 +1920,25 @@
     return arquivos;
   }
 
+  // Liga os slots genéricos (não nomeados) de uma seção de Anexos e retorna um array vivo
+  // {file, categoria} com o que estiver selecionado em cada slot — usado para transferir os
+  // anexos "extras" (sem exigência específica) para a guia ao autorizar a solicitação.
+  function _solicLigarAnexosGenericos(wrap, idPrefix, qtdGenericos){
+    var lista=[];
+    for(var i=0;i<qtdGenericos;i++){
+      (function(idx){
+        var inp=wrap.querySelector('#'+idPrefix+idx), lbl=wrap.querySelector('#'+idPrefix+idx+'Nome');
+        if(!inp) return;
+        inp.onchange=function(){
+          var f=inp.files&&inp.files[0];
+          lbl.textContent=f?f.name:'Nenhum arquivo escolhido';
+          lista[idx]=f||null;
+        };
+      })(i);
+    }
+    return lista;
+  }
+
   // Habilita/desabilita o botão Autorizar conforme todos os anexos obrigatórios pendentes tenham arquivo.
   function _solicAtualizarBotaoAutorizar(btnEl, anexosObrig, arquivos){
     if(!btnEl) return;
@@ -2350,13 +2446,7 @@
       anexosWrap.innerHTML=_solicAnexosSecaoHTML('siAnexo',anexosObrig);
       lcIcons();
       var qtdGenericos=Math.max(1,6-anexosObrig.length);
-      for(var i=0;i<qtdGenericos;i++){
-        (function(idx){
-          var inp=$('#siAnexo'+idx), lbl=$('#siAnexo'+idx+'Nome');
-          if(!inp) return;
-          inp.onchange=function(){ lbl.textContent=inp.files&&inp.files[0]?inp.files[0].name:'Nenhum arquivo escolhido'; };
-        })(i);
-      }
+      s._anexosGenericos=_solicLigarAnexosGenericos(wrap,'siAnexo',qtdGenericos);
       var btn=$('#siAutorizarBtn');
       var arquivosObrig=_solicLigarAnexosObrig(wrap,'siAnexo',anexosObrig,function(arq){ _solicAtualizarBotaoAutorizar(btn,anexosObrig,arq); });
       _solicAtualizarBotaoAutorizar(btn,anexosObrig,arquivosObrig);
@@ -2427,7 +2517,7 @@
       tipo:'Internação', natureza:'Internação', subInternacao:s.natureza.indexOf('cirurgica')>=0?'Cirúrgica':'Clínica',
       regime:s.regime==='Urgência/Emergência'?'Urgência':'Eletivo', status:'Em análise', origem:'Emissão guias',
       congenere:s.benef.cidade||'—', solicitante:s.profSolicNome||(s.solicitante&&s.solicitante.nome)||'—',
-      uti:false, opme:s.previsaoOpme==='Sim', dut:false, anexos:false, prio:s.regime==='Urgência/Emergência'?'Alta':'Média',
+      uti:false, opme:s.previsaoOpme==='Sim', dut:false, anexos:_solicTemAnexos(s), prio:s.regime==='Urgência/Emergência'?'Alta':'Média',
       risco:'baixo', dataEmissao:dataEmissao, horaEmissao:horaEmissao,
       internacao:s.dataHoraInternacao?s.dataHoraInternacao.replace('T',' '):'', alta:s.dataHoraPrevAlta?s.dataHoraPrevAlta.replace('T',' '):'',
       diasAuditoria:0, prazoVencido:false,
@@ -2441,6 +2531,7 @@
     };
 
     State.guias.push(guia);
+    _solicTransferirAnexosParaGuia(guia, s);
     logAcao('Solicitação de Internação registrada', 'Guia '+numero+' — '+s.benef.nome);
     toast('Solicitação registrada com sucesso — guia '+numero+' criada.','ok');
 
@@ -2667,13 +2758,7 @@
     $('#soEspecMat').onchange=function(){ s.especificacaoMaterial=this.value; };
     $('#soObsOpme').onchange=function(){ s.obsOpme=this.value; };
 
-    for(var i=0;i<6;i++){
-      (function(idx){
-        var inp=$('#soAnexo'+idx), lbl=$('#soAnexo'+idx+'Nome');
-        if(!inp) return;
-        inp.onchange=function(){ lbl.textContent=inp.files&&inp.files[0]?inp.files[0].name:'Nenhum arquivo escolhido'; };
-      })(i);
-    }
+    s._anexosGenericos=_solicLigarAnexosGenericos(wrap,'soAnexo',6);
 
     $('#soAutorizarBtn').onclick=function(){ _autorizarSolicitacaoOpme(); };
 
@@ -2710,6 +2795,8 @@
     guia.matmed=(guia.matmed||[]).concat(itemsParaGuia(s.opmes).map(function(o){ o=Object.assign({},o); o.opme=true; return o; }));
     guia.diariasTaxas=(guia.diariasTaxas||[]).concat(itemsParaGuia(s.taxas));
     guia.opme=true;
+    guia.anexos=guia.anexos||_solicTemAnexos(s);
+    _solicTransferirAnexosParaGuia(guia, s);
     guia.status='Cotação de OPME'; // reabre a guia para auditoria técnica do(s) OPME(s) anexado(s)
     var agora=new Date();
     guia.ultimaSync=agora.getFullYear()+'-'+String(agora.getMonth()+1).padStart(2,'0')+'-'+String(agora.getDate()).padStart(2,'0')+' '+String(agora.getHours()).padStart(2,'0')+':'+String(agora.getMinutes()).padStart(2,'0');
@@ -3167,13 +3254,7 @@
       anexosWrap.innerHTML=_solicAnexosSecaoHTML('sqAnexo',anexosObrig);
       lcIcons();
       var qtdGenericos=Math.max(1,6-anexosObrig.length);
-      for(var i=0;i<qtdGenericos;i++){
-        (function(idx){
-          var inp=$('#sqAnexo'+idx), lbl=$('#sqAnexo'+idx+'Nome');
-          if(!inp) return;
-          inp.onchange=function(){ lbl.textContent=inp.files&&inp.files[0]?inp.files[0].name:'Nenhum arquivo escolhido'; };
-        })(i);
-      }
+      s._anexosGenericos=_solicLigarAnexosGenericos(wrap,'sqAnexo',qtdGenericos);
       var btn=$('#sqAutorizarBtn');
       var arquivosObrig=_solicLigarAnexosObrig(wrap,'sqAnexo',anexosObrig,function(arq){ _solicAtualizarBotaoAutorizar(btn,anexosObrig,arq); });
       _solicAtualizarBotaoAutorizar(btn,anexosObrig,arquivosObrig);
@@ -3239,7 +3320,7 @@
       numero:numero, beneficiario:s.benef, prestadorSol:s.profSolicNome?{id:'',nome:s.profSolicNome,tipo:'Médico'}:null, prestadorExe:null, fluxo:fluxo,
       tipo:'Quimioterapia', natureza:'Ambulatorial', regime:'Eletivo', status:'Em análise', origem:'Emissão guias',
       congenere:s.benef.cidade||'—', solicitante:s.profSolicNome||'—',
-      uti:false, opme:_solicQuimioTemOpme(s), dut:false, anexos:false, prio:'Alta',
+      uti:false, opme:_solicQuimioTemOpme(s), dut:false, anexos:_solicTemAnexos(s), prio:'Alta',
       risco:'alto', dataEmissao:dataEmissao, horaEmissao:horaEmissao,
       internacao:'', alta:'', diasAuditoria:0, prazoVencido:false,
       procedimentos:itemsParaGuia(s.procedimentos), pacotes:[],
@@ -3252,6 +3333,7 @@
     };
 
     State.guias.push(guia);
+    _solicTransferirAnexosParaGuia(guia, s);
     logAcao('Solicitação de Quimioterapia registrada', 'Guia '+numero+' — '+s.benef.nome);
     toast('Solicitação registrada com sucesso — guia '+numero+' criada.','ok');
 
@@ -3547,13 +3629,7 @@
       anexosWrap.innerHTML=_solicAnexosSecaoHTML('spAnexo',anexosObrig);
       lcIcons();
       var qtdGenericos=Math.max(1,6-anexosObrig.length);
-      for(var i=0;i<qtdGenericos;i++){
-        (function(idx){
-          var inp=$('#spAnexo'+idx), lbl=$('#spAnexo'+idx+'Nome');
-          if(!inp) return;
-          inp.onchange=function(){ lbl.textContent=inp.files&&inp.files[0]?inp.files[0].name:'Nenhum arquivo escolhido'; };
-        })(i);
-      }
+      s._anexosGenericos=_solicLigarAnexosGenericos(wrap,'spAnexo',qtdGenericos);
       var btn=$('#spAutorizarBtn');
       var arquivosObrig=_solicLigarAnexosObrig(wrap,'spAnexo',anexosObrig,function(arq){ _solicAtualizarBotaoAutorizar(btn,anexosObrig,arq); });
       _solicAtualizarBotaoAutorizar(btn,anexosObrig,arquivosObrig);
@@ -3607,7 +3683,7 @@
       tipo:'Internação', natureza:'Internação', subInternacao:s.natureza.indexOf('cirurgica')>=0?'Cirúrgica':'Clínica',
       regime:guiaPrincipal.regime||'Eletivo', status:'Em análise', origem:'Emissão guias',
       congenere:s.benef.cidade||'—', solicitante:guiaPrincipal.solicitante||'—',
-      uti:false, opme:s.opmes.some(function(it){return it.codigo;}), dut:false, anexos:false, prio:'Média',
+      uti:false, opme:s.opmes.some(function(it){return it.codigo;}), dut:false, anexos:_solicTemAnexos(s), prio:'Média',
       risco:guiaPrincipal.risco||'baixo', dataEmissao:dataEmissao, horaEmissao:horaEmissao,
       internacao:guiaPrincipal.internacao||'', alta:'', diasAuditoria:0, prazoVencido:false,
       procedimentos:itemsParaGuia(s.procedimentos), pacotes:itemsParaGuia(s.pacotes),
@@ -3621,6 +3697,7 @@
     };
 
     State.guias.push(guia);
+    _solicTransferirAnexosParaGuia(guia, s);
     logAcao('Solicitação de Prorrogação de Internação registrada', 'Guia '+numero+' — prorrogação de '+s.numGuiaPrincipal+' — '+s.benef.nome);
     toast('Prorrogação registrada com sucesso — guia '+numero+' criada.','ok');
 
@@ -3930,13 +4007,7 @@
       if(!wrapEl) return;
       wrapEl.innerHTML=_solicAnexosSecaoHTML('seAnexo',anexosObrig,s._anexosObrigArquivos);
       var qtdGenericos=Math.max(1,6-anexosObrig.length);
-      for(var i=0;i<qtdGenericos;i++){
-        (function(idx){
-          var inp=wrap.querySelector('#seAnexo'+idx), lbl=wrap.querySelector('#seAnexo'+idx+'Nome');
-          if(!inp) return;
-          inp.onchange=function(){ lbl.textContent=inp.files&&inp.files[0]?inp.files[0].name:'Nenhum arquivo escolhido'; };
-        })(i);
-      }
+      s._anexosGenericos=_solicLigarAnexosGenericos(wrap,'seAnexo',qtdGenericos);
       var btnEl=wrap.querySelector('#seAutorizarBtn');
       s._anexosObrigArquivos=_solicLigarAnexosObrig(wrap,'seAnexo',anexosObrig,function(arquivos){
         s._anexosObrigArquivos=arquivos;
@@ -3994,7 +4065,7 @@
       numero:numero, beneficiario:s.benef, prestadorSol:s.solicitante, prestadorExe:s.executante, fluxo:fluxo,
       tipo:'Exame', natureza:'Ambulatorial', regime:s.regime==='Urgência/Emergência'?'Urgência':'Eletivo', status:'Em análise', origem:'Emissão guias',
       congenere:s.benef.cidade||'—', solicitante:(s.solicitante&&s.solicitante.nome)||'—',
-      uti:false, opme:s.opmes.some(function(it){return it.codigo;}), dut:false, anexos:false, prio:'Baixa',
+      uti:false, opme:s.opmes.some(function(it){return it.codigo;}), dut:false, anexos:_solicTemAnexos(s), prio:'Baixa',
       risco:'baixo', dataEmissao:dataEmissao, horaEmissao:horaEmissao,
       internacao:'', alta:'', diasAuditoria:0, prazoVencido:false,
       procedimentos:itemsParaGuia(s.procedimentos), pacotes:itemsParaGuia(s.pacotes),
@@ -4008,6 +4079,7 @@
     };
 
     State.guias.push(guia);
+    _solicTransferirAnexosParaGuia(guia, s);
     logAcao('Solicitação de Exames e Procedimentos registrada', 'Guia '+numero+' — '+s.benef.nome);
     toast('Solicitação registrada com sucesso — guia '+numero+' criada.','ok');
 
@@ -4180,13 +4252,7 @@
     var obsImpEl=$('#scObsImpressa'), obsImpCount=$('#scObsImpressaCount');
     obsImpEl.addEventListener('input',function(){ s.obsImpressa=this.value; obsImpCount.textContent=this.value.length+' de 2000 caracteres'; });
 
-    for(var i=0;i<6;i++){
-      (function(idx){
-        var inp=$('#scAnexo'+idx), lbl=$('#scAnexo'+idx+'Nome');
-        if(!inp) return;
-        inp.onchange=function(){ lbl.textContent=inp.files&&inp.files[0]?inp.files[0].name:'Nenhum arquivo escolhido'; };
-      })(i);
-    }
+    s._anexosGenericos=_solicLigarAnexosGenericos(wrap,'scAnexo',6);
 
     $('#scAutorizarBtn').onclick=function(){ _autorizarSolicitacaoConsulta(); };
   }
@@ -4223,7 +4289,7 @@
       numero:numero, beneficiario:s.benef, prestadorSol:s.executante, prestadorExe:s.executante, fluxo:fluxo,
       tipo:'Consulta', natureza:'Ambulatorial', regime:s.regime==='Urgência/Emergência'?'Urgência':'Eletivo', status:'Em análise', origem:'Emissão guias',
       congenere:s.benef.cidade||'—', solicitante:(s.executante&&s.executante.nome)||'—',
-      uti:false, opme:false, dut:false, anexos:false, prio:'Baixa',
+      uti:false, opme:false, dut:false, anexos:_solicTemAnexos(s), prio:'Baixa',
       risco:'baixo', dataEmissao:dataEmissao, horaEmissao:horaEmissao,
       internacao:'', alta:'', diasAuditoria:0, prazoVencido:false,
       procedimentos:[], pacotes:[], matmed:[], diariasTaxas:[],
@@ -4235,6 +4301,7 @@
     };
 
     State.guias.push(guia);
+    _solicTransferirAnexosParaGuia(guia, s);
     logAcao('Solicitação de Consulta registrada', 'Guia '+numero+' — '+s.benef.nome);
     toast('Solicitação registrada com sucesso — guia '+numero+' criada.','ok');
 
@@ -9471,8 +9538,17 @@
       var fc=wrap.querySelector('#anxCat').value;
       var arr=g.anexosLista.filter(function(a){ return (!q||a.nome.toLowerCase().indexOf(q)>=0) && (!fc||a.categoria===fc); });
       if(!arr.length){ listWrap.innerHTML='<div class="empty"><div class="ico">'+icoLg('search')+'</div>Nenhum anexo corresponde ao filtro.</div>'; lcIcons(); return; }
+      var extratosG=getAnxExtratosG(g.numero);
       arr.forEach(function(a){
         var nAnot=(a.anotacoes||[]).length;
+        var extA=extratosG[a.id];
+        var badgeCorresp='';
+        if(extA && extA.anexoObrigNome){
+          var corr=(''+extA.correspondeAoEsperado).toLowerCase();
+          if(corr==='nao') badgeCorresp='<span class="badge danger" title="Exigido: '+esc(extA.anexoObrigNome)+(extA.motivoDivergencia?(' — '+esc(extA.motivoDivergencia)):'')+'">'+ico('alert-triangle',12)+' Não corresponde ao exigido</span>';
+          else if(corr==='parcial') badgeCorresp='<span class="badge warn" title="Exigido: '+esc(extA.anexoObrigNome)+(extA.motivoDivergencia?(' — '+esc(extA.motivoDivergencia)):'')+'">'+ico('alert-triangle',12)+' Corresponde parcialmente</span>';
+          else if(corr==='sim') badgeCorresp='<span class="badge anx-ia-ok" title="Exigido: '+esc(extA.anexoObrigNome)+'">'+ico('check',12)+' Corresponde ao exigido</span>';
+        }
         var card=el('div',{style:'padding:10px;border:1px solid var(--line);border-radius:10px;margin-bottom:8px;background:#fff'});
         card.innerHTML=
           '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">'+
@@ -9484,6 +9560,7 @@
             '<span class="badge '+catColor(a.categoria)+'">'+esc(a.categoria)+'</span>'+
             '<span class="badge muted">'+a.tipo.toUpperCase()+'</span>'+
             (a.analisadoIA?'<span class="badge anx-ia-ok" title="Conteúdo lido pela RAI em '+esc(a.analisadoIA)+'">'+ico('sparkles',12)+' Já analisado pela IA</span>':'')+
+            badgeCorresp+
             (nAnot?'<span class="badge info">'+ico('message-circle',12)+' '+nAnot+'</span>':'')+
             '<div style="display:flex;gap:6px">'+
               '<button class="btn sm" data-act="ver">'+ico('eye')+' Visualizar</button>'+
