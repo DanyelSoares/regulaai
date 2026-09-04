@@ -91,6 +91,12 @@
   function ico(n,s){ var c=ctxRef(); return c.ico?c.ico(n,s||14):''; }
   function esc(t){ var c=ctxRef(); return c.esc?c.esc(t):(''+t); }
   function el(tag,attrs,html){ var c=ctxRef(); return c.el(tag,attrs,html); }
+  // Visibilidade dos sistemas de peso/pontuação (Configurações → Classificação de Risco),
+  // espelhando pesoVisivel()/aderenciaVisivel()/riscoRegVisivel() de app.js — este módulo roda
+  // isolado, então lê o mesmo State.pesosVisiveis via ctx em vez de duplicar a lógica.
+  function pesoVisivel(chave){ var st=ctxRef().State; return !!(st&&st.pesosVisiveis&&st.pesosVisiveis[chave]); }
+  function aderenciaVisivel(){ return pesoVisivel('aderenciaIA'); }
+  function riscoRegVisivel(){ return pesoVisivel('riscoRegulatorio'); }
 
   // Card de KPI simples (placeholder com valor)
   function kpiCard(titulo, valor, sub, cor, tip, gotoTab, drillKpi){
@@ -362,17 +368,20 @@
           acao:'Verificar pertinência e possível fracionamento'});
       }
     });
-    // 3) Alto custo: guias de risco crítico/alto com custo elevado
-    M.guias.forEach(function(g){
-      var c=custoGuia(g);
-      if((g.risco==='critico'||g.risco==='alto') && c>20000){
-        novo({sev:g.risco==='critico'?'critica':'alta',tipo:'alto_custo',score:c>40000?95:85,
-          medico:g.solicitante||'—',prestador:(g.prestadorExe&&g.prestadorExe.nome)||'—',
-          valor:moeda(c),benef:(g.beneficiario&&g.beneficiario.nome)||'—',guia:g.numero,
-          desc:'Guia '+g.numero+' ('+g.tipo+', risco '+g.risco+') com custo estimado de '+moeda(c)+', acima do limiar de R$ 20.000.',
-          acao:'Revisão por junta médica'});
-      }
-    });
+    // 3) Alto custo: guias de risco crítico/alto com custo elevado — depende do Risco Regulatório
+    // estar ativo (o próprio critério de disparo do alerta é o nível de risco da guia).
+    if(riscoRegVisivel()){
+      M.guias.forEach(function(g){
+        var c=custoGuia(g);
+        if((g.risco==='critico'||g.risco==='alto') && c>20000){
+          novo({sev:g.risco==='critico'?'critica':'alta',tipo:'alto_custo',score:c>40000?95:85,
+            medico:g.solicitante||'—',prestador:(g.prestadorExe&&g.prestadorExe.nome)||'—',
+            valor:moeda(c),benef:(g.beneficiario&&g.beneficiario.nome)||'—',guia:g.numero,
+            desc:'Guia '+g.numero+' ('+g.tipo+', risco '+g.risco+') com custo estimado de '+moeda(c)+', acima do limiar de R$ 20.000.',
+            acao:'Revisão por junta médica'});
+        }
+      });
+    }
     // 4) Inconsistência de OPME: variação de preço autorizado x cobrado alta
     M.opmes.forEach(function(o){
       if(o.varPreco>=25){
@@ -478,6 +487,7 @@
 
   // ── Conteúdo por aba (Fase 1: placeholders com escopo previsto) ───
   function renderTab(id){
+    if(id==='concordancia' && !aderenciaVisivel()){ id='executivo'; _state.tab='executivo'; }
     if(id==='executivo') return renderExecutivo();
     if(id==='custos') return renderCustos();
     if(id==='opme') return renderOpme();
@@ -793,12 +803,14 @@
     var M=analitico();
     var MK=window.MOCK||{};
     if(tipo==='guias'){
-      return {head:['Guia','DataEmissao','Beneficiario','Natureza','Regime','Especialidade','CID','Solicitante','Executante','Status','Risco','Custo'],
+      var showR=riscoRegVisivel();
+      return {head:['Guia','DataEmissao','Beneficiario','Natureza','Regime','Especialidade','CID','Solicitante','Executante','Status'].concat(showR?['Risco']:[]).concat(['Custo']),
         rows:(M.guias||[]).map(function(g){
           var nat=MK.naturezaDetalhada?MK.naturezaDetalhada(g):(g.natureza||'');
           var esp=MK.especialidadeDaGuia?MK.especialidadeDaGuia(g):'';
           var cid=MK.cidGuia?MK.cidGuia(g).codigo:'';
-          return [g.numero,g.dataEmissao,(g.beneficiario&&g.beneficiario.nome)||'',nat,g.regime||'',esp,cid,g.solicitante||'',(g.prestadorExe&&g.prestadorExe.nome)||'',g.status||'',g.risco||'',custoGuia(g)];
+          return [g.numero,g.dataEmissao,(g.beneficiario&&g.beneficiario.nome)||'',nat,g.regime||'',esp,cid,g.solicitante||'',(g.prestadorExe&&g.prestadorExe.nome)||'',g.status||'']
+            .concat(showR?[g.risco||'']:[]).concat([custoGuia(g)]);
         })};
     }
     if(tipo==='alertas') return {head:['ID','Data','Guia','Medico','Severidade','Tipo','Score','Valor','Status','Descricao'], rows:M.alertas.map(function(a){return [a.id,a.data,a.guia,a.medico,SEV_LBL[a.sev],TIPO_LBL[a.tipo]||a.tipo,a.score,a.valor,STATUS_LBL[a.status]||a.status,a.desc];})};
@@ -857,10 +869,11 @@
       ['Guias recebidas', M.totalGuias],
       ['Custo total analisado', M.totalCusto],
       ['Custo de serviços negados', M.custoNegado],
-      ['Alertas ativos', M.alertas.length],
+      ['Alertas ativos', M.alertas.length]
+    ].concat(riscoRegVisivel()?[
       ['Risco baixo', M.riscoCnt.baixo],['Risco médio', M.riscoCnt.medio],
       ['Risco alto', M.riscoCnt.alto],['Risco crítico', M.riscoCnt.critico]
-    ];
+    ]:[]);
     var execTabs=[
       tab('Ranking de médicos por custo',['#','Médico','Guias','Custo'],
         M.medicos.slice().sort(function(a,b){return b.custo-a.custo;}).map(function(m,i){return [i+1,m.nome,m.guias,m.custo];})),
@@ -1030,12 +1043,14 @@
         'Quantidade de alertas gerados pelo motor de detecção (concentração, recorrência, alto custo, inconsistência de OPME). Clique para abrir a aba Alertas Inteligentes.','alertas')+
     '</div>';
 
-    var distRisco='<div class="rel-card"><div class="rel-card-hd">Distribuição por risco<span class="rel-card-sub" title="Clique numa barra para filtrar o painel pelas guias daquele nível de risco">clique para filtrar · nº de guias</span></div><div style="padding:6px 14px 12px">'+
-      distRow('Baixo',rc.baixo,maxRisco,'#16a34a','baixo',fr==='baixo')+
-      distRow('Médio',rc.medio,maxRisco,'#a16207','medio',fr==='medio')+
-      distRow('Alto',rc.alto,maxRisco,'#c2410c','alto',fr==='alto')+
-      distRow('Crítico',rc.critico,maxRisco,'#b91c1c','critico',fr==='critico')+
-    '</div></div>';
+    var distRisco = riscoRegVisivel()
+      ? '<div class="rel-card"><div class="rel-card-hd">Distribuição por risco<span class="rel-card-sub" title="Clique numa barra para filtrar o painel pelas guias daquele nível de risco">clique para filtrar · nº de guias</span></div><div style="padding:6px 14px 12px">'+
+        distRow('Baixo',rc.baixo,maxRisco,'#16a34a','baixo',fr==='baixo')+
+        distRow('Médio',rc.medio,maxRisco,'#a16207','medio',fr==='medio')+
+        distRow('Alto',rc.alto,maxRisco,'#c2410c','alto',fr==='alto')+
+        distRow('Crítico',rc.critico,maxRisco,'#b91c1c','critico',fr==='critico')+
+      '</div></div>'
+      : '';
 
     var rkMed=rankTable('Ranking de médicos por custo',[
       {h:'#',f:function(r,i){return '<b>'+(i+1)+'</b>';}},
@@ -1080,7 +1095,7 @@
     return '<div class="rel-section">'+
       filtroBanner+
       kpis+
-      '<div class="rel-grid2">'+quebra+distRisco+'</div>'+
+      '<div class="rel-grid2'+(distRisco?'':' rel-grid2-single')+'">'+quebra+distRisco+'</div>'+
       '<div class="rel-grid2">'+rkMed+rkPrest+'</div>'+
       rkOpme+
     '</div>';
@@ -1509,7 +1524,10 @@
     // com KPIs + tabelas). Visível em todas as abas, exceto Comparativos. Respeita os filtros ativos.
     var xlsxGuias =
       '<button class="rel-tabbar-xlsx" data-xlsx-modulo="1" title="Exportar Relatórios completo para Excel (todas as abas, KPIs e tabelas)" aria-label="Exportar Relatórios completo para Excel">'+xlsxSvg(17)+'</button>';
-    tabBar.innerHTML = TABS.map(function(t){
+    // Aba "Concordância IA × Auditor" depende inteiramente da Aderência — some quando desativada.
+    if(!aderenciaVisivel() && _state.tab==='concordancia') _state.tab='executivo';
+    var tabsVisiveis = TABS.filter(function(t){ return t.id!=='concordancia' || aderenciaVisivel(); });
+    tabBar.innerHTML = tabsVisiveis.map(function(t){
       return '<button class="rel-tab'+(_state.tab===t.id?' active':'')+'" data-rtab="'+t.id+'">'+esc(t.label)+'</button>';
     }).join('') + '<span class="rel-tabbar-spacer"></span>' + xlsxGuias;
     wrap.appendChild(tabBar);

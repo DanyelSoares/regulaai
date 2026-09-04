@@ -123,7 +123,18 @@
     permOverrides: JSON.parse(localStorage.getItem('regula_perm_overrides')||'null') || {},
     // Tipos de Solicitação (ids de SOLICITACOES_TIPOS) que o perfil Prestador pode registrar.
     // Padrão: todos habilitados — configurável em Configurações → Permissões.
-    prestadorTiposPermitidos: JSON.parse(localStorage.getItem('regula_prestador_tipos')||'null')
+    prestadorTiposPermitidos: JSON.parse(localStorage.getItem('regula_prestador_tipos')||'null'),
+    // Visibilidade dos 4 sistemas de peso/pontuação (Configurações → Classificação de Risco).
+    // Quando um sistema está desativado (false), TODO elemento de UI que exibe o resultado
+    // daquele sistema (badge, coluna, KPI, gráfico, exportação, menção do assistente) fica
+    // oculto — não é só "pausar recálculo" (isso já existe em riscoConfig.ativo, que é outra
+    // coisa: só congela o último valor calculado, sem esconder nada).
+    // pesoItens: coluna "Peso" nas abas Procedimentos/Pacotes/Mat-Med/Diárias (Parametrização).
+    // aderenciaIA: % de Aderência (Pesos IA por fluxo + motor ai-engine.js).
+    // riscoRegulatorio: badge/nível de Risco Regulatório.
+    // riscoAssistencial: os 3 selos Assistencial/Documental/Contratual.
+    pesosVisiveis: Object.assign({pesoItens:true, aderenciaIA:true, riscoRegulatorio:true, riscoAssistencial:true},
+      JSON.parse(localStorage.getItem('regula_pesos_visiveis')||'null')||{})
   };
 
   var DEFAULT_PESOS={documental:6,dut:8,procedimento:7,pacote:5,matmed:7,diaria:5,contratual:7,historico:4};
@@ -623,6 +634,10 @@
     return '<span class="badge '+cls+'" data-tip="'+esc(tip)+'">'+esc(s)+'</span>';
   }
   function riskPill(r,guiaNumero){
+    // Componente genérico (pílula de nível baixo/médio/alto/crítico), reusado pelo Risco
+    // Regulatório (com guiaNumero → clicável, abre showRiscoCalculo) e pelo grid de 4 riscos
+    // na guia (sem guiaNumero). A visibilidade é decidida pelo CHAMADOR (riscoRegVisivel()/
+    // risco4Visivel()), não aqui — os dois sistemas têm toggles independentes.
     var clickable=guiaNumero!=null;
     var tip=clickable?'Risco Regulatório · Clique para ver o cálculo':'Risco Regulatório';
     return '<span class="risk '+r+(clickable?' risk-clickable':'')+'"'+(clickable?' data-risco-guia="'+esc(String(guiaNumero))+'"':'')+' title="'+tip+'">'+r.charAt(0).toUpperCase()+r.slice(1)+'</span>';
@@ -675,6 +690,7 @@
     if(g) showRiscoCalculo(g);
   });
   function aderenciaBar(p,iaOuGuia){
+    if(!aderenciaVisivel()) return ''; // sistema desativado em Configurações → Classificação de Risco
     var cls   = p>=90?'alta':(p>=70?'mod':(p>=50?'baixa':'crit'));
     var label = p>=90?'Alta':(p>=70?'Moderada':(p>=50?'Baixa':'Crítica'));
     var fatores='';
@@ -812,6 +828,15 @@
     if(!State.riscoConfig.ativo) return;
     State.guias.forEach(function(g){ g.risco=calcRisco(g); });
   }
+
+  // Helpers de visibilidade dos 4 sistemas de peso — usados por toda a UI para decidir se
+  // mostram/escondem badge, coluna, KPI, gráfico, exportação ou menção do assistente.
+  function pesoVisivel(chave){ return !!(State.pesosVisiveis&&State.pesosVisiveis[chave]); }
+  function pesoItensVisivel(){ return pesoVisivel('pesoItens'); }
+  function aderenciaVisivel(){ return pesoVisivel('aderenciaIA'); }
+  function riscoRegVisivel(){ return pesoVisivel('riscoRegulatorio'); }
+  function risco4Visivel(){ return pesoVisivel('riscoAssistencial'); }
+  function salvarPesosVisiveis(){ localStorage.setItem('regula_pesos_visiveis',JSON.stringify(State.pesosVisiveis)); }
 
   /* === Date Range Picker === */
   function makeDateRangePicker(container, initDe, initAte, onChange, opts){
@@ -4519,7 +4544,7 @@
       {t:'Baixa aderência',         v:count(guias,function(g){return guiaAderencia(g)<70}),             cls:'danger', base:guias,     fn:function(g){return guiaAderencia(g)<70;},                       extra:'aderencia', periodo:true},
       {t:'Tempo médio (dias)',       v:tempoMedio,                                                 cls:'info',   base:guias,     fn:function(g){return true;},                                      extra:'tempo',     periodo:true},
       {t:'Etapa com gargalo',        v:'Aud. Prévia',                                              cls:'warn',   base:guias,     fn:function(g){var et=g.etapas&&g.etapas.filter(function(e){return e.status==='Em andamento';})[0]; return !!(et&&et.nome&&et.nome.indexOf('AUD')>=0);}, extra:'etapa', periodo:true}
-    ];
+    ].filter(function(k){ return k.extra!=='aderencia' || aderenciaVisivel(); });
 
     function kpiModal(k){
       var list=(k.base||guias).filter(k.fn).slice().sort(function(a,b){return b.diasAuditoria-a.diasAuditoria;});
@@ -4577,6 +4602,7 @@
           {h:'Aderência',    f:function(g){return adBadge(g);}}
         ];
       }
+      if(cols && !aderenciaVisivel()) cols=cols.filter(function(c){return c.h!=='Aderência';});
 
       // ── Etapa com gargalo: ranking analítico ────────────────────────────────
       if(k.extra==='etapa'){
@@ -4757,8 +4783,12 @@
     });
     pa.appendChild(bars); panels.appendChild(pa);
 
-    // Donut de aderência média
+    // Donut de aderência média — painel inteiro fica de fora quando o sistema está desativado.
+    // updateDonut fica como no-op por padrão (chamada em outros pontos do Dashboard, ex. barras
+    // de status e ranking de fluxos), só é substituída de verdade quando o painel é construído.
     var avg=guias.length?Math.round(guias.reduce(function(a,g){return a+guiaAderencia(g)},0)/guias.length):0;
+    var updateDonut=function(){};
+    if(aderenciaVisivel()){
     var pb=el('div',{class:'panel',style:'text-align:center'},'<h3 style="text-align:left">Aderência regulatória média</h3>');
     var donutEl=el('div',{class:'donut',id:'donut-aderencia',style:'--p:'+avg},'<span>'+avg+'%</span>');
     var avgCls=AI.classificaAderencia(avg);
@@ -4774,7 +4804,7 @@
     pb.appendChild(donutEl); pb.appendChild(donutLblEl); pb.appendChild(donutLegend);
     panels.appendChild(pb);
     var _donutCur=avg, _donutTimer=null, _tipGuias=guias;
-    function updateDonut(filteredGs, filterName){
+    updateDonut=function(filteredGs, filterName){
       _tipGuias=filteredGs;
       var d=document.getElementById('donut-aderencia'), l=document.getElementById('donut-label');
       if(!d||!l) return;
@@ -4876,6 +4906,7 @@
         if(!pb.contains(e.target)) donutTip.classList.remove('visible');
       });
     }
+    } // fim if(aderenciaVisivel())
 
     // ── Ranking fluxos ────────────────────────────────────────────────────────
     var pc=el('div',{class:'panel'});
@@ -5067,7 +5098,7 @@
         '<select id="fStatus">'+opts(MOCK.STATUS,State.filtros.status,'Todos os status')+'</select>'+
         '<select id="fFluxo"><option value="">Todos os fluxos</option>'+MOCK.FLUXOS.map(function(f){return '<option value="'+f.id+'"'+(State.filtros.fluxo===f.id?' selected':'')+'>'+esc(f.nome)+'</option>'}).join('')+'</select>'+
         '<select id="fOrigem">'+opts(MOCK.ORIGENS,State.filtros.origem,'Todas as origens')+'</select>'+
-        '<select id="fRisco">'+opts(['baixo','medio','alto','critico'],State.filtros.risco,'Todos os riscos')+'</select>'+
+        (riscoRegVisivel()?'<select id="fRisco">'+opts(['baixo','medio','alto','critico'],State.filtros.risco,'Todos os riscos')+'</select>':'')+
         '<select id="fEspec">'+(function(){var s='<option value="">Especialidade</option>';var seen={};guias.forEach(function(g){var e=_especMap[g.tipo];if(e&&!seen[e]){seen[e]=1;s+='<option value="'+esc(e)+'"'+(State.filtros.especialidade===e?' selected':'')+'>'+esc(e)+'</option>';}});return s;}())+'</select>'+
         '<select id="fOpme">'+opts(['Sim','Não'],State.filtros.opme,'OPME')+'</select>'+
         '<select id="fUti">'+opts(['Sim','Não'],State.filtros.uti,'UTI')+'</select>'+
@@ -5359,7 +5390,7 @@
         '<td class="cell-dbl'+(State.filtros.tipo===g.tipo?' cell-filtered':'')+'">'+
           esc(g.tipo.toUpperCase())+
           '<div style="margin-top:5px;'+L2H+'gap:3px;flex-wrap:wrap">'+((g.opme||g.uti)?((g.opme?'<span class="badge warn">OPME</span>':'')+(g.uti?'<span class="badge info">UTI</span>':'')):'<span style="color:transparent;font-size:10px">—</span>')+'</div>'+
-          '<div style="margin-top:9px"><span class="ader-val '+(p>=90?'alta':p>=70?'mod':p>=50?'baixa':'crit')+'" title="Aderência">'+p+'%</span></div>'+
+          '<div style="margin-top:9px">'+(aderenciaVisivel()?'<span class="ader-val '+(p>=90?'alta':p>=70?'mod':p>=50?'baixa':'crit')+'" title="Aderência">'+p+'%</span>':'')+'</div>'+
         '</td>'+
         // FLUXO
         '<td>'+
@@ -5371,7 +5402,7 @@
         '<td>'+
           '<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;max-width:180px" title="'+esc(etAtual)+'">'+esc(etAtual)+'</span>'+
           '<div style="margin-top:5px;'+L2H+'"></div>'+
-          '<div style="margin-top:9px">'+riskPill(g.risco,g.numero)+'</div>'+
+          '<div style="margin-top:9px">'+(riscoRegVisivel()?riskPill(g.risco,g.numero):'')+'</div>'+
         '</td>';
       bindDbl(tr.cells[1],'benef',g.beneficiario.nome,'Beneficiário');
       // duplo clique no badge de congênere dentro da célula do beneficiário
@@ -5473,8 +5504,10 @@
       tsRow.appendChild(document.createElement('td'));
 
       var ts5=document.createElement('td');
-      ts5.innerHTML='<div class="tfoot-lbl">'+ico('alert-triangle',11)+' Risco</div>'+
-        '<div class="tfoot-sub">'+Object.keys(byRisco).map(function(r){return '<span class="badge muted" style="font-size:10px">'+esc(r)+' <b>'+byRisco[r]+'</b></span>';}).join('')+'</div>';
+      if(riscoRegVisivel()){
+        ts5.innerHTML='<div class="tfoot-lbl">'+ico('alert-triangle',11)+' Risco</div>'+
+          '<div class="tfoot-sub">'+Object.keys(byRisco).map(function(r){return '<span class="badge muted" style="font-size:10px">'+esc(r)+' <b>'+byRisco[r]+'</b></span>';}).join('')+'</div>';
+      }
       tsRow.appendChild(ts5);
 
       var tsTb=document.createElement('tbody'); tsTb.appendChild(tsRow);
@@ -5487,7 +5520,7 @@
       $('#fStatus').onchange=function(){State.filtros.status=this.value;render()};
       $('#fFluxo').onchange=function(){State.filtros.fluxo=this.value;render()};
       $('#fOrigem').onchange=function(){State.filtros.origem=this.value;render()};
-      $('#fRisco').onchange=function(){State.filtros.risco=this.value;render()};
+      if($('#fRisco')) $('#fRisco').onchange=function(){State.filtros.risco=this.value;render()};
       $('#fOpme').onchange=function(){State.filtros.opme=this.value;render()};
       $('#fUti').onchange=function(){State.filtros.uti=this.value;render()};
       $('#fNaturezaC').onchange=function(){State.filtros.natureza=this.value;render()};
@@ -5521,16 +5554,20 @@
     function countBy(arr,fn){var r={};arr.forEach(function(x){var k=fn(x);r[k]=(r[k]||0)+1;});return r;}
     function etapaNome(g){for(var i=0;i<g.etapas.length;i++){if(g.etapas[i].status==='em_execucao')return g.etapas[i].nome;}return g.etapas[g.etapas.length-1].nome;}
 
+    var showAd=aderenciaVisivel(), showRisco=riscoRegVisivel();
     var adhs=rows.map(function(g){return guiaAderencia(g);});
     var avgAdh=Math.round(adhs.reduce(function(a,b){return a+b;},0)/total);
 
-    var head1=['Guia','Beneficiário','CPF','Prestador','Tipo','Fluxo','Etapa Atual','Status','Origem','Aderência','Risco','Dias','Prazo Vencido','OPME','UTI'];
+    var head1=['Guia','Beneficiário','CPF','Prestador','Tipo','Fluxo','Etapa Atual','Status','Origem']
+      .concat(showAd?['Aderência']:[]).concat(showRisco?['Risco']:[])
+      .concat(['Dias','Prazo Vencido','OPME','UTI']);
     var rows1=rows.map(function(g){
       var adh=guiaAderencia(g);
       return [g.numero, g.beneficiario.nome, mask(g.beneficiario.cpf), g.prestadorSol.nome, g.tipo.toUpperCase(),
-        g.fluxo.nome, etapaNome(g), g.status, g.origem, adh+'%',
-        g.risco.charAt(0).toUpperCase()+g.risco.slice(1), g.diasAuditoria, g.prazoVencido?'SIM':'NÃO',
-        g.opme?'Sim':'Não', g.uti?'Sim':'Não'];
+        g.fluxo.nome, etapaNome(g), g.status, g.origem]
+        .concat(showAd?[adh+'%']:[])
+        .concat(showRisco?[g.risco.charAt(0).toUpperCase()+g.risco.slice(1)]:[])
+        .concat([g.diasAuditoria, g.prazoVencido?'SIM':'NÃO', g.opme?'Sim':'Não', g.uti?'Sim':'Não']);
     });
 
     var byStatus=countBy(rows,function(g){return g.status;});
@@ -5547,9 +5584,8 @@
       ['Junta Médica',byStatus['Em junta médica']||0],
       ['Com OPME',rows.filter(function(g){return g.opme;}).length],
       ['Prazo Vencido',rows.filter(function(g){return g.prazoVencido;}).length],
-      ['Negadas',byStatus['Negada']||0],
-      ['Aderência média',avgAdh+'%']
-    ];
+      ['Negadas',byStatus['Negada']||0]
+    ].concat(showAd?[['Aderência média',avgAdh+'%']]:[]);
     var tabStatus={titulo:'Distribuição por Status', head:['Status','Qtd','%'],
       rows:MOCK.STATUS.filter(function(s){return byStatus[s];}).map(function(s){return [s, byStatus[s], Math.round(byStatus[s]/total*100)+'%'];})};
     var tabRisco={titulo:'Distribuição por Risco', head:['Risco','Qtd','%'],
@@ -5561,9 +5597,10 @@
       rows:Object.keys(byFluxo).sort(function(a,b){return byFluxo[b]-byFluxo[a];}).map(function(k){return [k, byFluxo[k], Math.round(byFluxo[k]/total*100)+'%'];})};
 
     if(!window.RELATORIOS || !window.RELATORIOS.exportarPlanilhaMultiAba){ toast('Módulo de exportação não carregado.','err'); return; }
+    var tabelasIndicadores=[tabStatus].concat(showRisco?[tabRisco]:[]).concat(showAd?[tabAdh]:[]).concat([tabFluxo]);
     window.RELATORIOS.exportarPlanilhaMultiAba('RegulaAI_'+new Date().toISOString().slice(0,10), [
       {nome:'Guias', kpis:[], tabelas:[{titulo:'Relação de Guias', head:head1, rows:rows1}]},
-      {nome:'Indicadores', kpis:kpis2, tabelas:[tabStatus, tabRisco, tabAdh, tabFluxo]}
+      {nome:'Indicadores', kpis:kpis2, tabelas:tabelasIndicadores}
     ]);
     toast('Excel gerado: '+rows.length+' guias em 2 abas','ok');
   }
@@ -5791,7 +5828,7 @@
         c.innerHTML=
           '<div class="k-card-top">'+
             '<span class="k-num">'+esc(g.numero)+'</span>'+
-            (ehPrestador?'':riskPill(g.risco))+
+            (ehPrestador||!riscoRegVisivel()?'':riskPill(g.risco))+
           '</div>'+
           '<div class="k-beneficiario">'+ico('user',11)+' '+esc(g.beneficiario.nome)+'</div>'+
           '<div class="k-tipo">'+esc(g.tipo.toUpperCase())+
@@ -6217,8 +6254,9 @@
             return '<th style="width:'+s.width+'">'+s.label+'</th>';
           }).join('');
           var _temAnexosObrigCol=(vkey==='proc'||vkey==='pac');
+          var _temPesoCol=pesoItensVisivel();
           tv.innerHTML='<thead><tr>'+thCols+
-            '<th style="width:70px;text-align:center">Peso</th>'+
+            (_temPesoCol?'<th style="width:70px;text-align:center">Peso</th>':'')+
             '<th style="width:90px;text-align:center">Status</th>'+
             '<th style="width:140px;text-align:center">Instrução IA</th>'+
             (_temAnexosObrigCol?'<th style="width:140px;text-align:center">Anexos Obrig.</th>':'')+
@@ -6259,7 +6297,7 @@
               return '<td style="padding:5px 8px"><select class="vinc-proc-sel" data-field="'+esc(s.key)+'" data-vkey="'+esc(vkey)+'" data-cod="'+esc(r.cod)+'" style="'+selStyle+'">'+optHtml+'</select></td>';
             }).join('');
             trv.innerHTML=staticCols+procSelCols+
-              '<td style="text-align:center"><input type="number" class="vinc-peso" min="0" max="10" data-vkey="'+vkey+'" data-cod="'+esc(r.cod)+'" value="'+peso+'" style="width:52px;text-align:center;border:1.5px solid var(--g-200);border-radius:6px;padding:3px 5px;font-size:12px"></td>'+
+              (_temPesoCol?'<td style="text-align:center"><input type="number" class="vinc-peso" min="0" max="10" data-vkey="'+vkey+'" data-cod="'+esc(r.cod)+'" value="'+peso+'" style="width:52px;text-align:center;border:1.5px solid var(--g-200);border-radius:6px;padding:3px 5px;font-size:12px"></td>':'')+
               '<td style="text-align:center"><button class="vinc-status-btn '+(status==='ativo'?'active':'')+'" data-vkey="'+vkey+'" data-cod="'+esc(r.cod)+'" data-status="'+status+'" style="font-size:11px;padding:3px 10px;border-radius:12px;border:1.5px solid;cursor:pointer;font-weight:600;background:'+(status==='ativo'?'var(--g-700)':'#fff')+';color:'+(status==='ativo'?'#fff':'var(--muted)')+';border-color:'+(status==='ativo'?'var(--g-700)':'var(--g-200)')+'">'+esc(status==='ativo'?'Ativo':'Inativo')+'</button></td>'+
               '<td style="text-align:center">'+_vincInstrBtn(vkey,r.cod,!!instr)+'</td>'+
               (_temAnexosObrigCol?'<td style="text-align:center">'+_vincAnexosBtn(vkey,r.cod,anexosObrig.length)+'</td>':'');
@@ -7564,6 +7602,44 @@
           '<span id="modoTag" class="badge '+(cfg.ativo?'':'muted')+'">'+(cfg.ativo?'Automático':'Manual')+'</span>'+
         '</div>';
       rp.appendChild(hd);
+
+      // ── Visibilidade dos sistemas de peso/pontuação ──────────────────
+      // Diferente do toggle "Classificação automática ativa" acima (que só pausa o
+      // RECÁLCULO, mantendo o último valor e o badge visíveis) — aqui, desativar ESCONDE
+      // completamente o resultado daquele sistema em toda a plataforma (badges, colunas,
+      // KPIs, gráficos, exportações e menções do assistente RAI).
+      var visWrap=el('div',{class:'panel',style:'margin-top:10px;padding:14px 16px'});
+      var visCfg=State.pesosVisiveis;
+      var VIS_ITENS=[
+        {key:'pesoItens',        label:'Peso por item (Procedimentos/Pacotes/Mat-Med/Diárias)', desc:'Coluna "Peso" nas abas de vinculação em Parametrização'},
+        {key:'aderenciaIA',      label:'Aderência (Pesos IA por fluxo)',                          desc:'% de aderência, classificação, gráficos e a aba Concordância IA × Auditor em Relatórios'},
+        {key:'riscoRegulatorio', label:'Risco Regulatório',                                       desc:'Badge de risco na listagem de guias, Kanban, Dashboard e exportações'},
+        {key:'riscoAssistencial',label:'Risco Assistencial / Documental / Contratual',            desc:'Os 3 selos de risco por dimensão no resumo da guia'}
+      ];
+      visWrap.innerHTML='<div style="font-size:13px;font-weight:700;color:var(--ink);margin-bottom:2px">'+ico('eye-off',14)+' Visibilidade dos pesos e resultados</div>'+
+        '<p style="font-size:12px;color:var(--muted);margin:0 0 12px">Desative para ocultar completamente o resultado daquele sistema em toda a plataforma — não apaga a configuração, só deixa de exibi-la.</p>'+
+        '<div style="display:flex;flex-direction:column;gap:2px">'+
+        VIS_ITENS.map(function(it){
+          var on=visCfg[it.key]!==false;
+          return '<label class="peso-vis-row" style="display:flex;align-items:center;gap:10px;padding:8px 4px;'+(soLeitura?'':'cursor:pointer;')+'">'+
+            '<input type="checkbox" class="peso-vis-chk" data-key="'+it.key+'"'+(on?' checked':'')+(soLeitura?' disabled':'')+' style="accent-color:var(--g-600);width:16px;height:16px;flex-shrink:0">'+
+            '<span style="flex:1"><span style="font-size:13px;font-weight:600;color:var(--ink)">'+esc(it.label)+'</span>'+
+            '<div style="font-size:11.5px;color:var(--muted)">'+esc(it.desc)+'</div></span>'+
+          '</label>';
+        }).join('')+
+        '</div>';
+      rp.appendChild(visWrap);
+      if(!soLeitura){
+        setTimeout(function(){
+          $$('.peso-vis-chk',visWrap).forEach(function(chk){
+            chk.onchange=function(){
+              State.pesosVisiveis[chk.getAttribute('data-key')]=chk.checked;
+              salvarPesosVisiveis();
+              toast((chk.checked?'Exibição ativada: ':'Exibição desativada: ')+chk.closest('.peso-vis-row').querySelector('span > span').textContent,'ok');
+            };
+          });
+        },0);
+      }
 
       // ── Sub-abas ──
       var rstBar=el('div',{style:'display:flex;gap:0;flex-wrap:wrap;border-bottom:1.5px solid var(--g-100);margin:10px 0 0'});
@@ -9011,12 +9087,13 @@
       var adp=ia.aderencia;
       var adCls=adp>=90?'alta':(adp>=70?'mod':(adp>=50?'baixa':'crit'));
       var _r4=calc4Riscos(g);
-      var RISKS=[
-        {label:'Regulatório',  val:_r4.regulatorio.val,  ico:'shield-alert', itens:_r4.regulatorio.itens},
-        {label:'Assistencial', val:_r4.assistencial.val, ico:'heart-pulse',  itens:_r4.assistencial.itens},
-        {label:'Documental',   val:_r4.documental.val,   ico:'file-warning', itens:_r4.documental.itens},
-        {label:'Contratual',   val:_r4.contratual.val,   ico:'file-check',   itens:_r4.contratual.itens},
-      ];
+      var RISKS=[]
+        .concat(riscoRegVisivel()?[{label:'Regulatório',  val:_r4.regulatorio.val,  ico:'shield-alert', itens:_r4.regulatorio.itens}]:[])
+        .concat(risco4Visivel()?[
+          {label:'Assistencial', val:_r4.assistencial.val, ico:'heart-pulse',  itens:_r4.assistencial.itens},
+          {label:'Documental',   val:_r4.documental.val,   ico:'file-warning', itens:_r4.documental.itens},
+          {label:'Contratual',   val:_r4.contratual.val,   ico:'file-check',   itens:_r4.contratual.itens}
+        ]:[]);
       d.innerHTML=
         '<div class="guia-metrics">'+
           '<div class="guia-metric">'+
@@ -10262,7 +10339,7 @@
       : 'Nenhum procedimento desta guia está sujeito a Diretriz de Utilização (DUT) específica da ANS. A análise considera exclusivamente os critérios contratuais, documentais e de vinculação técnica apresentados.';
     var analiseTecnica='Critérios cumpridos: '+(ia.criteriosCumpridos.length?ia.criteriosCumpridos.join('; '):'nenhum registrado')+'. '+
       (ia.criteriosNaoCumpridos.length?('Critérios não cumpridos: '+ia.criteriosNaoCumpridos.join('; ')+'. '):'')+
-      'Aderência regulatória apurada: '+ia.aderencia+'% ('+ia.classificacao.label+').';
+      (aderenciaVisivel()?('Aderência regulatória apurada: '+ia.aderencia+'% ('+ia.classificacao.label+').'):'');
     var conclusao=ia.parecerGeral+' Conduta recomendada: '+ia.proximaAcao+'.';
     return {baseNormativa:baseNormativa, analiseTecnica:analiseTecnica, conclusao:conclusao, pendencias:ia.pendencias||[], resumoMotivo:(ia.pendencias&&ia.pendencias.length)?ia.pendencias.join('; '):ia.parecerGeral};
   }
@@ -10595,7 +10672,7 @@
         if(ia.alertas.length) linhas.push('Alertas: '+ia.alertas.join('; ')+'.');
         linhas.push('Conduta recomendada: '+_limpa(ia.proximaAcao)+'.');
         if(ia.sugestoesArgumentos.length) linhas.push('Pontos de atenção: '+ia.sugestoesArgumentos.join(' / ')+'.');
-        linhas.push('Aderência regulatória apurada: '+ia.aderencia+'% ('+ia.classificacao.label+').');
+        if(aderenciaVisivel()) linhas.push('Aderência regulatória apurada: '+ia.aderencia+'% ('+ia.classificacao.label+').');
         m.querySelector('#pImp').value=linhas.join('\n\n');
         btn.innerHTML=ico('sparkles')+' Gerar análise técnica (obs. impressas)'; btn.disabled=false;
         lcIcons();
@@ -11521,7 +11598,16 @@
         manualBox('Aba: Classificação de Risco',
           '<p>Define como as guias são classificadas automaticamente em 4 níveis de risco (Baixo, Médio, Alto, Crítico) com base em fatores presentes na guia.</p>'+
           '<p>Edição disponível para <b>Administrador</b> e <b>Gestor</b>.</p>'+
-          '<p><b>Toggle "Classificação automática ativa"</b> — quando ativo, o risco é recalculado automaticamente a cada análise. Quando inativo, o risco permanece manual.</p>'+
+          '<p><b>Toggle "Classificação automática ativa"</b> — quando ativo, o risco é recalculado automaticamente a cada análise. Quando inativo, o risco permanece manual (o último valor calculado continua exibido normalmente — este toggle não esconde nada, só pausa o recálculo).</p>'+
+          '<br><p><b>Visibilidade dos pesos e resultados</b></p>'+
+          '<p>Logo abaixo, 4 interruptores independentes controlam se o resultado de cada sistema de peso/pontuação aparece na plataforma. Diferente do toggle acima, aqui <b>desativar esconde completamente</b> o elemento — badge, coluna, KPI, gráfico, exportação e até menções do assistente RAI —, sem apagar a configuração por trás:</p>'+
+          manualTable(['Interruptor','O que some quando desativado'],[
+            ['Peso por item (Procedimentos/Pacotes/Mat-Med/Diárias)','A coluna "Peso" nas 4 abas de vinculação em Parametrização'],
+            ['Aderência (Pesos IA por fluxo)','% de aderência em toda a plataforma (Dashboard, listagem de Guias, Kanban, resumo da guia, Parecer Técnico, exportações Excel) e a aba "Concordância IA × Auditor" inteira em Relatórios, que depende desse dado'],
+            ['Risco Regulatório','O badge de risco na listagem de guias, Kanban, Dashboard, filtro "Todos os riscos", resumo/rodapé e exportações; o card "Regulatório" some do grid de 4 riscos no resumo da guia (os outros 3 continuam, se o interruptor deles estiver ativo)'],
+            ['Risco Assistencial / Documental / Contratual','Os 3 selos dessas dimensões no grid de risco do resumo da guia'],
+          ])+
+          '<p><i>Cada um pode ser ligado/desligado independentemente dos outros — ex.: manter Risco Regulatório e esconder só Aderência.</i></p>'+
           '<br><p><b>Sub-aba: Limiares por nível</b></p>'+
           '<p>Define os limiares de pontuação para cada nível:</p>'+
           manualTable(['Nível','Pontuação'],[
@@ -11868,7 +11954,7 @@
       'MAPA DE NAVEGAÇÃO (nomes EXATOS — use-os literalmente):\n'+
       'MENU LATERAL (sidebar): Dashboard | Guias | Kanban | Solicitações | Parametrização | Configurações | Assistente | Manual | Logs. (Perfil Prestador só enxerga Solicitações e Kanban.)\n'+
       'CONFIGURAÇÕES (abas): "Classificação de Risco", "Fluxos", "Permissões", "Usuários" (só Administrador), "Assistente IA" (só Administrador).\n'+
-      ' - Classificação de Risco: define os fatores de risco e, na sub-aba "Limiares", os limiares Baixo/Médio/Alto; sub-aba "Prévia" mostra a distribuição.\n'+
+      ' - Classificação de Risco: define os fatores de risco e, na sub-aba "Limiares", os limiares Baixo/Médio/Alto; sub-aba "Prévia" mostra a distribuição. Logo abaixo do toggle "Classificação automática ativa" há a seção "Visibilidade dos pesos e resultados", com 4 interruptores independentes (Peso por item, Aderência, Risco Regulatório, Risco Assistencial/Documental/Contratual) — desativar um esconde COMPLETAMENTE aquele resultado em toda a plataforma (badges, colunas, KPIs, gráficos, exportações e até nas respostas deste assistente), sem apagar a configuração. Diferente do toggle "Classificação automática ativa", que só pausa o recálculo sem esconder nada.\n'+
       ' - Fluxos: define o prazo (SLA, em dias) e o regime de cada fluxo.\n'+
       ' - Permissões: matriz de permissões por perfil, incluindo o perfil Prestador (clique na célula para ciclar Acesso total / Somente leitura / Sem acesso). Logo abaixo da matriz há a seção "Tipos de Solicitação — perfil Prestador", com checkboxes definindo quais dos 6 tipos de Solicitação o Prestador pode registrar.\n'+
       ' - Usuários: cadastro de usuários (Nome, CPF, E-mail, Login, Senha, Perfil, Situação Ativo/Inativo).\n'+
@@ -11949,12 +12035,12 @@
         L.push('PERÍODO SELECIONADO: nenhum filtro de período aplicado — considerando TODAS as guias disponíveis.');
       }
       if(flt.natureza) L.push('FILTRO DE NATUREZA ATIVO: '+flt.natureza+'.');
-      if(flt.risco) L.push('FILTRO DE RISCO ATIVO: '+flt.risco+'.');
+      if(flt.risco && riscoRegVisivel()) L.push('FILTRO DE RISCO ATIVO: '+flt.risco+'.');
       L.push('DADOS ANALÍTICOS ATUAIS (correspondem ao período/natureza acima):');
       L.push('Total de guias analisadas: '+gs.length);
       L.push('Custo total analisado: '+moedaTxt(totalCusto));
       L.push('Custo de serviços negados: '+moedaTxt(negCusto)+' ('+nNeg+' guia(s) negada(s))');
-      L.push('Distribuição por risco: baixo '+risco.baixo+', médio '+risco.medio+', alto '+risco.alto+', crítico '+risco.critico+'.');
+      if(riscoRegVisivel()) L.push('Distribuição por risco: baixo '+risco.baixo+', médio '+risco.medio+', alto '+risco.alto+', crítico '+risco.critico+'.');
       L.push('Natureza: Ambulatorial '+nat['Ambulatorial']+', Internação '+nat['Internação']+'.');
       L.push('Top médicos por custo: '+top(porMed,'custo',5).map(function(o){return o._k+' ('+moedaTxt(o.custo)+', '+o.guias+' guia(s))';}).join('; '));
       L.push('Top prestadores por custo: '+top(porPrest,'custo',5).map(function(o){return o._k+' ('+moedaTxt(o.custo)+', '+o.guias+' guia(s))';}).join('; '));
@@ -11997,7 +12083,7 @@
 
       // ── Identificação e beneficiário ──
       sec('IDENTIFICAÇÃO');
-      L.push('Guia: '+g.numero+' | Status: '+g.status+' | Risco (motor): '+(g.risco||'—'));
+      L.push('Guia: '+g.numero+' | Status: '+g.status+(riscoRegVisivel()?(' | Risco (motor): '+(g.risco||'—')):''));
       L.push('Tipo/Regime/Natureza: '+g.tipo+' / '+g.regime+' / '+g.natureza+(g.subInternacao?' ('+g.subInternacao+')':''));
       L.push('Fluxo: '+(g.fluxo&&g.fluxo.nome||'—')+' | Origem: '+(g.origem||'—')+' | Acomodação: '+(b.acomodacao||'—'));
       L.push('Beneficiário: '+(b.nome||'—')+(b.idade!=null?', '+b.idade+' anos':'')+' | Plano/Contrato: '+(b.plano||'—')+' / '+(b.contrato||'—'));
@@ -12014,7 +12100,7 @@
 
       // ── Análise técnica da IA ──
       sec('ANÁLISE TÉCNICA IA');
-      L.push('Aderência: '+ia.aderencia+'% ('+ia.classificacao.label+') | Confiança: '+Math.round(ia.confianca)+'%');
+      L.push((aderenciaVisivel()?('Aderência: '+ia.aderencia+'% ('+ia.classificacao.label+') | '):'')+'Confiança: '+Math.round(ia.confianca)+'%');
       L.push('Parecer geral: '+ia.parecerGeral);
       if((ia.pendencias||[]).length) L.push('Pendências: '+ia.pendencias.join('; '));
       if((ia.alertas||[]).length) L.push('Alertas: '+ia.alertas.join('; '));
@@ -12268,7 +12354,8 @@
       chatGuia=g; aguardandoGuia=false; anexosVisaoEnviados=false;
       chatInp.placeholder='Digite sua mensagem...';
       var nAnx=anexosParaVisao(g).length;
-      addMsg('bot','Guia <b>'+esc(g.numero)+'</b> carregada — '+esc(g.beneficiario&&g.beneficiario.nome||'')+' · '+esc(g.tipo)+' · aderência '+ (g._cache?g._cache.aderencia:AI.analisarGuiaComIA(g,{pesos:getFluxoPesos(g.fluxo&&g.fluxo.id)}).aderencia) +'%.<br>Analisando a guia'+(nAnx?' e lendo '+nAnx+' anexo(s)':'')+'… <i>Sou apoio à decisão — a palavra final é da operadora.</i>',true);
+      var _adTxt=aderenciaVisivel()?(' · aderência '+ (g._cache?g._cache.aderencia:AI.analisarGuiaComIA(g,{pesos:getFluxoPesos(g.fluxo&&g.fluxo.id)}).aderencia) +'%'):'';
+      addMsg('bot','Guia <b>'+esc(g.numero)+'</b> carregada — '+esc(g.beneficiario&&g.beneficiario.nome||'')+' · '+esc(g.tipo)+_adTxt+'.<br>Analisando a guia'+(nAnx?' e lendo '+nAnx+' anexo(s)':'')+'… <i>Sou apoio à decisão — a palavra final é da operadora.</i>',true);
       chatInp.focus();
       // Análise técnica automática (dossiê completo + leitura dos anexos), sem esperar pergunta
       analiseAutomaticaGuia();
