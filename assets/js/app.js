@@ -67,8 +67,8 @@
   var State = {
     route:'dashboard',
     perfil: localStorage.getItem('regula_perfil') || 'auditor',
-    visaoPerfil: '',        // gestor only: ''|'enfermeiro'|'auditor'
-    visaoEnfermeiros: [],  // gestor only: []=todas | ['E1','E2'...]
+    // Enfermeiras selecionadas via FAB (multi-seleção): []=uma só (perfilDef.enfermeiro.enfermeiroId) | ['E1','E2'...]=união dos fluxos
+    visaoEnfermeiros: [],
     riscoConfig: (function(){
       var saved=JSON.parse(localStorage.getItem('regula_risco_cfg')||'null');
       // Migração: config antiga (tinha fatores removidos como 'uti'/'oncologia') → usa novo padrão
@@ -467,28 +467,24 @@
     return true;
   }
 
-  // Filtra as guias visíveis de acordo com o perfil ativo
-  // Enfermeiro: só guias nos seus fluxos E cuja etapa atual é de responsabilidade do enfermeiro
-  // Auditor: guias cuja etapa atual é de responsabilidade do auditor (inclui fluxos sem etapa enfermeiro)
-  // Gestor: tudo; se State.visaoPerfil estiver definido, aplica a mesma lógica do perfil simulado
+  // Filtra as guias visíveis de acordo com o perfil ativo.
+  // Enfermeiro: só guias nos seus fluxos E cuja etapa atual é de responsabilidade do enfermeiro.
+  // Quando o FAB seleciona MÚLTIPLAS enfermeiras (State.visaoEnfermeiros), usa a união dos fluxos
+  // delas em vez de apenas uma — visão combinada, sem depender de "Gestor vendo como outro perfil".
+  // Auditor: vê qualquer guia (etapa "AUDITORIA EXTERNA - MÉDICO" é só a fila de obrigação dele).
   function guiasVisiveis(){
     var base = State.guias;
-    var efetivo = ehGestor() ? State.visaoPerfil : State.perfil;
-    if(!efetivo) return base;
-    if(efetivo === 'enfermeiro'){
-      // Gestor pode filtrar por enfermeira específica; perfil enfermeiro usa seu próprio cadastro
+    if(State.perfil==='enfermeiro'){
       var fluxosEnf;
-      if(ehGestor() && State.visaoEnfermeiros.length){
-        // uma ou mais enfermeiras selecionadas: união dos fluxos
+      if(State.visaoEnfermeiros.length){
+        // uma ou mais enfermeiras selecionadas no FAB: união dos fluxos
         fluxosEnf = ENFERMEIROS
           .filter(function(e){ return State.visaoEnfermeiros.indexOf(e.id)>=0; })
           .reduce(function(acc,e){ return acc.concat(e.fluxos); },[]);
-      } else if(State.perfil==='enfermeiro'){
+      } else {
         var enfProp=null;
         for(var ej=0;ej<ENFERMEIROS.length;ej++){ if(ENFERMEIROS[ej].id===perfilDef.enfermeiro.enfermeiroId){enfProp=ENFERMEIROS[ej];break;} }
         fluxosEnf = enfProp ? enfProp.fluxos : [];
-      } else {
-        fluxosEnf = ENFERMEIROS.reduce(function(acc,e){ return acc.concat(e.fluxos); },[]);
       }
       return base.filter(function(g){
         if(fluxosEnf.indexOf(g.fluxo.id) < 0) return false;
@@ -496,93 +492,12 @@
         return et && et.responsavel === 'enfermeiro';
       });
     }
-    // Auditor pode auditar QUALQUER guia (todos os perfis podem). A etapa "AUDITORIA EXTERNA - MÉDICO"
-    // é apenas a fila de OBRIGAÇÃO do auditor — destacada na lista, sem restringir o acesso.
     return base;
   }
   // A guia está na fila de obrigação do auditor (etapa atual = AUDITORIA EXTERNA - MÉDICO)?
   function ehFilaAuditor(g){
     var et = etapaAtualDe(g);
     return !!(et && et.nome && et.nome.indexOf('AUDITORIA EXTERNA - MÉDICO')>=0);
-  }
-
-  // Barra de visão compartilhada entre Dashboard e Guias (apenas Gestor)
-  function renderVisaoBar(wrap){
-    var totalTodos=State.guias.length;
-    var enfAtivo=State.visaoPerfil==='enfermeiro';
-
-    // Linha principal: sempre Todos | Enfermeiros | Auditor
-    var mainBar=el('div',{class:'visao-bar'});
-    mainBar.innerHTML=
-      '<span class="visao-bar-lbl"><span style="font-size:12px;font-weight:600;color:var(--g-700)">Visualizar:</span></span>'+
-      '<span class="visao-bar-btns">'+
-        '<button class="visao-btn'+(State.visaoPerfil===''?' active':'')+'" data-v="">'+
-          ico('users',12)+' Todos ('+totalTodos+')</button>'+
-        '<button class="visao-btn'+(enfAtivo?' active':'')+'" data-v="enfermeiro">'+
-          ico('stethoscope',12)+' Enfermeiros'+(enfAtivo?' '+ico('chevron-up',11):' '+ico('chevron-down',11))+'</button>'+
-        '<button class="visao-btn'+(State.visaoPerfil==='auditor'?' active':'')+'" data-v="auditor">'+
-          ico('user-check',12)+' Auditor</button>'+
-      '</span>';
-
-    $$('.visao-btn',mainBar).forEach(function(b){
-      b.onclick=function(){
-        State.visaoPerfil=b.getAttribute('data-v');
-        State.visaoEnfermeiros=[];   // sempre reseta seleção individual
-        render();
-      };
-    });
-    wrap.appendChild(mainBar);
-
-    // Segunda linha: enfermeiras individuais — só quando "Enfermeiros" está ativo
-    if(enfAtivo){
-      var subBar=el('div',{class:'visao-enf-row'});
-      var nSel=State.visaoEnfermeiros.length;
-      subBar.innerHTML=
-        '<span class="visao-enf-label">'+ico('corner-down-right',12)+
-        (nSel?' <b>'+nSel+'</b> selecionada'+(nSel>1?'s':'')+':' : ' Selecione uma ou mais:')+'</span>'+
-        ENFERMEIROS.map(function(e){
-          var sel=State.visaoEnfermeiros.indexOf(e.id)>=0;
-          return '<button class="visao-btn enf-btn'+(sel?' active':'')+'" data-enf-id="'+e.id+'"'+
-            ' style="--enf-cor:'+e.cor+'">' +
-            '<span class="enf-dot" style="background:'+e.cor+'"></span>'+
-            esc(e.nome)+'</button>';
-        }).join('')+
-        (nSel?'<button class="visao-btn" id="btnEnfClear" style="font-size:11px;opacity:.7">'+ico('x',11)+' Limpar</button>':'');
-
-      $$('.enf-btn',subBar).forEach(function(b){
-        b.onclick=function(){
-          var id=b.getAttribute('data-enf-id');
-          var idx=State.visaoEnfermeiros.indexOf(id);
-          if(idx>=0) State.visaoEnfermeiros.splice(idx,1);
-          else State.visaoEnfermeiros.push(id);
-          render();
-        };
-      });
-      var clr=subBar.querySelector('#btnEnfClear');
-      if(clr) clr.onclick=function(){ State.visaoEnfermeiros=[]; render(); };
-      wrap.appendChild(subBar);
-    }
-
-    // Banner contextual
-    if(State.visaoPerfil){
-      var bann=el('div',{class:'perfil-banner info'});
-      var label='';
-      if(State.visaoPerfil==='enfermeiro'){
-        if(State.visaoEnfermeiros.length){
-          var nomes=ENFERMEIROS.filter(function(e){return State.visaoEnfermeiros.indexOf(e.id)>=0;}).map(function(e){return '<b>'+esc(e.nome.split(' ')[0])+'</b>';});
-          label='Enf. '+nomes.join(' + ');
-        } else {
-          label='Todos os enfermeiros ('+ENFERMEIROS.map(function(e){return e.nome.split(' ')[0];}).join(', ')+')';
-        }
-      } else {
-        label='Auditor — vê todas as guias (fila de obrigação: AUDITORIA EXTERNA - MÉDICO)';
-      }
-      var guias=guiasVisiveis();
-      bann.innerHTML=ico('eye',14)+' Simulando visão: '+label+' — <b>'+guias.length+'</b> guia(s) visíveis.'+
-        ' <button class="chip-rm" id="btnSairVisao2" style="font-size:12px;margin-left:8px;vertical-align:middle">Voltar visão completa</button>';
-      wrap.appendChild(bann);
-      setTimeout(function(){ var b=$('#btnSairVisao2'); if(b) b.onclick=function(){State.visaoPerfil='';State.visaoEnfermeiros=[];render();}; },0);
-    }
   }
 
   /* === Aplica risco calculado ao iniciar (depois que guiaAderencia estiver disponível) === */
@@ -1202,7 +1117,7 @@
         users=[{nome:perfilDef.auditor.nome, cor:perfilDef.auditor.cor, profile:'auditor', enfId:'', sub:'Auditoria médica'}];
         label='Auditor';
       } else if(profile==='prestador'){
-        users=[{nome:perfilDef.prestador.nome, cor:perfilDef.prestador.cor, profile:'prestador', enfId:'', sub:'Acesso restrito a Solicitações'}];
+        users=(MOCK.PRESTADORES||[]).map(function(p){ return {nome:p.nome, cor:perfilDef.prestador.cor, profile:'prestador', prestId:p.id, sub:p.tipo}; });
         label='Prestador';
       } else {
         users=ENFERMEIROS.map(function(e){ return {nome:e.nome, cor:e.cor, profile:'enfermeiro', enfId:e.id, sub:e.especialidade}; });
@@ -1210,12 +1125,56 @@
       }
       var up=$('#fabUserPick');
       var showSearch=users.length>3;
+      // Enfermeiro é o único perfil com seleção MÚLTIPLA (visão combinada de várias enfermeiras
+      // nos mesmos fluxos, sem precisar reabrir o FAB por cada uma) — os demais trocam de perfil
+      // imediatamente ao clicar, como sempre funcionou.
+      var multiSelect=(profile==='enfermeiro');
+      var selecaoTmp=multiSelect?State.visaoEnfermeiros.slice():[];
+
+      function aplicarTroca(u){
+        if(u.profile==='enfermeiro'){
+          var enfSel=null;
+          for(var k=0;k<ENFERMEIROS.length;k++){ if(ENFERMEIROS[k].id===u.enfId){ enfSel=ENFERMEIROS[k]; break; } }
+          if(!enfSel) enfSel=ENFERMEIROS[0];
+          perfilDef.enfermeiro.nome=enfSel.nome; perfilDef.enfermeiro.cor=enfSel.cor;
+          perfilDef.enfermeiro.fluxos=enfSel.fluxos; perfilDef.enfermeiro.enfermeiroId=enfSel.id;
+        } else if(u.profile==='prestador'){
+          perfilDef.prestador.nome=u.nome; // só identificação visual — permissões continuam globais
+        }
+        State.perfil=u.profile; State.visaoEnfermeiros=[];
+        localStorage.setItem('regula_perfil',State.perfil);
+        // Se o perfil perdeu acesso à rota atual (ex.: Logs, ou virou Prestador numa rota fora da allowlist), volta ao Dashboard
+        if(State.route==='logs' && !can('logs')){ State.route='dashboard'; }
+        if(State.perfil==='prestador' && ROTAS_PRESTADOR.indexOf(State.route)<0){ State.route='solicitacoes'; }
+        fabClose(); renderUserChip(); aplicarVisibilidadeNav(); render();
+        toast('Perfil: '+u.nome,'ok');
+      }
+
+      function aplicarMultiEnfermeiro(){
+        State.visaoEnfermeiros=selecaoTmp.slice();
+        var enfPrincipal=null;
+        if(selecaoTmp.length){
+          for(var k=0;k<ENFERMEIROS.length;k++){ if(ENFERMEIROS[k].id===selecaoTmp[0]){ enfPrincipal=ENFERMEIROS[k]; break; } }
+        }
+        if(!enfPrincipal) enfPrincipal=ENFERMEIROS[0];
+        perfilDef.enfermeiro.nome=enfPrincipal.nome; perfilDef.enfermeiro.cor=enfPrincipal.cor;
+        perfilDef.enfermeiro.fluxos=enfPrincipal.fluxos; perfilDef.enfermeiro.enfermeiroId=enfPrincipal.id;
+        State.perfil='enfermeiro';
+        localStorage.setItem('regula_perfil',State.perfil);
+        if(State.route==='logs' && !can('logs')){ State.route='dashboard'; }
+        fabClose(); renderUserChip(); aplicarVisibilidadeNav(); render();
+        var qtd=selecaoTmp.length;
+        toast(qtd>1?('Perfil: Enfermeiro — '+qtd+' selecionadas'):('Perfil: '+enfPrincipal.nome),'ok');
+      }
+
       function buildFupList(q){
         var filtered=q?users.filter(function(u){ return u.nome.toLowerCase().indexOf(q)>=0||(u.sub&&u.sub.toLowerCase().indexOf(q)>=0); }):users;
         var list=up.querySelector('.fup-list'); list.innerHTML='';
         if(!filtered.length){ list.innerHTML='<div class="fup-empty">Nenhum resultado</div>'; return; }
         filtered.forEach(function(u){
-          var isActive=(State.perfil===u.profile&&(u.profile!=='enfermeiro'||perfilDef.enfermeiro.enfermeiroId===u.enfId));
+          var isActive=multiSelect
+            ? selecaoTmp.indexOf(u.enfId)>=0
+            : (State.perfil===u.profile&&(u.profile!=='enfermeiro'||perfilDef.enfermeiro.enfermeiroId===u.enfId)&&(u.profile!=='prestador'||perfilDef.prestador.nome===u.nome));
           var btn=document.createElement('button');
           btn.className='fup-item'+(isActive?' fup-active':'');
           btn.innerHTML=
@@ -1226,20 +1185,15 @@
             (isActive?'<span class="fup-check">'+ico('check',13)+'</span>':'');
           btn.onclick=function(e2){
             e2.stopPropagation();
-            if(u.profile==='enfermeiro'){
-              var enfSel=null;
-              for(var k=0;k<ENFERMEIROS.length;k++){ if(ENFERMEIROS[k].id===u.enfId){ enfSel=ENFERMEIROS[k]; break; } }
-              if(!enfSel) enfSel=ENFERMEIROS[0];
-              perfilDef.enfermeiro.nome=enfSel.nome; perfilDef.enfermeiro.cor=enfSel.cor;
-              perfilDef.enfermeiro.fluxos=enfSel.fluxos; perfilDef.enfermeiro.enfermeiroId=enfSel.id;
+            if(multiSelect){
+              var idx=selecaoTmp.indexOf(u.enfId);
+              if(idx>=0) selecaoTmp.splice(idx,1); else selecaoTmp.push(u.enfId);
+              buildFupList(q);
+              var applyBtn=up.querySelector('#fupApply');
+              if(applyBtn) applyBtn.textContent=selecaoTmp.length>1?('Aplicar ('+selecaoTmp.length+' selecionadas)'):'Aplicar';
+              return;
             }
-            State.perfil=u.profile; State.visaoPerfil=''; State.visaoEnfermeiros=[];
-            localStorage.setItem('regula_perfil',State.perfil);
-            // Se o perfil perdeu acesso à rota atual (ex.: Logs, ou virou Prestador numa rota fora da allowlist), volta ao Dashboard
-            if(State.route==='logs' && !can('logs')){ State.route='dashboard'; }
-            if(State.perfil==='prestador' && ROTAS_PRESTADOR.indexOf(State.route)<0){ State.route='solicitacoes'; }
-            fabClose(); renderUserChip(); aplicarVisibilidadeNav(); render();
-            toast('Perfil: '+u.nome,'ok');
+            aplicarTroca(u);
           };
           list.appendChild(btn);
         });
@@ -1251,10 +1205,13 @@
           '<span class="fup-title">'+esc(label)+'</span>'+
         '</div>'+
         (showSearch?'<div class="fup-search"><input class="fup-sinput" type="text" placeholder="Buscar..." autocomplete="off"></div>':'')+
-        '<div class="fup-list"></div>';
+        '<div class="fup-list"></div>'+
+        (multiSelect?'<div class="fup-apply-wrap"><button class="btn sm" id="fupApply" style="width:100%">'+(selecaoTmp.length>1?('Aplicar ('+selecaoTmp.length+' selecionadas)'):'Aplicar')+'</button></div>':'');
       buildFupList('');
       var sinput=up.querySelector('.fup-sinput');
       if(sinput) sinput.oninput=function(){ buildFupList(sinput.value.trim().toLowerCase()); };
+      var applyBtn0=up.querySelector('#fupApply');
+      if(applyBtn0) applyBtn0.onclick=function(e4){ e4.stopPropagation(); aplicarMultiEnfermeiro(); };
       up.querySelector('#fupBack').onclick=function(e3){
         e3.stopPropagation();
         up.style.display='none'; up.innerHTML='';
@@ -4498,9 +4455,7 @@
     // processo (Em análise, Em junta médica, Aguardando complemento, Analisadas, Cotação de OPME)
     // — mostram o estado agora, não uma janela histórica.
     var guiasAgora=guiasVisiveis();
-    var tituloExtra='';
-    if(ehGestor() && State.visaoPerfil) tituloExtra=' <span class="badge info">Visão: '+State.visaoPerfil+'</span>';
-    var hdr=el('div',{class:'page-title'},'<div><h1>Dashboard Executivo'+tituloExtra+'</h1><p>Visão consolidada de auditoria assistencial e indicadores operacionais.</p></div>');
+    var hdr=el('div',{class:'page-title'},'<div><h1>Dashboard Executivo</h1><p>Visão consolidada de auditoria assistencial e indicadores operacionais.</p></div>');
     var dpWrap=el('div',{id:'dashPeriodoWrap',style:'display:flex;align-items:center'});
     hdr.appendChild(dpWrap);
     wrap.appendChild(hdr);
@@ -4516,15 +4471,15 @@
       var bann=el('div',{class:'perfil-banner'});
       var bIcon=State.perfil==='enfermeiro'?'stethoscope':'search';
       var _filaN=State.perfil==='auditor'?guias.filter(function(gg){return ehFilaAuditor(gg);}).length:0;
+      var _enfNomes=State.visaoEnfermeiros.length
+        ? ENFERMEIROS.filter(function(e){return State.visaoEnfermeiros.indexOf(e.id)>=0;}).map(function(e){return e.nome;}).join(', ')
+        : perfilDef.enfermeiro.nome;
       var bMsg=State.perfil==='enfermeiro'
-        ?'Você está visualizando '+guias.length+' guia(s) atribuída(s) ao perfil Enfermeiro nos fluxos: '+perfilDef.enfermeiro.fluxos.join(', ')+'.'
+        ?'Você está visualizando '+guias.length+' guia(s) atribuída(s) a <b>'+esc(_enfNomes)+'</b> nos fluxos: '+perfilDef.enfermeiro.fluxos.join(', ')+'.'
         :'Você pode auditar qualquer uma das '+guias.length+' guia(s). <b>'+_filaN+'</b> na sua fila de obrigação (etapa AUDITORIA EXTERNA - MÉDICO), destacadas com "Sua fila".';
       bann.innerHTML=ico(bIcon,14)+' '+bMsg;
       wrap.appendChild(bann);
     }
-
-    // Seletor de visão para Gestor/Admin
-    if(ehGestor()) renderVisaoBar(wrap);
 
     function count(base,fn){ return base.filter(fn).length; }
     var refreshDuracao=null;
@@ -5068,7 +5023,7 @@
     wrap.appendChild(el('div',{class:'page-title'},'<div><h1>Relação de Guias</h1><p>Filtre, audite e emita parecer da operadora com apoio da análise técnica.</p></div><div style="display:flex;gap:8px;align-items:center"><button class="btn ghost" id="btnClear">'+ico('x',13)+' Limpar filtros</button><button class="btn-animated" id="btnExport">'+ico('download')+' Exportar Excel</button></div>'));
 
     // Banner de contexto de perfil
-    if(!ehGestor()){
+    if(State.perfil==='enfermeiro'||State.perfil==='auditor'){
       var bann=el('div',{class:'perfil-banner'});
       var bIcon=State.perfil==='enfermeiro'?'stethoscope':'search';
       var bMsg=State.perfil==='enfermeiro'
@@ -5076,8 +5031,6 @@
         :'Exibindo '+guias.length+' guia(s) em etapas de auditoria médica atribuídas ao Auditor.';
       bann.innerHTML=ico(bIcon,14)+' '+bMsg;
       wrap.appendChild(bann);
-    } else {
-      renderVisaoBar(wrap);
     }
 
     // ── Abas Relação / Filtro aprofundado ─────────────────────
@@ -11697,11 +11650,14 @@
             ['Enfermeiro','Restrito','Acesso apenas às guias dos seus fluxos e às etapas de responsabilidade do enfermeiro'],
             ['Prestador','Muito restrito','Acesso apenas a Solicitações (tipos configuráveis) e a uma visão limitada do Kanban — ver detalhes abaixo'],
           ]))+
-        manualBox('Simulação de Perfil (Administrador / Gestor)',
-          '<p>Administrador e Gestor podem simular a visão de outros perfis usando o <b>botão flutuante</b> no canto inferior direito da tela (FAB com ícone de usuários). Ao selecionar um perfil:</p>'+
-          '<ul><li>A visão de guias é filtrada conforme as regras do perfil simulado</li>'+
-          '<li>Um banner de aviso é exibido no topo indicando o perfil em simulação</li>'+
-          '<li>Um botão "Sair da visão" permite retornar à visão completa</li></ul>')+
+        manualBox('Simulação de Perfil (todos os perfis)',
+          '<p>Qualquer usuário pode trocar de perfil usando o <b>botão flutuante</b> no canto inferior direito da tela (FAB com ícone de usuários) — útil para conferir como o sistema se comporta em cada perfil. Ao clicar num tipo de perfil (Ad/G/A/E/P), abre-se a lista de usuários daquele tipo:</p>'+
+          '<ul>'+
+          '<li><b>Administrador, Gestor, Auditor:</b> usuário único — clique troca de perfil imediatamente.</li>'+
+          '<li><b>Enfermeiro:</b> lista as enfermeiras cadastradas (até 5 visíveis, com rolagem e busca se houver mais). É o único perfil com <b>seleção múltipla</b> — marque uma ou mais e clique em <b>"Aplicar"</b> para trocar para o perfil Enfermeiro com a visão combinada (união dos fluxos) de todas as selecionadas.</li>'+
+          '<li><b>Prestador:</b> lista os prestadores cadastrados (mesmo padrão de rolagem/busca do Enfermeiro). Clique troca de perfil imediatamente — a escolha do prestador é só identificação visual (nome exibido no chip do usuário); as permissões de Solicitações continuam as mesmas configuradas globalmente para o perfil, não variam por prestador.</li>'+
+          '</ul>'+
+          '<p>Ao trocar de perfil, a visão de guias é filtrada conforme as regras daquele perfil, e um banner de contexto é exibido no topo do Dashboard/Guias quando aplicável (Enfermeiro/Auditor).</p>')+
         manualTable(['Funcionalidade','Admin','Gestor','Auditor','Enfermeiro','Prestador'],[
           ['Dashboard','✓','✓','✓','✓','—'],
           ['Relação de Guias','✓','✓','✓','✓ (fluxos próprios)','—'],
