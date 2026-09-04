@@ -391,7 +391,9 @@
     admin:      {nome:'Administrador',     cor:'#021f10', perms:['ver','triagem','complemento','parecer','aprovar','reprovar','junta','config','parametrizar','logs','usuarios','configIA']},
     // Prestador: acesso restrito só a Solicitações (tipos configuráveis via Permissões) e visualização
     // limitada do Kanban (sem abrir guia, sem risco/aderência/fluxo-etapa — ver ROTAS_PRESTADOR abaixo).
-    prestador:  {nome:'Prestador',         cor:'#0a8a43', perms:[]}
+    // prestId: qual prestador foi selecionado no FAB (local de atendimento) — filtra o Kanban por
+    // guia.prestadorExe.id. null = nenhum selecionado ainda (Kanban fica vazio até escolher).
+    prestador:  {nome:'Prestador',         cor:'#0a8a43', perms:[], prestId:null}
   };
   // Rotas de navegação que o perfil Prestador pode acessar — controla nav, clique e roteamento central.
   var ROTAS_PRESTADOR=['solicitacoes','kanban'];
@@ -491,6 +493,15 @@
         var et = etapaAtualDe(g);
         return et && et.responsavel === 'enfermeiro';
       });
+    }
+    // Prestador: só as guias cujo LOCAL DE ATENDIMENTO (prestadorExe) é o prestador selecionado
+    // no FAB — é a visão que aquele prestador teria ao acessar o sistema de verdade. Sem prestador
+    // selecionado (prestId null — não deveria acontecer no fluxo normal do FAB, mas é a via segura
+    // para qualquer estado inconsistente), não mostra nenhuma guia em vez de mostrar todas.
+    if(State.perfil==='prestador'){
+      var pid=perfilDef.prestador.prestId;
+      if(!pid) return [];
+      return base.filter(function(g){ return g.prestadorExe && g.prestadorExe.id===pid; });
     }
     return base;
   }
@@ -1037,6 +1048,16 @@
     $$('.nav-item[data-route]').forEach(function(a){
       a.style.display=podeAcessarRota(a.getAttribute('data-route'))?'':'none';
     });
+    // Assistente (#chatToggleBtn) não é uma rota — não tem data-route, então fica de fora do
+    // loop acima. Prestador não deve ter acesso ao chat (apoio de auditoria/IA para a operadora).
+    var chatBtn=$('#chatToggleBtn');
+    if(chatBtn) chatBtn.style.display=State.perfil==='prestador'?'none':'';
+    if(State.perfil==='prestador'){
+      var chatRoot=$('#chatRoot');
+      if(chatRoot){ chatRoot.classList.remove('chat-open','chat-minimized','chat-max','chat-max2','hist-open'); }
+      document.body.classList.remove('chat-fullopen');
+      localStorage.setItem('regula_chat_ui','closed');
+    }
   }
 
   /* === Sidebar / nav === */
@@ -1139,7 +1160,7 @@
           perfilDef.enfermeiro.nome=enfSel.nome; perfilDef.enfermeiro.cor=enfSel.cor;
           perfilDef.enfermeiro.fluxos=enfSel.fluxos; perfilDef.enfermeiro.enfermeiroId=enfSel.id;
         } else if(u.profile==='prestador'){
-          perfilDef.prestador.nome=u.nome; // só identificação visual — permissões continuam globais
+          perfilDef.prestador.nome=u.nome; perfilDef.prestador.prestId=u.prestId;
         }
         State.perfil=u.profile; State.visaoEnfermeiros=[];
         localStorage.setItem('regula_perfil',State.perfil);
@@ -1174,7 +1195,7 @@
         filtered.forEach(function(u){
           var isActive=multiSelect
             ? selecaoTmp.indexOf(u.enfId)>=0
-            : (State.perfil===u.profile&&(u.profile!=='enfermeiro'||perfilDef.enfermeiro.enfermeiroId===u.enfId)&&(u.profile!=='prestador'||perfilDef.prestador.nome===u.nome));
+            : (State.perfil===u.profile&&(u.profile!=='enfermeiro'||perfilDef.enfermeiro.enfermeiroId===u.enfId)&&(u.profile!=='prestador'||perfilDef.prestador.prestId===u.prestId));
           var btn=document.createElement('button');
           btn.className='fup-item'+(isActive?' fup-active':'');
           btn.innerHTML=
@@ -11420,7 +11441,7 @@
           ]))+
         manualBox('Interação',
           '<p>Clique em qualquer card para abrir os detalhes completos da guia (mesmo modal da tela Guias).</p>'+
-          '<p style="padding:9px 12px;background:var(--g-50);border-radius:8px;font-size:12.5px;margin-top:8px"><b>'+ico('building-2',12)+' Perfil Prestador:</b> vê o Kanban completo, mas os cards <b>não são clicáveis</b> — não é possível abrir a guia. Também não aparecem no card, por serem informações internas de auditoria: a pílula de <b>risco regulatório</b>, a barra de <b>aderência regulatória</b> e a linha de <b>fluxo/etapa atual</b> do processo.</p>');
+          '<p style="padding:9px 12px;background:var(--g-50);border-radius:8px;font-size:12.5px;margin-top:8px"><b>'+ico('building-2',12)+' Perfil Prestador:</b> vê apenas as guias cujo <b>local de atendimento</b> é o prestador selecionado no FAB (a visão que aquele prestador teria ao acessar o sistema de verdade) — não é o quadro completo. Os cards também <b>não são clicáveis</b> — não é possível abrir a guia. Também não aparecem no card, por serem informações internas de auditoria: a pílula de <b>risco regulatório</b>, a barra de <b>aderência regulatória</b> e a linha de <b>fluxo/etapa atual</b> do processo.</p>');
     }
 
     else if(sec==='solicitacoes'){
@@ -11655,13 +11676,13 @@
           '<ul>'+
           '<li><b>Administrador, Gestor, Auditor:</b> usuário único — clique troca de perfil imediatamente.</li>'+
           '<li><b>Enfermeiro:</b> lista as enfermeiras cadastradas (até 5 visíveis, com rolagem e busca se houver mais). É o único perfil com <b>seleção múltipla</b> — marque uma ou mais e clique em <b>"Aplicar"</b> para trocar para o perfil Enfermeiro com a visão combinada (união dos fluxos) de todas as selecionadas.</li>'+
-          '<li><b>Prestador:</b> lista os prestadores cadastrados (mesmo padrão de rolagem/busca do Enfermeiro). Clique troca de perfil imediatamente — a escolha do prestador é só identificação visual (nome exibido no chip do usuário); as permissões de Solicitações continuam as mesmas configuradas globalmente para o perfil, não variam por prestador.</li>'+
+          '<li><b>Prestador:</b> lista os prestadores cadastrados (mesmo padrão de rolagem/busca do Enfermeiro). Clique troca de perfil imediatamente. A escolha do prestador filtra o <b>Kanban</b> para mostrar só as guias daquele local de atendimento — mas as permissões de <b>Solicitações</b> continuam as mesmas configuradas globalmente para o perfil, não variam por prestador.</li>'+
           '</ul>'+
           '<p>Ao trocar de perfil, a visão de guias é filtrada conforme as regras daquele perfil, e um banner de contexto é exibido no topo do Dashboard/Guias quando aplicável (Enfermeiro/Auditor).</p>')+
         manualTable(['Funcionalidade','Admin','Gestor','Auditor','Enfermeiro','Prestador'],[
           ['Dashboard','✓','✓','✓','✓','—'],
           ['Relação de Guias','✓','✓','✓','✓ (fluxos próprios)','—'],
-          ['Kanban','✓','✓','✓','✓ (fluxos próprios)','✓ (sem abrir guia, sem risco/aderência/fluxo-etapa)'],
+          ['Kanban','✓','✓','✓','✓ (fluxos próprios)','✓ (só do prestador selecionado, sem abrir guia, sem risco/aderência/fluxo-etapa)'],
           ['Solicitações','—','—','—','—','✓ (tipos configuráveis)'],
           ['Parametrização','✓','✓','—','—','—'],
           ['Logs','✓','✓','—','—','—'],
@@ -11673,10 +11694,11 @@
           ['Triagem/Complemento','✓','✓','✓','✓','—'],
         ])+
         manualBox('Perfil Prestador — detalhes',
-          '<p>Perfil pensado para uso pelo prestador de serviço (hospital, clínica), fora da operadora. Único perfil, sem vínculo a um prestador específico — não há hoje login individual por prestador (o mapeamento por prestador está previsto para uma futura integração com os perfis já cadastrados no ERP).</p>'+
+          '<p>Perfil pensado para uso pelo prestador de serviço (hospital, clínica), fora da operadora — simula a visão que aquele prestador teria ao acessar o sistema. Não há hoje login individual real por prestador (o mapeamento por prestador está previsto para uma futura integração com os perfis já cadastrados no ERP); a escolha do prestador é feita no FAB de simular perfil.</p>'+
           '<ul>'+
-          '<li><b>Solicitações:</b> só enxerga os tipos de solicitação habilitados para o perfil, configuráveis pelo Administrador/Gestor em Configurações → Permissões.</li>'+
-          '<li><b>Kanban:</b> visualiza o quadro completo de guias, mas não pode clicar para abrir os detalhes de nenhuma guia. Os cards também não exibem risco regulatório, aderência regulatória, nem o fluxo/etapa atual do processo — informações internas de auditoria.</li>'+
+          '<li><b>Solicitações:</b> só enxerga os tipos de solicitação habilitados para o perfil (globais, não variam por prestador escolhido), configuráveis pelo Administrador/Gestor em Configurações → Permissões.</li>'+
+          '<li><b>Kanban:</b> mostra apenas as guias cujo <b>local de atendimento</b> é o prestador escolhido no FAB — não é o quadro completo. Não é possível clicar para abrir os detalhes de nenhuma guia. Os cards também não exibem risco regulatório, aderência regulatória, nem o fluxo/etapa atual do processo — informações internas de auditoria.</li>'+
+          '<li><b>Assistente (chat RAI):</b> item de menu fica oculto para este perfil.</li>'+
           '<li>Todas as demais rotas do menu (Dashboard, Guias, Parametrização, Configurações, Logs etc.) ficam ocultas para este perfil.</li>'+
           '</ul>');
     }
@@ -11927,7 +11949,7 @@
       'CONCEITOS: '+
       '1) ADERÊNCIA: calculada por critérios ponderados pelos pesos definidos em Parametrização → (fluxo) → "Pesos IA". O TETO é dinâmico — soma apenas os critérios aplicáveis àquela guia (ex.: DUT só entra se a guia tem procedimento com DUT obrigatória; Pacotes só se houver pacote vinculado). '+
       '2) REPROCESSAR: o botão "Reprocessar" (rodapé do modal da guia) reanalisa a guia considerando itens desmarcados pelo auditor, observações e parecer da operadora. '+
-      '3) PERFIS: Administrador (tudo, incluindo Configurações → Usuários), Gestor (igual ao Administrador, exceto Usuários), Auditor (análise e parecer), Enfermeiro (triagem e complemento nos seus fluxos), Prestador (só Solicitações, com tipos configuráveis, e Kanban sem abrir guia nem ver risco/aderência/fluxo-etapa — sem cadastro individual em Usuários, é um perfil único simulável pelo FAB). '+
+      '3) PERFIS: Administrador (tudo, incluindo Configurações → Usuários), Gestor (igual ao Administrador, exceto Usuários), Auditor (análise e parecer), Enfermeiro (triagem e complemento nos seus fluxos), Prestador (só Solicitações — tipos configuráveis — e Kanban filtrado só pelas guias do prestador escolhido no FAB, sem abrir guia, sem ver risco/aderência/fluxo-etapa, sem acesso ao Assistente — sem cadastro individual em Usuários, é simulável pelo FAB escolhendo um dos prestadores cadastrados). '+
       'Exemplo de resposta correta a "onde ajusto os pesos da aderência": "Acesse Parametrização, selecione o fluxo desejado e abra a aba Pesos IA. Lá há um campo de peso (0 a 10) para cada critério (Documental, DUT, Procedimentos, etc.)." '+
       'Se não souber um caminho específico, diga que não está mapeado e oriente a consultar o Manual — nunca invente.';
 
