@@ -10867,6 +10867,7 @@
       {id:'dashboard',  ico:'gauge',          label:'Dashboard'},
       {id:'guias',      ico:'file-check-2',   label:'Guias'},
       {id:'kanban',     ico:'kanban',         label:'Kanban'},
+      {id:'solicitacoes', ico:'clipboard-plus', label:'Solicitações'},
       {id:'param',      ico:'sliders',        label:'Parametrização'},
       {id:'logs',       ico:'history',        label:'Logs'},
       {id:'config',     ico:'wrench',         label:'Configurações'},
@@ -10909,6 +10910,7 @@
           {ico:'gauge',      title:'Dashboard',       desc:'Indicadores consolidados, KPIs e visão executiva do processo de auditoria.'},
           {ico:'file-check-2',title:'Guias',          desc:'Relação completa de guias com filtros avançados, abertura de detalhes e emissão de parecer.'},
           {ico:'kanban',     title:'Kanban',          desc:'Visualização por status em colunas, com filtros por UTI, regime e tipo.'},
+          {ico:'clipboard-plus', title:'Solicitações', desc:'Registro de novas solicitações de guia (Internação, OPME, Quimioterapia, Prorrogação, Consulta, Exames) com validação de anexos obrigatórios por IA.'},
           {ico:'sliders',    title:'Parametrização',  desc:'Configuração de fluxos, regras DUT, procedimentos, pacotes, Mat/Med e diárias.'},
           {ico:'history',    title:'Logs',            desc:'Rastreabilidade completa de ações de usuários e eventos do sistema e IA.'},
           {ico:'wrench',     title:'Configurações',   desc:'Classificação de risco, prazos por fluxo e matriz de permissões por perfil.'},
@@ -11387,7 +11389,42 @@
             ['Tipo','Todos / Internação / Ambulatorial'],
           ]))+
         manualBox('Interação',
-          '<p>Clique em qualquer card para abrir os detalhes completos da guia (mesmo modal da tela Guias).</p>');
+          '<p>Clique em qualquer card para abrir os detalhes completos da guia (mesmo modal da tela Guias).</p>'+
+          '<p style="padding:9px 12px;background:var(--g-50);border-radius:8px;font-size:12.5px;margin-top:8px"><b>'+ico('building-2',12)+' Perfil Prestador:</b> vê o Kanban completo, mas os cards <b>não são clicáveis</b> — não é possível abrir a guia. Também não aparecem no card, por serem informações internas de auditoria: a pílula de <b>risco regulatório</b>, a barra de <b>aderência regulatória</b> e a linha de <b>fluxo/etapa atual</b> do processo.</p>');
+    }
+
+    else if(sec==='solicitacoes'){
+      body.innerHTML=
+        manualHdr('Solicitações','Registro de novas solicitações de guia pelo prestador')+
+        manualBox('Visão Geral',
+          '<p>O módulo Solicitações permite registrar uma nova guia (ou anexar informações a uma existente, no caso de OPME) diretamente pelo sistema, sem depender de importação. Ao acessar, é exibido um hub com os <b>6 tipos</b> de solicitação disponíveis; cada card abre um formulário dedicado.</p>')+
+        manualBox('Tipos de Solicitação',
+          manualTable(['Tipo','O que faz'],[
+            ['Solicitação de Internação','Cria uma guia nova do tipo Internação (Clínica ou Cirúrgica)'],
+            ['Solicitação de Prorrogação de Internação','Cria uma guia nova vinculada a uma guia de Internação principal já existente, para prorrogar o período'],
+            ['Solicitação de OPME','Não cria guia nova — localiza uma guia existente pelo número e anexa os OPMEs a ela, reabrindo-a para cotação'],
+            ['Solicitação de Quimioterapia','Cria uma guia nova do tipo Quimioterapia, com campos clínicos específicos (estadiamento, ECOG, ciclos etc.)'],
+            ['Solicitação de Consulta','Cria uma guia nova do tipo Consulta'],
+            ['Solicitação de Exames e Procedimentos','Cria uma guia nova do tipo Exame, com seções de Procedimentos, Pacotes, Taxas e OPMEs'],
+          ]))+
+        manualBox('Anexos Obrigatórios',
+          '<p>Quando um código de <b>Procedimento</b> ou <b>Pacote</b> inserido na solicitação tem anexos obrigatórios cadastrados em <b>Parametrização</b>, a seção Anexos da tela passa a exibir um <b>slot nomeado</b> para cada documento exigido (com <b>*</b> indicando obrigatoriedade), no lugar de parte dos slots genéricos. Se dois códigos exigirem o mesmo documento, aparece apenas um slot (deduplicado por nome).</p>'+
+          '<ul>'+
+          '<li>O botão <b>Autorizar</b> fica desabilitado até que todos os anexos obrigatórios pendentes tenham um arquivo selecionado.</li>'+
+          '<li>Assim que um arquivo é escolhido, uma <b>checagem rápida da IA</b> roda na hora (status "Verificando..."), comparando o conteúdo do arquivo com o nome do documento exigido. Se o resultado for <b>"não corresponde"</b>, o Autorizar é bloqueado até o arquivo ser corrigido. Resultado "parcial" ou a ausência de uma chave de IA configurada não bloqueiam — apenas sinalizam.</li>'+
+          '<li>Essa checagem é <b>rasa e rápida</b>, feita para não travar o prestador. Uma análise mais completa roda depois, automaticamente, quando a guia é aberta por um auditor (ver abaixo).</li>'+
+          '<li>A seção Solicitação de OPME não tem esse recurso, por não possuir itens de Procedimentos/Pacotes.</li>'+
+          '</ul>')+
+        manualBox('O que acontece ao Autorizar',
+          '<p>Ao clicar em <b>Autorizar</b>, o sistema valida os campos obrigatórios (marcados com <b>*</b>) e os anexos obrigatórios pendentes. Se tudo estiver correto:</p>'+
+          '<ul>'+
+          '<li>Uma guia é criada (ou, no caso de OPME, a guia existente é atualizada) e entra automaticamente no fluxo de auditoria correspondente.</li>'+
+          '<li>Todos os arquivos anexados (obrigatórios e os slots genéricos extras) são transferidos para a guia, ficando visíveis na aba <b>Resumo → Gestão de Anexos</b> ao abrir a guia depois.</li>'+
+          '<li>Para os anexos que atenderam a uma exigência específica, o card mostra <b>"Exigido para: &lt;nome do documento&gt;"</b> e um selo de status: <b>✓ Corresponde</b>, <b>⚠ Não corresponde</b>, <b>⚠ Corresponde parcialmente</b>, ou <b>Aguardando validação da IA</b> (enquanto a análise completa ainda não rodou — depende de uma chave de IA configurada em Administração).</li>'+
+          '<li>O auditor pode sempre abrir o arquivo (botão <b>Visualizar</b>) e conferir manualmente, independente do que a IA concluiu.</li>'+
+          '</ul>')+
+        manualBox('Restrição por Perfil (Prestador)',
+          '<p>O perfil <b>Prestador</b> só enxerga os tipos de Solicitação habilitados para ele. Essa lista é configurada pelo Administrador/Gestor em <b>Configurações → Permissões</b>, na seção "Tipos de Solicitação — perfil Prestador". Por padrão, todos os 6 tipos estão liberados. Um tipo desabilitado aparece no hub com o aviso "Não disponível para este perfil".</p>');
     }
 
     else if(sec==='param'){
@@ -11417,16 +11454,27 @@
             ['Peso','Pontuação do item no cálculo de risco (0–10)'],
             ['Obrig.','Se o item é obrigatório na guia'],
             ['IA','Instrução personalizada para a IA analisar este item'],
+            ['Anexos Obrig. (Procedimentos e Pacotes)','Lista de documentos exigidos para autorizar uma solicitação que use este código — ver detalhes abaixo'],
             ['OPME','Se o item é classificado como OPME (apenas Procedimentos)'],
             ['Status','Ativo ou Inativo'],
           ]))+
-        manualBox('Importar / Exportar (Instruções IA + Pesos)',
-          '<p>Os botões <b>Exportar instruções IA</b> e <b>Importar instruções IA</b> permitem gerenciar em massa as instruções e pesos via planilha:</p>'+
+        manualBox('Anexos Obrigatórios (Procedimentos e Pacotes)',
+          '<p>Nas abas <b>Procedimentos</b> e <b>Pacotes</b>, o botão na coluna "Anexos Obrig." abre um modal onde é possível cadastrar, por código, a lista de documentos que devem ser anexados para que uma Solicitação com esse código possa ser autorizada (ex.: "Laudo de ultrassom do abdome").</p>'+
           '<ul>'+
-          '<li><b>Exportar</b> — gera planilha Excel com colunas: Código, Descrição, OPME (se aplicável), <b>Peso (0–10)</b> e Instrução IA</li>'+
-          '<li><b>Importar</b> — lê planilha preenchida, detecta colunas automaticamente por cabeçalho, exibe prévia com contagem de instruções e pesos a importar</li>'+
+          '<li>Um item pode ter <b>vários</b> anexos obrigatórios cadastrados.</li>'+
+          '<li>No módulo <b>Solicitações</b>, ao inserir esse código, um slot de anexo nomeado (com <b>*</b>) aparece automaticamente para cada documento exigido, e o botão Autorizar fica bloqueado até todos serem anexados.</li>'+
+          '<li>Uma checagem da IA (rasa, na hora, e completa, ao abrir a guia depois) confere se o documento anexado realmente corresponde ao que foi pedido — ver seção <b>Solicitações → Anexos Obrigatórios</b> no menu deste manual.</li>'+
+          '<li>Botão só ativo para <b>Administrador</b> e <b>Gestor</b>; demais perfis apenas visualizam a lista cadastrada.</li>'+
+          '</ul>')+
+        manualBox('Importar / Exportar (Instruções IA + Anexos Obrigatórios)',
+          '<p>Os botões <b>Exportar planilha</b> e <b>Importar instruções + anexos</b> (nas abas Procedimentos, Pacotes e Mat/Med) permitem gerenciar em massa, via planilha, as instruções da IA, os pesos e — nas abas Procedimentos e Pacotes — os anexos obrigatórios:</p>'+
+          '<ul>'+
+          '<li><b>Exportar</b> — gera planilha Excel com colunas: Código, Descrição, OPME (se aplicável), <b>Peso (0–10)</b>, Instrução IA e, em Procedimentos/Pacotes, <b>Anexos Obrigatórios</b>. A planilha inclui uma linha de orientações logo abaixo do cabeçalho, ignorada automaticamente ao reimportar.</li>'+
+          '<li><b>Importar</b> — lê planilha preenchida, detecta colunas automaticamente por cabeçalho, exibe prévia com contagem de instruções, pesos e anexos a importar</li>'+
           '<li>Valores de peso são clampados automaticamente entre 0 e 10</li>'+
           '<li>Linhas sem peso não sobrescrevem o valor existente</li>'+
+          '<li><b>Múltiplos anexos obrigatórios</b> na mesma célula devem ser separados por <b>ponto e vírgula ( ; )</b> — não usar vírgula, pois ela já é o separador de coluna do formato CSV e quebraria a planilha.</li>'+
+          '<li>A <b>Instrução IA</b> aceita texto livre, até <b>3.000 caracteres</b> por item.</li>'+
           '</ul>'+
           '<p><b>Formatos aceitos:</b> CSV, XLS, XLSX ou HTML (gerado pelo próprio Export).</p>')+
         manualBox('Aba: Regras DUT',
@@ -11496,13 +11544,15 @@
           '<p>A legenda/nota abaixo da tabela explica o comportamento da coluna Regime.</p>')+
         manualBox('Aba: Permissões',
           '<p><span class="badge info" style="font-size:10px">só Administrador</span></p>'+
-          '<p>Matriz de permissões por perfil. Esta aba é <b>exclusiva do Administrador</b> — Gestor, Auditor e Enfermeiro não a visualizam.</p>'+
+          '<p>Matriz de permissões por perfil, incluindo <b>Prestador</b>. Esta aba é <b>exclusiva do Administrador</b> — Gestor, Auditor e Enfermeiro não a visualizam.</p>'+
           '<p>Clique em qualquer célula da matriz para ciclar entre os níveis:</p>'+
           manualTable(['Nível','Ícone','Descrição'],[
             ['Acesso total','✓','Permissão completa para a ação'],
             ['Somente leitura','👁','Pode visualizar mas não alterar'],
             ['Sem acesso','—','Funcionalidade oculta para o perfil'],
           ])+
+          '<p>As permissões da matriz não fazem sentido para o Prestador (que não acessa nenhuma dessas telas), por isso aparecem como "Sem acesso" em todas as linhas — isso é esperado.</p>'+
+          '<p>Logo abaixo da matriz, a seção <b>"Tipos de Solicitação — perfil Prestador"</b> permite marcar/desmarcar, com checkboxes, quais dos 6 tipos de Solicitação (Internação, OPME, Quimioterapia, Prorrogação, Consulta, Exames) o perfil Prestador pode registrar. Por padrão, todos vêm habilitados.</p>'+
           '<p>As alterações são salvas automaticamente no navegador (localStorage).</p>')+
         manualBox('Aba: Usuários',
           '<p><span class="badge info" style="font-size:10px">só Administrador</span></p>'+
@@ -11559,25 +11609,34 @@
             ['Gestor','Total','Mesmos acessos do Administrador, exceto gerenciar Usuários. Inclui Configurações, Parametrização e Logs.'],
             ['Auditor','Parcial','Pode auditar guias, emitir pareceres e visualizar relatórios'],
             ['Enfermeiro','Restrito','Acesso apenas às guias dos seus fluxos e às etapas de responsabilidade do enfermeiro'],
+            ['Prestador','Muito restrito','Acesso apenas a Solicitações (tipos configuráveis) e a uma visão limitada do Kanban — ver detalhes abaixo'],
           ]))+
         manualBox('Simulação de Perfil (Administrador / Gestor)',
           '<p>Administrador e Gestor podem simular a visão de outros perfis usando o <b>botão flutuante</b> no canto inferior direito da tela (FAB com ícone de usuários). Ao selecionar um perfil:</p>'+
           '<ul><li>A visão de guias é filtrada conforme as regras do perfil simulado</li>'+
           '<li>Um banner de aviso é exibido no topo indicando o perfil em simulação</li>'+
           '<li>Um botão "Sair da visão" permite retornar à visão completa</li></ul>')+
-        manualTable(['Funcionalidade','Admin','Gestor','Auditor','Enfermeiro'],[
-          ['Dashboard','✓','✓','✓','✓'],
-          ['Relação de Guias','✓','✓','✓','✓ (fluxos próprios)'],
-          ['Kanban','✓','✓','✓','✓ (fluxos próprios)'],
-          ['Parametrização','✓','✓','—','—'],
-          ['Logs','✓','✓','—','—'],
-          ['Configurações','✓','✓','—','—'],
-          ['Gerenciar Usuários','✓','—','—','—'],
-          ['Emitir parecer','✓','✓','✓','—'],
-          ['Aprovar/Reprovar','✓','✓','✓','—'],
-          ['Junta médica','✓','✓','✓','—'],
-          ['Triagem/Complemento','✓','✓','✓','✓'],
-        ]);
+        manualTable(['Funcionalidade','Admin','Gestor','Auditor','Enfermeiro','Prestador'],[
+          ['Dashboard','✓','✓','✓','✓','—'],
+          ['Relação de Guias','✓','✓','✓','✓ (fluxos próprios)','—'],
+          ['Kanban','✓','✓','✓','✓ (fluxos próprios)','✓ (sem abrir guia, sem risco/aderência/fluxo-etapa)'],
+          ['Solicitações','—','—','—','—','✓ (tipos configuráveis)'],
+          ['Parametrização','✓','✓','—','—','—'],
+          ['Logs','✓','✓','—','—','—'],
+          ['Configurações','✓','✓','—','—','—'],
+          ['Gerenciar Usuários','✓','—','—','—','—'],
+          ['Emitir parecer','✓','✓','✓','—','—'],
+          ['Aprovar/Reprovar','✓','✓','✓','—','—'],
+          ['Junta médica','✓','✓','✓','—','—'],
+          ['Triagem/Complemento','✓','✓','✓','✓','—'],
+        ])+
+        manualBox('Perfil Prestador — detalhes',
+          '<p>Perfil pensado para uso pelo prestador de serviço (hospital, clínica), fora da operadora. Único perfil, sem vínculo a um prestador específico — não há hoje login individual por prestador (o mapeamento por prestador está previsto para uma futura integração com os perfis já cadastrados no ERP).</p>'+
+          '<ul>'+
+          '<li><b>Solicitações:</b> só enxerga os tipos de solicitação habilitados para o perfil, configuráveis pelo Administrador/Gestor em Configurações → Permissões.</li>'+
+          '<li><b>Kanban:</b> visualiza o quadro completo de guias, mas não pode clicar para abrir os detalhes de nenhuma guia. Os cards também não exibem risco regulatório, aderência regulatória, nem o fluxo/etapa atual do processo — informações internas de auditoria.</li>'+
+          '<li>Todas as demais rotas do menu (Dashboard, Guias, Parametrização, Configurações, Logs etc.) ficam ocultas para este perfil.</li>'+
+          '</ul>');
     }
 
     wrap.appendChild(body);
@@ -11807,16 +11866,17 @@
     // Mapa de navegação REAL do sistema (nomes exatos das telas e abas)
     var MAPA_SISTEMA=
       'MAPA DE NAVEGAÇÃO (nomes EXATOS — use-os literalmente):\n'+
-      'MENU LATERAL (sidebar): Dashboard | Guias | Kanban | Parametrização | Configurações | Assistente | Manual | Logs.\n'+
+      'MENU LATERAL (sidebar): Dashboard | Guias | Kanban | Solicitações | Parametrização | Configurações | Assistente | Manual | Logs. (Perfil Prestador só enxerga Solicitações e Kanban.)\n'+
       'CONFIGURAÇÕES (abas): "Classificação de Risco", "Fluxos", "Permissões", "Usuários" (só Administrador), "Assistente IA" (só Administrador).\n'+
       ' - Classificação de Risco: define os fatores de risco e, na sub-aba "Limiares", os limiares Baixo/Médio/Alto; sub-aba "Prévia" mostra a distribuição.\n'+
       ' - Fluxos: define o prazo (SLA, em dias) e o regime de cada fluxo.\n'+
-      ' - Permissões: matriz de permissões por perfil (clique na célula para ciclar Acesso total / Somente leitura / Sem acesso).\n'+
+      ' - Permissões: matriz de permissões por perfil, incluindo o perfil Prestador (clique na célula para ciclar Acesso total / Somente leitura / Sem acesso). Logo abaixo da matriz há a seção "Tipos de Solicitação — perfil Prestador", com checkboxes definindo quais dos 6 tipos de Solicitação o Prestador pode registrar.\n'+
       ' - Usuários: cadastro de usuários (Nome, CPF, E-mail, Login, Senha, Perfil, Situação Ativo/Inativo).\n'+
       ' - Assistente IA: provedor (Gemini/Claude/OpenAI) + chave de API + modelo.\n'+
       'PARAMETRIZAÇÃO: selecione um fluxo e use as abas internas. Os PESOS do cálculo de aderência ficam na aba "Pesos IA" (ícone de cérebro) DENTRO do fluxo selecionado — lá há um campo de peso (0 a 10) para cada critério: Documental, DUT, Procedimentos, Pacotes, Mat/Med, Diárias/Taxas, Contratual/Histórico. As Regras DUT ficam na aba "Regras DUT". As vinculações (Procedimentos, Pacotes, Mat/Med, Diárias/Taxas) têm suas próprias abas, cada uma com campo de peso por item.\n'+
       'GUIAS: a relação tem filtros rápidos e o "Filtro aprofundado"; clicar numa guia abre o modal de detalhes com abas (Cabeçalho, Resumo, Beneficiário, Solicitação, Etapas, Procedimentos, Pacotes, Mat/Med, Diárias/Taxas, OPME, Anexos, Críticas, Parecer Técnico, Parecer Operadora, Obs. Impressas, Obs. Não Impressas, Histórico, Logs). O Resumo mostra beneficiário, prestador solicitante/executante, especialidade e os riscos. No rodapé do modal: botão "Reprocessar" e "Parecer da Operadora".\n'+
-      'DASHBOARD: KPIs clicáveis; o KPI "Etapa com gargalo" abre o "Ranking de Gargalos". Os KPIs se dividem em "período" (Total de guias, Liberadas, Negadas, Com OPME, Baixa aderência, Tempo médio, Etapa com gargalo — respeitam o seletor de período do topo, padrão últimos 30 dias) e "tempo real" (Em análise, Em junta médica, Aguardando complemento, Analisadas, Cotação de OPME — sempre mostram o status atual, ignorando o período selecionado).\n';
+      'DASHBOARD: KPIs clicáveis; o KPI "Etapa com gargalo" abre o "Ranking de Gargalos". Os KPIs se dividem em "período" (Total de guias, Liberadas, Negadas, Com OPME, Baixa aderência, Tempo médio, Etapa com gargalo — respeitam o seletor de período do topo, padrão últimos 30 dias) e "tempo real" (Em análise, Em junta médica, Aguardando complemento, Analisadas, Cotação de OPME — sempre mostram o status atual, ignorando o período selecionado).\n'+
+      'SOLICITAÇÕES: hub com 6 tipos (Internação, Prorrogação de Internação, OPME, Quimioterapia, Consulta, Exames e Procedimentos). Cada um abre um formulário próprio. Quando um código de Procedimento/Pacote inserido tem "Anexos Obrigatórios" cadastrados em Parametrização, a seção Anexos exibe um slot nomeado (com *) por documento exigido, e o botão "Autorizar" fica bloqueado até todos serem anexados e uma checagem rápida da IA confirmar que não há divergência ("não corresponde" bloqueia; "parcial" ou sem IA configurada não bloqueiam). Ao autorizar, os anexos são transferidos para a guia criada. Solicitação de OPME não cria guia nova — localiza uma guia existente pelo número e anexa os OPMEs a ela. Perfil Prestador só vê os tipos habilitados para ele (configurável em Configurações → Permissões, seção "Tipos de Solicitação — perfil Prestador").\n';
 
     // Modo "Uso do sistema" — manual + dúvidas de usabilidade
     var CTX_SISTEMA=CTX_BASE+
@@ -11825,7 +11885,7 @@
       'CONCEITOS: '+
       '1) ADERÊNCIA: calculada por critérios ponderados pelos pesos definidos em Parametrização → (fluxo) → "Pesos IA". O TETO é dinâmico — soma apenas os critérios aplicáveis àquela guia (ex.: DUT só entra se a guia tem procedimento com DUT obrigatória; Pacotes só se houver pacote vinculado). '+
       '2) REPROCESSAR: o botão "Reprocessar" (rodapé do modal da guia) reanalisa a guia considerando itens desmarcados pelo auditor, observações e parecer da operadora. '+
-      '3) PERFIS: Administrador (tudo, incluindo Configurações → Usuários), Gestor (igual ao Administrador, exceto Usuários), Auditor (análise e parecer), Enfermeiro (triagem e complemento nos seus fluxos). '+
+      '3) PERFIS: Administrador (tudo, incluindo Configurações → Usuários), Gestor (igual ao Administrador, exceto Usuários), Auditor (análise e parecer), Enfermeiro (triagem e complemento nos seus fluxos), Prestador (só Solicitações, com tipos configuráveis, e Kanban sem abrir guia nem ver risco/aderência/fluxo-etapa — sem cadastro individual em Usuários, é um perfil único simulável pelo FAB). '+
       'Exemplo de resposta correta a "onde ajusto os pesos da aderência": "Acesse Parametrização, selecione o fluxo desejado e abra a aba Pesos IA. Lá há um campo de peso (0 a 10) para cada critério (Documental, DUT, Procedimentos, etc.)." '+
       'Se não souber um caminho específico, diga que não está mapeado e oriente a consultar o Manual — nunca invente.';
 
