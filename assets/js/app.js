@@ -134,7 +134,10 @@
     // riscoRegulatorio: badge/nível de Risco Regulatório.
     // riscoAssistencial: os 3 selos Assistencial/Documental/Contratual.
     pesosVisiveis: Object.assign({pesoItens:true, aderenciaIA:true, riscoRegulatorio:true, riscoAssistencial:true},
-      JSON.parse(localStorage.getItem('regula_pesos_visiveis')||'null')||{})
+      JSON.parse(localStorage.getItem('regula_pesos_visiveis')||'null')||{}),
+    // Textos de prompt de IA editados pelo Administrador (Configurações → Prompts do Sistema).
+    // Chave = id do prompt (ver PROMPTS_SISTEMA); valor = texto customizado. Ausente = usa o padrão.
+    promptsOverride: JSON.parse(localStorage.getItem('regula_prompts_override')||'null') || {}
   };
 
   var DEFAULT_PESOS={documental:6,dut:8,procedimento:7,pacote:5,matmed:7,diaria:5,contratual:7,historico:4};
@@ -220,12 +223,8 @@
         r.onerror=reject;
         r.readAsDataURL(file);
       });
-      var sistema='Você faz uma triagem RÁPIDA e superficial de documentos. Responda SOMENTE com o JSON pedido, sem texto antes ou depois, sem markdown.';
-      var prompt='O arquivo anexado precisa CONTER, em alguma página ou seção, um documento do tipo: "'+anexoObrigNome+'". '+
-        'O arquivo pode ser um PDF com VÁRIAS páginas de conteúdo misto (ex.: solicitação médica na página 1, o laudo pedido na página 2, imagens de exame na página 3) — isso é normal e não é motivo para reprovar. '+
-        'Olhe rapidamente TODAS as páginas e diga se o documento exigido aparece em pelo menos uma delas, mesmo que junto com outros documentos. '+
-        'Só responda "nao" se, depois de olhar todas as páginas, esse documento realmente não estiver presente em nenhuma delas. '+
-        'Responda em JSON válido, exatamente: {"corresponde":"<sim|nao|parcial>"}';
+      var sistema=getPromptText('anexoObrigRasa','sistema');
+      var prompt=getPromptText('anexoObrigRasa','prompt',{anexoObrigNome:anexoObrigNome});
       var resp=await window.callIAComSistemaEAnexo(cfg, sistema, prompt, {mime:mime, base64:base64, nome:file.name});
       if(!resp || !resp.ok) return {ok:false};
       var txt=resp.text.trim().replace(/^```json/i,'').replace(/^```/,'').replace(/```$/,'').trim();
@@ -253,15 +252,9 @@
     // à IA que confira se o conteúdo do documento corresponde ao que foi exigido (ex.: "Laudo de
     // ultrassom do abdome" vs. o usuário ter anexado, por engano, uma nota fiscal).
     var reqNome=anexo.anexoObrigNome||'';
-    var sistema='Você é um assistente de extração de documentos médicos/administrativos (OCR + interpretação). Responda SOMENTE com o JSON solicitado, sem texto antes ou depois, sem markdown.';
-    var prompt='Leia o documento anexado (arquivo "'+(anexo.nome||'')+'") e extraia as informações a seguir. '+
-      'Identifique o NOME DO PACIENTE constante no documento e confira se é o mesmo da guia ("'+nomeGuia+'"). '+
-      (reqNome?(
-        'Este anexo foi enviado para atender à exigência cadastrada: "'+reqNome+'". O arquivo pode ser um PDF com VÁRIAS páginas de conteúdo misto '+
-        '(ex.: solicitação médica na página 1, o laudo pedido na página 2, imagens de exame na página 3) — isso é normal e não é motivo para reprovar. '+
-        'Examine TODAS as páginas do arquivo e avalie se o documento exigido ("'+reqNome+'") está presente em pelo menos uma delas, mesmo que junto com outros documentos diferentes. '+
-        'Só marque "nao" se, depois de examinar todas as páginas, esse documento realmente não estiver presente em nenhuma. '
-      ):'')+
+    var sistema=getPromptText('anexoObrigCompleto','sistema');
+    var prompt=getPromptText('anexoObrigCompleto','promptBase',{nomeArquivo:anexo.nome||'',nomeGuia:nomeGuia})+
+      (reqNome?getPromptText('anexoObrigCompleto','promptExigencia',{reqNome:reqNome}):'')+
       'Responda em JSON válido, exatamente neste formato: {"pacienteDoc":"<nome do paciente no documento ou vazio>","confereNome":"<sim|nao|?>","extrato":"<1-2 frases com o achado principal do documento>"'+
       (reqNome?',"correspondeAoEsperado":"<sim|nao|parcial>","motivoDivergencia":"<vazio se o documento exigido estiver presente em alguma página; senão, explique em 1 frase o que o arquivo contém de fato>"':'')+
       '}';
@@ -771,6 +764,241 @@
   function riscoRegVisivel(){ return pesoVisivel('riscoRegulatorio'); }
   function risco4Visivel(){ return pesoVisivel('riscoAssistencial'); }
   function salvarPesosVisiveis(){ localStorage.setItem('regula_pesos_visiveis',JSON.stringify(State.pesosVisiveis)); }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Textos padrão de fábrica dos mapas de navegação usados pelo chat RAI (registrados em
+  // PROMPTS_SISTEMA como 'mapaSistema'/'mapaRelatorios' — editáveis por Administrador).
+  // Extensos e sensíveis: os nomes de tela/aba citados precisam bater com a interface real.
+  function _mapaSistemaPadrao(){
+    return 'MAPA DE NAVEGAÇÃO (nomes EXATOS — use-os literalmente):\n'+
+      'MENU LATERAL (sidebar): Dashboard | Guias | Kanban | Solicitações | Parametrização | Configurações | Assistente | Manual | Logs. (Perfil Prestador só enxerga Solicitações e Kanban.)\n'+
+      'CONFIGURAÇÕES (abas): "Classificação de Risco", "Fluxos", "Permissões", "Usuários" (só Administrador), "Assistente IA" (só Administrador), "Prompts do Sistema" (só Administrador).\n'+
+      ' - Classificação de Risco: define os fatores de risco e, na sub-aba "Limiares", os limiares Baixo/Médio/Alto; sub-aba "Prévia" mostra a distribuição. Logo abaixo do toggle "Classificação automática ativa" há a seção "Visibilidade dos pesos e resultados", com 4 interruptores independentes (Peso por item, Aderência, Risco Regulatório, Risco Assistencial/Documental/Contratual) — desativar um esconde COMPLETAMENTE aquele resultado em toda a plataforma (badges, colunas, KPIs, gráficos, exportações e até nas respostas deste assistente), sem apagar a configuração. Diferente do toggle "Classificação automática ativa", que só pausa o recálculo sem esconder nada.\n'+
+      ' - Fluxos: define o prazo (SLA, em dias) e o regime de cada fluxo.\n'+
+      ' - Permissões: matriz de permissões por perfil, incluindo o perfil Prestador (clique na célula para ciclar Acesso total / Somente leitura / Sem acesso). Logo abaixo da matriz há a seção "Tipos de Solicitação — perfil Prestador", com checkboxes definindo quais dos 6 tipos de Solicitação o Prestador pode registrar.\n'+
+      ' - Usuários: cadastro de usuários (Nome, CPF, E-mail, Login, Senha, Perfil, Situação Ativo/Inativo).\n'+
+      ' - Assistente IA: provedor (Gemini/Claude/OpenAI) + chave de API + modelo.\n'+
+      ' - Prompts do Sistema: lista, agrupados por categoria, todos os textos ("prompts") enviados de fato ao provedor de IA em cada ponto do sistema — cada um com onde é usado, quando dispara, e um textarea editável por campo com placeholders {{assim}} obrigatórios (salvar sem um deles é bloqueado) e botão "Restaurar padrão".\n'+
+      'PARAMETRIZAÇÃO: selecione um fluxo e use as abas internas. Os PESOS do cálculo de aderência ficam na aba "Pesos IA" (ícone de cérebro) DENTRO do fluxo selecionado — lá há um campo de peso (0 a 10) para cada critério: Documental, DUT, Procedimentos, Pacotes, Mat/Med, Diárias/Taxas, Contratual/Histórico. As Regras DUT ficam na aba "Regras DUT". As vinculações (Procedimentos, Pacotes, Mat/Med, Diárias/Taxas) têm suas próprias abas, cada uma com campo de peso por item.\n'+
+      'GUIAS: a relação tem filtros rápidos e o "Filtro aprofundado"; clicar numa guia abre o modal de detalhes com abas (Cabeçalho, Resumo, Beneficiário, Solicitação, Etapas, Procedimentos, Pacotes, Mat/Med, Diárias/Taxas, OPME, Anexos, Críticas, Parecer Técnico, Parecer Operadora, Obs. Impressas, Obs. Não Impressas, Histórico, Logs). O Resumo mostra beneficiário, prestador solicitante/executante, especialidade e os riscos. No rodapé do modal: botão "Reprocessar" e "Parecer da Operadora".\n'+
+      'DASHBOARD: KPIs clicáveis; o KPI "Etapa com gargalo" abre o "Ranking de Gargalos". Os KPIs se dividem em "período" (Total de guias, Liberadas, Negadas, Com OPME, Baixa aderência, Tempo médio, Etapa com gargalo — respeitam o seletor de período do topo, padrão últimos 30 dias) e "tempo real" (Em análise, Em junta médica, Aguardando complemento, Analisadas, Cotação de OPME — sempre mostram o status atual, ignorando o período selecionado).\n'+
+      'SOLICITAÇÕES: hub com 6 tipos (Internação, Prorrogação de Internação, OPME, Quimioterapia, Consulta, Exames e Procedimentos). Cada um abre um formulário próprio. Quando um código de Procedimento/Pacote inserido tem "Anexos Obrigatórios" cadastrados em Parametrização, a seção Anexos exibe um slot nomeado (com *) por documento exigido, e o botão "Autorizar" fica bloqueado até todos serem anexados e uma checagem rápida da IA confirmar que não há divergência ("não corresponde" bloqueia; "parcial" ou sem IA configurada não bloqueiam). Ao autorizar, os anexos são transferidos para a guia criada. Solicitação de OPME não cria guia nova — localiza uma guia existente pelo número e anexa os OPMEs a ela. Perfil Prestador só vê os tipos habilitados para ele (configurável em Configurações → Permissões, seção "Tipos de Solicitação — perfil Prestador").\n';
+  }
+  function _mapaRelatoriosPadrao(){
+    return 'ABAS DO MÓDULO RELATÓRIOS (nomes exatos):\n'+
+      ' - Painel Executivo: KPIs (Guias recebidas, Custo total analisado, Custo de serviços negados, Alertas ativos), Distribuição por risco (clicável p/ filtrar), quebra Ambulatorial × Internação, e rankings de médicos, prestadores e OPME.\n'+
+      ' - Beneficiários: consolidado por paciente (guias, ambulatorial/internação, procedimentos, OPME, negadas, custo, score de recorrência).\n'+
+      ' - Médicos Solicitantes: perfil por médico (especialidade, guias, custo, taxa de aprovação, desvio vs. média da especialidade, concentração em prestador).\n'+
+      ' - Prestadores: consolidado por prestador executante (guias, ambulatorial, internações, OPME, custo médio/total, score). KPI "Acima da média" lista quem supera o custo médio/guia.\n'+
+      ' - Procedimentos: rankings (Mais solicitados / Mais caros) para Procedimentos, Diárias e Taxas, OPME e Mat/Med.\n'+
+      ' - OPME: valor autorizado × cobrado por item, variação de preço; alerta quando ≥25% acima.\n'+
+      ' - Custos: custo total, médio por guia, maior custo, custo de serviços negados; rankings por guia/beneficiário/procedimento.\n'+
+      ' - Alertas Inteligentes: alertas gerados pelo motor (concentração, desvio de especialidade, recorrência, alto custo, inconsistência de OPME) com severidade e ação sugerida.\n'+
+      ' - Comparativos: destaque de cada grupo contra a média do próprio grupo.\n'+
+      'FILTROS: há filtro de Período e de Natureza (Ambulatorial/Internação e subtipos) que valem em todas as abas, exceto Comparativos. Todas as tabelas podem ser exportadas para Excel.\n';
+  }
+
+  // Prompts do Sistema — registro central dos textos enviados a um provedor de IA
+  // real (Gemini/Claude/OpenAI), editáveis por Administrador em Configurações →
+  // Prompts do Sistema. Cada entrada descreve ONDE é usado, QUANDO dispara, e
+  // quais placeholders {{...}} o texto precisa manter para a interpolação
+  // funcionar — salvar sem um placeholder obrigatório é bloqueado na UI.
+  // ═══════════════════════════════════════════════════════════════════════════
+  var PROMPTS_SISTEMA=[
+    {
+      id:'anexoObrigRasa', categoria:'Solicitações', nome:'Checagem rápida de anexo obrigatório',
+      onde:'Tela Solicitações — qualquer slot de "Anexo Obrigatório" nomeado',
+      quando:'Toda vez que o usuário escolhe um arquivo num slot de anexo obrigatório (antes de liberar "Autorizar")',
+      campos:[
+        {chave:'sistema', label:'Papel da IA (system)', placeholders:[],
+          padrao:'Você faz uma triagem RÁPIDA e superficial de documentos. Responda SOMENTE com o JSON pedido, sem texto antes ou depois, sem markdown.'},
+        {chave:'prompt', label:'Instrução (prompt)', placeholders:['anexoObrigNome'],
+          padrao:'O arquivo anexado precisa CONTER, em alguma página ou seção, um documento do tipo: "{{anexoObrigNome}}". '+
+            'O arquivo pode ser um PDF com VÁRIAS páginas de conteúdo misto (ex.: solicitação médica na página 1, o laudo pedido na página 2, imagens de exame na página 3) — isso é normal e não é motivo para reprovar. '+
+            'Olhe rapidamente TODAS as páginas e diga se o documento exigido aparece em pelo menos uma delas, mesmo que junto com outros documentos. '+
+            'Só responda "nao" se, depois de olhar todas as páginas, esse documento realmente não estiver presente em nenhuma delas. '+
+            'Responda em JSON válido, exatamente: {"corresponde":"<sim|nao|parcial>"}'}
+      ]
+    },
+    {
+      id:'anexoObrigCompleto', categoria:'Solicitações', nome:'Checagem completa de anexo (OCR)',
+      onde:'Guia criada a partir de uma Solicitação — anexos transferidos automaticamente',
+      quando:'Automático, em segundo plano, ao criar/abrir a guia — lê nome do paciente e (se o anexo veio de um slot obrigatório) confere a correspondência com o documento exigido',
+      campos:[
+        {chave:'sistema', label:'Papel da IA (system)', placeholders:[],
+          padrao:'Você é um assistente de extração de documentos médicos/administrativos (OCR + interpretação). Responda SOMENTE com o JSON solicitado, sem texto antes ou depois, sem markdown.'},
+        {chave:'promptBase', label:'Instrução — parte fixa (sempre enviada)', placeholders:['nomeArquivo','nomeGuia'],
+          padrao:'Leia o documento anexado (arquivo "{{nomeArquivo}}") e extraia as informações a seguir. '+
+            'Identifique o NOME DO PACIENTE constante no documento e confira se é o mesmo da guia ("{{nomeGuia}}"). '},
+        {chave:'promptExigencia', label:'Instrução — só quando o anexo tem exigência cadastrada', placeholders:['reqNome'],
+          padrao:'Este anexo foi enviado para atender à exigência cadastrada: "{{reqNome}}". O arquivo pode ser um PDF com VÁRIAS páginas de conteúdo misto '+
+            '(ex.: solicitação médica na página 1, o laudo pedido na página 2, imagens de exame na página 3) — isso é normal e não é motivo para reprovar. '+
+            'Examine TODAS as páginas do arquivo e avalie se o documento exigido ("{{reqNome}}") está presente em pelo menos uma delas, mesmo que junto com outros documentos diferentes. '+
+            'Só marque "nao" se, depois de examinar todas as páginas, esse documento realmente não estiver presente em nenhuma. '}
+      ],
+      nota:'O formato JSON de resposta (pacienteDoc/confereNome/extrato e, condicionalmente, correspondeAoEsperado/motivoDivergencia) é fixo no código e não faz parte do texto editável.'
+    },
+    {
+      id:'idcodExtracao', categoria:'ID Código', nome:'Extração de dados da solicitação (1ª passada)',
+      onde:'Tela ID Código', quando:'Ao clicar em "Identificar códigos" após anexar um documento de solicitação médica',
+      campos:[
+        {chave:'prompt', label:'Instrução (prompt)', placeholders:[], padrao:_idcodPromptExtracaoPadrao()}
+      ]
+    },
+    {
+      id:'idcodMatching', categoria:'ID Código', nome:'Classificação de códigos TUSS (2ª passada)',
+      onde:'Tela ID Código', quando:'Automático, logo após a extração — para cada procedimento identificado, escolhe/classifica os candidatos TUSS pré-filtrados da base local',
+      campos:[
+        {chave:'prompt', label:'Instrução (prompt)', placeholders:['listaProcedimentos'], padrao:_idcodPromptMatchingPadrao()}
+      ],
+      nota:'{{listaProcedimentos}} é substituído por um bloco de dados gerado automaticamente (um item por procedimento com seus candidatos TUSS) — não é texto livre.'
+    },
+    {
+      id:'cidSignificado', categoria:'CID-10', nome:'Significado de código CID-10',
+      onde:'Qualquer campo de CID no sistema (busca manual)', quando:'Ao digitar/confirmar um código CID e o sistema busca o significado oficial',
+      campos:[
+        {chave:'sistema', label:'Papel da IA (system)', placeholders:[],
+          padrao:'Você responde apenas com o significado oficial (descrição) de códigos CID-10, em português, sem explicações adicionais.'},
+        {chave:'prompt', label:'Instrução (prompt)', placeholders:['cid'],
+          padrao:'Qual é o significado do código CID-10 "{{cid}}"? Responda APENAS com a descrição oficial, sem repetir o código, sem pontuação final, em uma linha.'}
+      ]
+    },
+    {
+      id:'cidBusca', categoria:'CID-10', nome:'Busca de CID-10 por termo/patologia',
+      onde:'Busca avançada de CID', quando:'Ao buscar por nome de patologia ou código parcial em campos de busca de CID',
+      campos:[
+        {chave:'sistema', label:'Papel da IA (system)', placeholders:[],
+          padrao:'Você é um especialista em codificação CID-10 (Classificação Internacional de Doenças). Responda SOMENTE com JSON válido, sem markdown, sem texto adicional.'},
+        {chave:'prompt', label:'Instrução (prompt)', placeholders:['qtde','termo'],
+          padrao:'Liste até {{qtde}} códigos CID-10 reais e oficiais que correspondam a este termo de busca (pode ser o nome de uma patologia/doença ou um código CID, completo ou parcial): "{{termo}}". '+
+            'Se o termo já for um código específico e válido, retorne apenas ele. Ordene do mais relevante para o menos relevante. '+
+            'Responda EXATAMENTE neste formato: [{"codigo":"J18.9","descricao":"Pneumonia não especificada"}]. Se nada corresponder, responda [].'}
+      ]
+    },
+    {
+      id:'parecerTecnico', categoria:'Guias', nome:'Geração do Parecer Técnico (PDF)',
+      onde:'Modal de detalhe da guia → aba Parecer Técnico', quando:'Ao clicar em "Gerar Parecer Técnico" (ou "Reprocessar")',
+      campos:[
+        {chave:'sistemaSufixo', label:'Papel da IA (system) — sufixo somado ao prompt "Conversa técnica" (ver categoria Assistente RAI)', placeholders:[],
+          padrao:'\n\nMODO: GERAÇÃO DE PARECER TÉCNICO FORMAL (documento único, não é conversa). Responda SOMENTE com o JSON solicitado pelo usuário, sem texto antes ou depois.'},
+        {chave:'promptBase', label:'Instrução — parte fixa', placeholders:['classifLabel','linhaItens'],
+          padrao:'Redija um PARECER TÉCNICO de auditoria assistencial para subsidiar a decisão da operadora (auditoria médica/área de autorização) sobre a guia abaixo, no MESMO PADRÃO e nível de detalhamento de um parecer técnico-regulatório profissional (com base normativa, análise técnica criteriosa e conclusão objetiva).\n\n'+
+            'CLASSIFICAÇÃO JÁ DEFINIDA (não altere, apenas fundamente): {{classifLabel}}\n\n'+
+            'SERVIÇOS SOLICITADOS NESTA GUIA:\n{{linhaItens}}\n\n'},
+        {chave:'promptComDut', label:'Instrução — quando há procedimento sujeito a DUT', placeholders:[],
+          padrao:'IMPORTANTE: um ou mais procedimentos desta guia estão sujeitos a Diretriz de Utilização (DUT) da ANS (RN 465/2021, Anexo II). Cite a DUT aplicável ao(s) procedimento(s) (pelo número/nome do item da DUT quando puder inferir do procedimento e do CID, ou de forma genérica caso não seja possível identificar o item exato) e analise o enquadramento clínico frente aos critérios da diretriz.'},
+        {chave:'promptSemDut', label:'Instrução — quando NÃO há procedimento sujeito a DUT', placeholders:[],
+          padrao:'Nenhum procedimento desta guia está sujeito a DUT — NÃO cite DUT nem Anexo II da RN 465/2021 neste parecer; baseie a análise apenas nos critérios contratuais/documentais/clínicos apresentados.'},
+        {chave:'promptFormato', label:'Instrução — formato de resposta exigido', placeholders:[],
+          padrao:'Responda em JSON válido (sem markdown ao redor, sem ```), com este formato exato:\n'+
+            '{"baseNormativa":"texto da seção Base normativa aplicável","analiseTecnica":"texto da seção Análise técnica (enquadramento clínico/documental e, se houver DUT, adequação metodológica)","conclusao":"texto da seção Conclusão e posicionamento recomendado, incluindo a regra de reclassificação quando aplicável","pendencias":["item pendente 1","item pendente 2"],"resumoMotivo":"1-2 frases do motivo da classificação, para o Resumo executivo"}\n'+
+            'Cada campo de texto deve ter 2 a 5 frases, técnico e objetivo, em português. "pendencias" pode ser um array vazio se a classificação for Favorável sem pendências. Não inclua nada fora do JSON.'}
+      ]
+    },
+    {
+      id:'ctxBase', categoria:'Assistente RAI', nome:'Identidade da RAI (base comum)',
+      onde:'Todos os modos do chat (Uso do sistema, Conversa técnica, Relatórios) + modo Voz + Parecer Técnico',
+      quando:'Sempre — é o bloco inicial de TODO system prompt enviado à IA no chat/voz/parecer',
+      campos:[
+        {chave:'texto', label:'Texto', placeholders:[],
+          padrao:'Você é a RAI, assistente virtual integrada ao RegulaAI Saúde, plataforma de auditoria assistencial para operadoras de saúde. Você CONHECE o sistema real e a navegação exata dele. '+
+            'NÃO se apresente nem use saudações como "Olá! Sou a RAI" nas respostas — a apresentação já foi feita na abertura do chat. Vá direto ao ponto. '+
+            'Se o usuário perguntar o que significa RAI ou o motivo do nome, responda: "RAI é a combinação da primeira letra de Regulação (R) + AI (Artificial Intelligence)." '+
+            'Responda em português, de forma objetiva, técnica e acolhedora. '+
+            'REGRA DE PRECISÃO (obrigatória): nunca use linguagem vaga ou hipotética sobre o sistema. É PROIBIDO escrever "costuma ser", "geralmente", "provavelmente", "deve estar em", "ou X ou Y", ou inventar nomes de menus/telas. Cite SEMPRE o caminho exato usando os nomes reais abaixo, no formato "Seção → Aba → campo". Se você realmente não souber um caminho específico, diga "Não tenho esse caminho mapeado; consulte o Manual" — jamais invente. '}
+      ],
+      nota:'Editar este texto muda o comportamento em TODOS os modos do chat, no modo Voz e no Parecer Técnico — é a persona/regras base comuns a todos eles.'
+    },
+    {
+      id:'mapaSistema', categoria:'Assistente RAI', nome:'Mapa de navegação do sistema',
+      onde:'Modo "Uso do sistema" do chat', quando:'Sempre que o modo "Uso do sistema" está ativo — dá ao assistente os nomes exatos de telas/abas',
+      campos:[{chave:'texto', label:'Texto', placeholders:[], padrao:_mapaSistemaPadrao()}],
+      nota:'Texto extenso e sensível — os nomes de menu/aba citados aqui precisam bater exatamente com os nomes reais da interface, senão o assistente passa a orientar caminhos errados.'
+    },
+    {
+      id:'ctxSistemaModo', categoria:'Assistente RAI', nome:'Instrução do modo "Uso do sistema"',
+      onde:'Modo "Uso do sistema" do chat', quando:'Sempre que esse modo está ativo — vem depois de Identidade da RAI e do Mapa de navegação',
+      campos:[{chave:'texto', label:'Texto', placeholders:[], padrao:
+        'MODO: USO DO SISTEMA. Você atua como o manual interativo do RegulaAI Saúde, tirando dúvidas sobre usabilidade, telas, fluxos de trabalho e funcionamento da plataforma. NÃO emita pareceres clínicos neste modo; se o usuário quiser análise técnica de uma guia, oriente-o a iniciar uma "Conversa técnica". '}]
+    },
+    {
+      id:'conceitosSistema', categoria:'Assistente RAI', nome:'Conceitos do sistema (aderência, reprocessar, perfis)',
+      onde:'Modo "Uso do sistema" do chat', quando:'Sempre que esse modo está ativo — vem depois do Mapa de navegação',
+      campos:[{chave:'texto', label:'Texto', placeholders:[], padrao:
+        'CONCEITOS: '+
+        '1) ADERÊNCIA: calculada por critérios ponderados pelos pesos definidos em Parametrização → (fluxo) → "Pesos IA". O TETO é dinâmico — soma apenas os critérios aplicáveis àquela guia (ex.: DUT só entra se a guia tem procedimento com DUT obrigatória; Pacotes só se houver pacote vinculado). '+
+        '2) REPROCESSAR: o botão "Reprocessar" (rodapé do modal da guia) reanalisa a guia considerando itens desmarcados pelo auditor, observações e parecer da operadora. '+
+        '3) PERFIS: Administrador (tudo, incluindo Configurações → Usuários), Gestor (igual ao Administrador, exceto Usuários), Auditor (análise e parecer), Enfermeiro (triagem e complemento nos seus fluxos), Prestador (só Solicitações — tipos configuráveis — e Kanban filtrado só pelas guias do prestador escolhido no FAB, sem abrir guia, sem ver risco/aderência/fluxo-etapa, sem acesso ao Assistente — sem cadastro individual em Usuários, é simulável pelo FAB escolhendo um dos prestadores cadastrados). '+
+        'Exemplo de resposta correta a "onde ajusto os pesos da aderência": "Acesse Parametrização, selecione o fluxo desejado e abra a aba Pesos IA. Lá há um campo de peso (0 a 10) para cada critério (Documental, DUT, Procedimentos, etc.)." '+
+        'Se não souber um caminho específico, diga que não está mapeado e oriente a consultar o Manual — nunca invente.'}]
+    },
+    {
+      id:'ctxTecnicoModo', categoria:'Assistente RAI', nome:'Instrução do modo "Conversa técnica"',
+      onde:'Modo "Conversa técnica" do chat + Parecer Técnico (via sufixo próprio)', quando:'Sempre que esse modo está ativo — vem depois de Identidade da RAI, antes do dossiê da guia',
+      campos:[{chave:'texto', label:'Texto', placeholders:[], padrao:
+        'MODO: CONVERSA TÉCNICA. Você atua como apoio técnico-assistencial ao auditor sobre uma guia específica: esclarece o parecer, discute indicação técnica dos serviços solicitados, contraindicações, alternativas terapêuticas possíveis, e pontos de atenção regulatórios. '+
+        'IMPORTANTE: você é apoio à decisão — NÃO autoriza nem nega procedimentos. A decisão final é exclusiva da operadora/auditor. Baseie-se nos dados fornecidos da guia e em boas práticas clínicas/regulatórias; quando faltar informação, declare a limitação. '+
+        'CONTEXTO INTEGRAL: o dossiê abaixo já reúne TODAS as abas da guia (dados, serviços, análise IA, críticas, observações impressas/internas, histórico, hist. de atendimento, carências, mensalidades, etapas e a lista de anexos). Você NÃO precisa pedir que o usuário cole textos ou envie arquivos — você já tem tudo. '+
+        'ANEXOS: quando arquivos (laudos, exames, imagens/PDF) forem enviados junto na conversa, LEIA o conteúdo deles e cite achados relevantes (ex.: valores de exame, IMC, laudo do médico assistente, evidência de DUT), cruzando com os serviços solicitados e a indicação clínica. Se um anexo estiver listado mas sem conteúdo legível, aponte que o arquivo não pôde ser lido. '}],
+      nota:'Reusado também como base do "system" do Parecer Técnico (que soma um sufixo próprio) — editar aqui afeta os dois.'
+    },
+    {
+      id:'mapaRelatorios', categoria:'Assistente RAI', nome:'Mapa das abas do módulo Relatórios',
+      onde:'Modo "Relatórios" do chat', quando:'Sempre que esse modo está ativo',
+      campos:[{chave:'texto', label:'Texto', placeholders:[], padrao:_mapaRelatoriosPadrao()}],
+      nota:'Texto extenso e sensível — os nomes de aba citados aqui precisam bater exatamente com os nomes reais do módulo Relatórios.'
+    },
+    {
+      id:'ctxRelatoriosModo', categoria:'Assistente RAI', nome:'Instrução do modo "Relatórios"',
+      onde:'Modo "Relatórios" do chat', quando:'Sempre que esse modo está ativo — vem depois do Mapa de Relatórios, antes dos dados analíticos',
+      campos:[{chave:'texto', label:'Texto', placeholders:[], padrao:
+        'MODO: RELATÓRIOS. Você atua como analista de BI assistencial do RegulaAI, conversando sobre os dados dos relatórios (recorrências, custos, desvios, riscos, OPME, alertas). '+
+        'Responda SEMPRE com base nos DADOS ANALÍTICOS fornecidos abaixo — cite números reais (valores, quantidades, nomes). Se o usuário pedir algo que não está nos dados, diga que aquele recorte não está disponível no resumo atual e sugira a aba/filtro do módulo Relatórios onde ele encontra. NÃO invente números. Valores em R$ são estimativas simuladas do sistema para demonstração. '+
+        'PERÍODO: você RECEBE o período atualmente selecionado (linha "PERÍODO SELECIONADO" abaixo) e os dados já correspondem a ele. Quando perguntarem qual período está sendo analisado, INFORME o intervalo exato dessa linha. Os dados são atualizados em tempo real conforme o usuário altera o filtro de Período no módulo — a cada pergunta você recebe o recorte vigente. '}]
+    },
+    {
+      id:'vozSufixo', categoria:'Assistente RAI', nome:'Instrução do modo Voz (sufixo)',
+      onde:'Conversa por voz (push-to-talk)', quando:'Toda mensagem falada — somado ao fim do system prompt do modo "Uso do sistema"',
+      campos:[{chave:'texto', label:'Texto', placeholders:[], padrao:
+        '\n\nMODO: CONVERSA POR VOZ. Responda de forma curta e natural para ser OUVIDA em áudio — frases diretas, sem listas, sem markdown, sem emojis.'}]
+    }
+  ];
+
+  // Retorna o texto de um campo de um prompt (override salvo pelo Admin, senão o padrão de fábrica).
+  function _promptOverrideRaw(promptId, campoChave){
+    var k=promptId+'|'+campoChave;
+    var ov=State.promptsOverride[k];
+    return typeof ov==='string' ? ov : null;
+  }
+  function _promptDef(promptId){ for(var i=0;i<PROMPTS_SISTEMA.length;i++){ if(PROMPTS_SISTEMA[i].id===promptId) return PROMPTS_SISTEMA[i]; } return null; }
+  function _campoDef(promptDef,campoChave){ for(var i=0;i<promptDef.campos.length;i++){ if(promptDef.campos[i].chave===campoChave) return promptDef.campos[i]; } return null; }
+  // Substitui {{placeholder}} pelos valores em `vars` (objeto {placeholder: valor}).
+  function _interpolarPrompt(texto, vars){
+    if(!vars) return texto;
+    return texto.replace(/\{\{(\w+)\}\}/g, function(m,key){ return (vars[key]!=null?String(vars[key]):m); });
+  }
+  // Retorna o texto FINAL (override ou padrão) de um campo, já com {{placeholders}} substituídos por `vars`.
+  function getPromptText(promptId, campoChave, vars){
+    var pdef=_promptDef(promptId), cdef=pdef&&_campoDef(pdef,campoChave);
+    var base=_promptOverrideRaw(promptId,campoChave);
+    if(base==null) base=cdef?cdef.padrao:'';
+    return _interpolarPrompt(base, vars);
+  }
+  // true se um texto contém todos os placeholders obrigatórios daquele campo — usado para bloquear
+  // "Salvar" na tela de Prompts do Sistema quando o Admin remove um placeholder necessário.
+  function _promptTextoValido(promptId, campoChave, texto){
+    var pdef=_promptDef(promptId), cdef=pdef&&_campoDef(pdef,campoChave);
+    if(!cdef) return true;
+    return (cdef.placeholders||[]).every(function(ph){ return texto.indexOf('{{'+ph+'}}')>=0; });
+  }
+  function salvarPromptOverride(promptId, campoChave, texto){
+    State.promptsOverride[promptId+'|'+campoChave]=texto;
+    localStorage.setItem('regula_prompts_override',JSON.stringify(State.promptsOverride));
+  }
+  function restaurarPromptPadrao(promptId, campoChave){
+    delete State.promptsOverride[promptId+'|'+campoChave];
+    localStorage.setItem('regula_prompts_override',JSON.stringify(State.promptsOverride));
+  }
 
   /* === Date Range Picker === */
   function makeDateRangePicker(container, initDe, initAte, onChange, opts){
@@ -1401,7 +1629,9 @@
   }
 
   // Prompt da 1ª passada: lê o documento e extrai dados administrativos + procedimentos em texto livre (sem código ainda)
-  function _idcodPromptExtracao(){
+  // Texto padrão de fábrica (registrado em PROMPTS_SISTEMA como 'idcodExtracao'/'prompt' — editável
+  // por Administrador em Configurações → Prompts do Sistema). Este texto não tem placeholders.
+  function _idcodPromptExtracaoPadrao(){
     return 'Leia esta solicitação/guia médica (pedido de exames ou procedimentos) e extraia as informações a seguir. '+
       'Responda SOMENTE com JSON válido, sem markdown, exatamente neste formato:\n'+
       '{"solicitante":"<nome do médico solicitante>","especialidade":"<especialidade do solicitante, se constar>",'+
@@ -1430,12 +1660,11 @@
       'Liste em "procedimentos" TODOS os itens que serão de fato executados/realizados, um por objeto. Se algum dado não constar, use string vazia "". '+
       'Se o documento trouxer SOMENTE indicação clínica (sem CID) ou SOMENTE o código CID (sem texto de indicação), preencha apenas o campo correspondente e deixe o outro vazio — nunca invente um a partir do outro.';
   }
-  // Prompt da 2ª passada: para cada procedimento, recebe candidatos TUSS pré-filtrados e escolhe/classifica a confiança
-  function _idcodPromptMatching(procedimentos){
-    var linhas=procedimentos.map(function(p,i){
-      var cands=p.candidatos.map(function(c){ return '    - '+c.cod+' | '+c.desc; }).join('\n');
-      return '['+i+'] Procedimento solicitado: "'+p.descricao+'" (Qtd: '+p.qtd+')\n  Candidatos TUSS encontrados na base:\n'+(cands||'    (nenhum candidato encontrado na base local)');
-    }).join('\n\n');
+  function _idcodPromptExtracao(){ return getPromptText('idcodExtracao','prompt'); }
+
+  // Texto padrão de fábrica com o placeholder {{listaProcedimentos}} no lugar do bloco de dados —
+  // registrado em PROMPTS_SISTEMA como 'idcodMatching'/'prompt'.
+  function _idcodPromptMatchingPadrao(){
     return 'Você é um especialista em codificação TUSS (Terminologia Unificada da Saúde Suplementar, tabela 22 da ANS). '+
       'Para cada procedimento solicitado abaixo, escolha o(s) código(s) TUSS mais adequado(s) dentre os candidatos listados (não invente códigos fora da lista de candidatos). '+
       'Classifique sua confiança como: "certo" (um único candidato claramente correto), "multipla" (até 3 candidatos plausíveis, sem certeza de qual é o correto), '+
@@ -1444,10 +1673,18 @@
       'raramente têm um código TUSS com o mesmo nome — nesses casos, NÃO desista com "incerto" só porque não há um candidato idêntico. '+
       'Procure entre os candidatos a sessão/consulta da especialidade profissional envolvida (ex.: psicologia, terapia ocupacional, fonoaudiologia) que melhor corresponda ao serviço descrito, e classifique como "revisar" (não "incerto") — '+
       'só use "incerto" quando de fato nenhum candidato tiver qualquer relação com o procedimento (nem por especialidade, nem por tipo de atendimento).\n\n'+
-      linhas+'\n\n'+
+      '{{listaProcedimentos}}\n\n'+
       'Responda SOMENTE com JSON válido (array), sem markdown, exatamente neste formato:\n'+
       '[{"indice":0,"confianca":"certo|multipla|revisar|incerto","opcoes":[{"cod":"...","desc":"..."}]}]\n'+
       '"opcoes" deve ter no máximo 3 itens, escolhidos apenas entre os candidatos fornecidos para aquele procedimento, ordenados do mais provável ao menos provável. Se confianca for "incerto" E realmente não houver nenhum candidato minimamente relacionado, "opcoes" pode ser um array vazio — caso contrário, inclua ao menos o melhor palpite disponível.';
+  }
+  // Prompt da 2ª passada: para cada procedimento, recebe candidatos TUSS pré-filtrados e escolhe/classifica a confiança
+  function _idcodPromptMatching(procedimentos){
+    var linhas=procedimentos.map(function(p,i){
+      var cands=p.candidatos.map(function(c){ return '    - '+c.cod+' | '+c.desc; }).join('\n');
+      return '['+i+'] Procedimento solicitado: "'+p.descricao+'" (Qtd: '+p.qtd+')\n  Candidatos TUSS encontrados na base:\n'+(cands||'    (nenhum candidato encontrado na base local)');
+    }).join('\n\n');
+    return getPromptText('idcodMatching','prompt',{listaProcedimentos:linhas});
   }
 
   function _idcodParseJson(texto){
@@ -1462,8 +1699,8 @@
     if(!cfg.key) return '';
     try{
       var resp=await window.callIAComSistema(cfg,
-        'Você responde apenas com o significado oficial (descrição) de códigos CID-10, em português, sem explicações adicionais.',
-        'Qual é o significado do código CID-10 "'+cid+'"? Responda APENAS com a descrição oficial, sem repetir o código, sem pontuação final, em uma linha.');
+        getPromptText('cidSignificado','sistema'),
+        getPromptText('cidSignificado','prompt',{cid:cid}));
       if(!resp || !resp.ok) return '';
       return resp.text.trim().replace(/^["']|["']$/g,'').split('\n')[0];
     }catch(e){ return ''; }
@@ -1477,10 +1714,8 @@
     var cfg=window.getIaCfg();
     if(!cfg.key) return {erro:'Nenhuma chave de IA configurada (Configurações → Assistente IA).'};
     try{
-      var sistema='Você é um especialista em codificação CID-10 (Classificação Internacional de Doenças). Responda SOMENTE com JSON válido, sem markdown, sem texto adicional.';
-      var pedido='Liste até '+(qtde||10)+' códigos CID-10 reais e oficiais que correspondam a este termo de busca (pode ser o nome de uma patologia/doença ou um código CID, completo ou parcial): "'+termo+'". '+
-        'Se o termo já for um código específico e válido, retorne apenas ele. Ordene do mais relevante para o menos relevante. '+
-        'Responda EXATAMENTE neste formato: [{"codigo":"J18.9","descricao":"Pneumonia não especificada"}]. Se nada corresponder, responda [].';
+      var sistema=getPromptText('cidBusca','sistema');
+      var pedido=getPromptText('cidBusca','prompt',{qtde:(qtde||10),termo:termo});
       var resp=await window.callIAComSistema(cfg, sistema, pedido);
       if(!resp || !resp.ok) return {erro:(resp&&resp.text)||'Falha ao consultar a IA.'};
       var texto=resp.text.trim().replace(/^```json/i,'').replace(/^```/,'').replace(/```$/,'').trim();
@@ -7548,6 +7783,8 @@
     if(can('usuarios')) CFG_TABS.push({id:'usuarios', label:'Usuários', ico:'users'});
     // Aba Assistente IA (chave de API): exclusiva do Administrador
     if(can('configIA')) CFG_TABS.push({id:'ia', label:'Assistente IA', ico:'bot'});
+    // Aba Prompts do Sistema: exclusiva do Administrador
+    if(State.perfil==='admin') CFG_TABS.push({id:'prompts', label:'Prompts do Sistema', ico:'terminal'});
 
     var tabBar=el('div',{class:'cfg-tab-bar'});
     CFG_TABS.forEach(function(tb){
@@ -7896,6 +8133,110 @@
       panel.appendChild(_buildPermMatrix());
       cfgContent.appendChild(panel);
       lcIcons();
+    }
+
+    // ── Conteúdo: Prompts do Sistema ────────────────────────────────
+    function renderPrompts(){
+      cfgContent.innerHTML='';
+      if(State.perfil!=='admin'){
+        cfgContent.appendChild(el('div',{class:'ai-warn',style:'margin-top:14px'},ico('lock')+' Os Prompts do Sistema são exclusivos do <b>Administrador</b>.'));
+        return;
+      }
+      var wrap2=el('div');
+      wrap2.innerHTML='<div class="panel" style="padding:16px 18px;margin-bottom:14px">'+
+        '<h3 style="margin:0 0 4px">'+ico('terminal',16)+' Prompts do Sistema</h3>'+
+        '<p style="font-size:12.5px;color:var(--muted);margin:0;line-height:1.6">Textos enviados de fato à IA configurada (Gemini/Claude/OpenAI) em cada ponto do sistema — hoje "invisíveis" no código. '+
+        'Editar aqui muda o comportamento real da IA naquele ponto, imediatamente, para todos os usuários. Placeholders <code>{{assim}}</code> são substituídos automaticamente por dados reais (nome do paciente, código, etc.) — '+
+        'são <b>obrigatórios</b>: o sistema recusa salvar um texto que remova algum.</p>'+
+      '</div>';
+      cfgContent.appendChild(wrap2);
+
+      // Agrupa por categoria, na ordem em que aparecem no registro
+      var categorias=[];
+      PROMPTS_SISTEMA.forEach(function(p){ if(categorias.indexOf(p.categoria)<0) categorias.push(p.categoria); });
+
+      categorias.forEach(function(cat){
+        var catWrap=el('div',{style:'margin-bottom:22px'});
+        catWrap.innerHTML='<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:0 0 8px 2px">'+esc(cat)+'</div>';
+        PROMPTS_SISTEMA.filter(function(p){return p.categoria===cat;}).forEach(function(pdef){
+          catWrap.appendChild(_renderPromptCard(pdef));
+        });
+        cfgContent.appendChild(catWrap);
+      });
+      lcIcons();
+    }
+
+    // Card de um prompt: cabeçalho com onde/quando, e um bloco por campo (textarea + placeholders + Salvar/Restaurar).
+    function _renderPromptCard(pdef){
+      var anyOverride=pdef.campos.some(function(c){ return _promptOverrideRaw(pdef.id,c.chave)!=null; });
+      var card=el('div',{class:'panel', style:'padding:14px 16px;margin-bottom:10px'});
+      var hd=el('div',{style:'display:flex;align-items:flex-start;justify-content:space-between;gap:10px;cursor:pointer'});
+      hd.innerHTML=
+        '<div>'+
+          '<div style="font-size:13.5px;font-weight:700;color:var(--ink);display:flex;align-items:center;gap:6px">'+esc(pdef.nome)+
+            (anyOverride?'<span class="badge warn" style="font-size:9.5px">Modificado</span>':'')+
+          '</div>'+
+          '<div style="font-size:11.5px;color:var(--muted);margin-top:3px"><b>Onde:</b> '+esc(pdef.onde)+'</div>'+
+          '<div style="font-size:11.5px;color:var(--muted);margin-top:1px"><b>Quando:</b> '+esc(pdef.quando)+'</div>'+
+          (pdef.nota?'<div style="font-size:11px;color:#8a6300;margin-top:5px;background:#fff9e8;border:1px solid #f0dca0;border-radius:6px;padding:5px 9px">'+ico('info',11)+' '+esc(pdef.nota)+'</div>':'')+
+        '</div>'+
+        '<button class="btn ghost sm prompt-toggle" type="button">'+ico('chevron-down',13)+'</button>';
+      card.appendChild(hd);
+      var body=el('div',{class:'prompt-card-body', style:'margin-top:12px;display:none;padding-top:12px;border-top:1px solid var(--g-100)'});
+      pdef.campos.forEach(function(cdef){ body.appendChild(_renderPromptCampo(pdef,cdef)); });
+      card.appendChild(body);
+      var open=false;
+      hd.onclick=function(){
+        open=!open;
+        body.style.display=open?'':'none';
+        hd.querySelector('.prompt-toggle').innerHTML=ico(open?'chevron-up':'chevron-down',13);
+        lcIcons();
+      };
+      return card;
+    }
+
+    // Bloco de um campo editável: label, placeholders disponíveis, textarea, Salvar/Restaurar padrão.
+    function _renderPromptCampo(pdef, cdef){
+      var wrap3=el('div',{style:'margin-bottom:14px'});
+      var overrideAtual=_promptOverrideRaw(pdef.id,cdef.chave);
+      var valorAtual=overrideAtual!=null?overrideAtual:cdef.padrao;
+      var isOverride=overrideAtual!=null;
+      var phTxt=cdef.placeholders&&cdef.placeholders.length
+        ? cdef.placeholders.map(function(p){return '<code>{{'+p+'}}</code>';}).join(' ')
+        : '<span style="color:var(--muted)">nenhum</span>';
+      wrap3.innerHTML=
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:5px">'+
+          '<label style="font-size:12.5px;font-weight:600;color:var(--ink)">'+esc(cdef.label)+(isOverride?' <span class="badge warn" style="font-size:9px">modificado</span>':'')+'</label>'+
+          '<span style="font-size:11px;color:var(--muted)">Placeholders obrigatórios: '+phTxt+'</span>'+
+        '</div>'+
+        '<textarea class="prompt-textarea" rows="6" style="width:100%;box-sizing:border-box;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;line-height:1.55;border:1.5px solid var(--g-200);border-radius:8px;padding:10px 12px;resize:vertical;color:var(--ink)">'+esc(valorAtual)+'</textarea>'+
+        '<div class="prompt-campo-msg" style="font-size:11.5px;color:#a01b14;margin-top:4px;display:none"></div>'+
+        '<div style="display:flex;gap:8px;margin-top:7px">'+
+          '<button class="btn sm prompt-salvar" type="button">'+ico('save',12)+' Salvar</button>'+
+          (isOverride?'<button class="btn ghost sm prompt-restaurar" type="button">'+ico('rotate-ccw',12)+' Restaurar padrão</button>':'')+
+        '</div>';
+      var ta=wrap3.querySelector('.prompt-textarea');
+      var msgEl=wrap3.querySelector('.prompt-campo-msg');
+      wrap3.querySelector('.prompt-salvar').onclick=function(){
+        var texto=ta.value;
+        if(!_promptTextoValido(pdef.id,cdef.chave,texto)){
+          var faltando=(cdef.placeholders||[]).filter(function(ph){return texto.indexOf('{{'+ph+'}}')<0;});
+          msgEl.textContent='Não é possível salvar: faltam os placeholders '+faltando.map(function(p){return '{{'+p+'}}';}).join(', ')+' — eles são obrigatórios para este campo funcionar.';
+          msgEl.style.display='';
+          return;
+        }
+        msgEl.style.display='none';
+        salvarPromptOverride(pdef.id,cdef.chave,texto);
+        toast('Prompt salvo: '+pdef.nome+' — '+cdef.label,'ok');
+        renderPrompts();
+      };
+      var restBtn=wrap3.querySelector('.prompt-restaurar');
+      if(restBtn) restBtn.onclick=function(){
+        restaurarPromptPadrao(pdef.id,cdef.chave);
+        toast('Restaurado ao padrão: '+pdef.nome+' — '+cdef.label,'ok');
+        renderPrompts();
+      };
+      return wrap3;
     }
 
     // ── Conteúdo: Fluxos ─────────────────────────────────────────────
@@ -8419,6 +8760,7 @@
       else if(id==='fluxos') renderFluxos();
       else if(id==='usuarios') renderUsuarios();
       else if(id==='ia') renderIA();
+      else if(id==='prompts') renderPrompts();
     }
 
     $$('.cfg-tab',tabBar).forEach(function(b){ b.onclick=function(){ setTab(b.getAttribute('data-cfg-tab')); }; });
@@ -10291,15 +10633,9 @@
   function promptParecerTecnico(g, ia, itens, classif){
     var temDUT=(g.procedimentos||[]).some(function(p){return p.dut;});
     var linhaItens=itens.map(function(it){return '- '+it.tipo+' '+it.cod+' — '+it.desc+(it.qtdSolic?(' (Qtde solic.: '+it.qtdSolic+')'):'');}).join('\n');
-    return 'Redija um PARECER TÉCNICO de auditoria assistencial para subsidiar a decisão da operadora (auditoria médica/área de autorização) sobre a guia abaixo, no MESMO PADRÃO e nível de detalhamento de um parecer técnico-regulatório profissional (com base normativa, análise técnica criteriosa e conclusão objetiva).\n\n'+
-      'CLASSIFICAÇÃO JÁ DEFINIDA (não altere, apenas fundamente): '+classif.label+'\n\n'+
-      'SERVIÇOS SOLICITADOS NESTA GUIA:\n'+linhaItens+'\n\n'+
-      (temDUT
-        ? 'IMPORTANTE: um ou mais procedimentos desta guia estão sujeitos a Diretriz de Utilização (DUT) da ANS (RN 465/2021, Anexo II). Cite a DUT aplicável ao(s) procedimento(s) (pelo número/nome do item da DUT quando puder inferir do procedimento e do CID, ou de forma genérica caso não seja possível identificar o item exato) e analise o enquadramento clínico frente aos critérios da diretriz.'
-        : 'Nenhum procedimento desta guia está sujeito a DUT — NÃO cite DUT nem Anexo II da RN 465/2021 neste parecer; baseie a análise apenas nos critérios contratuais/documentais/clínicos apresentados.')+'\n\n'+
-      'Responda em JSON válido (sem markdown ao redor, sem \`\`\`), com este formato exato:\n'+
-      '{"baseNormativa":"texto da seção Base normativa aplicável","analiseTecnica":"texto da seção Análise técnica (enquadramento clínico/documental e, se houver DUT, adequação metodológica)","conclusao":"texto da seção Conclusão e posicionamento recomendado, incluindo a regra de reclassificação quando aplicável","pendencias":["item pendente 1","item pendente 2"],"resumoMotivo":"1-2 frases do motivo da classificação, para o Resumo executivo"}\n'+
-      'Cada campo de texto deve ter 2 a 5 frases, técnico e objetivo, em português. "pendencias" pode ser um array vazio se a classificação for Favorável sem pendências. Não inclua nada fora do JSON.';
+    return getPromptText('parecerTecnico','promptBase',{classifLabel:classif.label,linhaItens:linhaItens})+
+      getPromptText('parecerTecnico', temDUT?'promptComDut':'promptSemDut')+'\n\n'+
+      getPromptText('parecerTecnico','promptFormato');
   }
 
   // Gera o conteúdo do parecer técnico via IA (chamada única). Retorna {baseNormativa,analiseTecnica,conclusao,pendencias,resumoMotivo} ou null se IA não configurada/falhar.
@@ -10307,7 +10643,7 @@
     if(!window.getIaCfg || !window.callIAComSistema || !window.resumoGuiaTexto || !window.ctxTecnico) return null;
     var cfg=window.getIaCfg();
     if(!cfg.key) return null;
-    var sistema=window.ctxTecnico(window.resumoGuiaTexto(g))+'\n\nMODO: GERAÇÃO DE PARECER TÉCNICO FORMAL (documento único, não é conversa). Responda SOMENTE com o JSON solicitado pelo usuário, sem texto antes ou depois.';
+    var sistema=window.ctxTecnico(window.resumoGuiaTexto(g))+getPromptText('parecerTecnico','sistemaSufixo');
     var resp=await window.callIAComSistema(cfg, sistema, promptParecerTecnico(g, ia, itens, classif));
     if(!resp.ok) return null;
     try{
@@ -11662,6 +11998,18 @@
           '<p>Cada provedor guarda sua própria chave e modelo. A chave fica armazenada <b>apenas no navegador</b> (localStorage) — nunca é enviada ao servidor nem ao código-fonte.</p>'+
           '<p><b>Importante para os demais perfis:</b> Auditor, Enfermeiro e Gestor <b>não veem</b> esta aba, mas <b>usam o chat normalmente</b> com a chave que o Administrador configurou. Caso a chave ainda não esteja configurada naquele dispositivo, o chat orienta a contatar o Administrador.</p>'+
           '<p style="padding:9px 12px;background:#fef9e7;border:1px solid #f5e2a3;border-radius:8px;font-size:12.5px"><b>'+ico('info',12)+' Chave por dispositivo:</b> a chave é salva por navegador/dispositivo. Para habilitar a RAI em um novo computador, o <b>Administrador</b> deve abrir o sistema naquele dispositivo e inserir a chave uma vez — os demais usuários daquele navegador passam a usar o assistente sem precisar da chave. <i>(A análise de aderência das guias é local e funciona para todos, independentemente da chave.)</i></p>')+
+        manualBox('Aba: Prompts do Sistema',
+          '<p><span class="badge info" style="font-size:10px">só Administrador</span></p>'+
+          '<p>Mostra, em texto aberto, os <b>prompts</b> — as instruções reais enviadas ao provedor de IA configurado (Gemini/Claude/OpenAI) — em cada ponto do sistema onde a IA é usada. Antes desta aba, esses textos ficavam apenas no código-fonte, sem visibilidade nem possibilidade de ajuste. Esta aba é <b>exclusiva do Administrador</b>.</p>'+
+          '<p>Os prompts são agrupados por categoria (Solicitações, ID Código, CID-10, Guias, Assistente RAI). Cada prompt mostra <b>onde</b> no sistema é usado e <b>quando</b> dispara; alguns trazem uma nota de atenção sobre alguma particularidade.</p>'+
+          '<ul>'+
+            '<li><b>Placeholders</b> — trechos como <code>{{nomeGuia}}</code> são substituídos automaticamente por dados reais no momento do envio. São <b>obrigatórios</b>: o botão <b>Salvar</b> recusa gravar um texto que remova um placeholder exigido pelo campo, mostrando quais faltam.</li>'+
+            '<li><b>Restaurar padrão</b> — aparece somente quando o campo tem um texto customizado salvo; devolve o texto de fábrica.</li>'+
+            '<li><b>Selo "Modificado"</b> — indica que aquele prompt (ou campo) tem uma versão customizada em uso, diferente do padrão original.</li>'+
+          '</ul>'+
+          '<p>Alguns prompts são <b>compartilhados</b> entre vários pontos de uso (por exemplo, o contexto-base da RAI é reutilizado nos três modos do chat, na conversa por voz e no Parecer Técnico) — nesse caso há um único campo editável, com uma nota explicando onde ele é reaproveitado, para evitar edições divergentes do mesmo texto em vários lugares.</p>'+
+          '<p style="padding:9px 12px;background:#fef9e7;border:1px solid #f5e2a3;border-radius:8px;font-size:12.5px"><b>'+ico('info',12)+' Efeito imediato e para todos:</b> alterar um prompt aqui muda o comportamento real da IA naquele ponto imediatamente, para todos os usuários do sistema — não é uma simulação. Use com cautela, especialmente em prompts que alimentam respostas estruturadas (como extrações e classificações).</p>'+
+          '<p style="padding:9px 12px;background:var(--g-50);border-radius:8px;font-size:12.5px"><b>'+ico('lock',12)+' Formato de resposta e anexos de mídia:</b> o formato JSON esperado na resposta de alguns prompts (ex.: checagem de anexos obrigatórios) permanece fixo, fora da área editável, para não quebrar a leitura automática da resposta. O bloco de anexos do chat técnico (que intercala texto com imagens/PDFs enviados) aparece na lista apenas de forma informativa, sem edição, nesta versão.</p>')+
         manualBox('Assistente RAI: modos de atendimento',
           '<p>Ao abrir o chat, a RAI se apresenta e oferece <b>três modos</b>. O usuário escolhe um pelos botões:</p>'+
           manualTable(['Modo','O que faz'],[
@@ -11935,61 +12283,26 @@
     }
 
     // Base de identidade comum aos modos
-    var CTX_BASE='Você é a RAI, assistente virtual integrada ao RegulaAI Saúde, plataforma de auditoria assistencial para operadoras de saúde. Você CONHECE o sistema real e a navegação exata dele. '+
-      'NÃO se apresente nem use saudações como "Olá! Sou a RAI" nas respostas — a apresentação já foi feita na abertura do chat. Vá direto ao ponto. '+
-      'Se o usuário perguntar o que significa RAI ou o motivo do nome, responda: "RAI é a combinação da primeira letra de Regulação (R) + AI (Artificial Intelligence)." '+
-      'Responda em português, de forma objetiva, técnica e acolhedora. '+
-      'REGRA DE PRECISÃO (obrigatória): nunca use linguagem vaga ou hipotética sobre o sistema. É PROIBIDO escrever "costuma ser", "geralmente", "provavelmente", "deve estar em", "ou X ou Y", ou inventar nomes de menus/telas. Cite SEMPRE o caminho exato usando os nomes reais abaixo, no formato "Seção → Aba → campo". Se você realmente não souber um caminho específico, diga "Não tenho esse caminho mapeado; consulte o Manual" — jamais invente. ';
+    var CTX_BASE=getPromptText('ctxBase','texto');
 
     // Mapa de navegação REAL do sistema (nomes exatos das telas e abas)
-    var MAPA_SISTEMA=
-      'MAPA DE NAVEGAÇÃO (nomes EXATOS — use-os literalmente):\n'+
-      'MENU LATERAL (sidebar): Dashboard | Guias | Kanban | Solicitações | Parametrização | Configurações | Assistente | Manual | Logs. (Perfil Prestador só enxerga Solicitações e Kanban.)\n'+
-      'CONFIGURAÇÕES (abas): "Classificação de Risco", "Fluxos", "Permissões", "Usuários" (só Administrador), "Assistente IA" (só Administrador).\n'+
-      ' - Classificação de Risco: define os fatores de risco e, na sub-aba "Limiares", os limiares Baixo/Médio/Alto; sub-aba "Prévia" mostra a distribuição. Logo abaixo do toggle "Classificação automática ativa" há a seção "Visibilidade dos pesos e resultados", com 4 interruptores independentes (Peso por item, Aderência, Risco Regulatório, Risco Assistencial/Documental/Contratual) — desativar um esconde COMPLETAMENTE aquele resultado em toda a plataforma (badges, colunas, KPIs, gráficos, exportações e até nas respostas deste assistente), sem apagar a configuração. Diferente do toggle "Classificação automática ativa", que só pausa o recálculo sem esconder nada.\n'+
-      ' - Fluxos: define o prazo (SLA, em dias) e o regime de cada fluxo.\n'+
-      ' - Permissões: matriz de permissões por perfil, incluindo o perfil Prestador (clique na célula para ciclar Acesso total / Somente leitura / Sem acesso). Logo abaixo da matriz há a seção "Tipos de Solicitação — perfil Prestador", com checkboxes definindo quais dos 6 tipos de Solicitação o Prestador pode registrar.\n'+
-      ' - Usuários: cadastro de usuários (Nome, CPF, E-mail, Login, Senha, Perfil, Situação Ativo/Inativo).\n'+
-      ' - Assistente IA: provedor (Gemini/Claude/OpenAI) + chave de API + modelo.\n'+
-      'PARAMETRIZAÇÃO: selecione um fluxo e use as abas internas. Os PESOS do cálculo de aderência ficam na aba "Pesos IA" (ícone de cérebro) DENTRO do fluxo selecionado — lá há um campo de peso (0 a 10) para cada critério: Documental, DUT, Procedimentos, Pacotes, Mat/Med, Diárias/Taxas, Contratual/Histórico. As Regras DUT ficam na aba "Regras DUT". As vinculações (Procedimentos, Pacotes, Mat/Med, Diárias/Taxas) têm suas próprias abas, cada uma com campo de peso por item.\n'+
-      'GUIAS: a relação tem filtros rápidos e o "Filtro aprofundado"; clicar numa guia abre o modal de detalhes com abas (Cabeçalho, Resumo, Beneficiário, Solicitação, Etapas, Procedimentos, Pacotes, Mat/Med, Diárias/Taxas, OPME, Anexos, Críticas, Parecer Técnico, Parecer Operadora, Obs. Impressas, Obs. Não Impressas, Histórico, Logs). O Resumo mostra beneficiário, prestador solicitante/executante, especialidade e os riscos. No rodapé do modal: botão "Reprocessar" e "Parecer da Operadora".\n'+
-      'DASHBOARD: KPIs clicáveis; o KPI "Etapa com gargalo" abre o "Ranking de Gargalos". Os KPIs se dividem em "período" (Total de guias, Liberadas, Negadas, Com OPME, Baixa aderência, Tempo médio, Etapa com gargalo — respeitam o seletor de período do topo, padrão últimos 30 dias) e "tempo real" (Em análise, Em junta médica, Aguardando complemento, Analisadas, Cotação de OPME — sempre mostram o status atual, ignorando o período selecionado).\n'+
-      'SOLICITAÇÕES: hub com 6 tipos (Internação, Prorrogação de Internação, OPME, Quimioterapia, Consulta, Exames e Procedimentos). Cada um abre um formulário próprio. Quando um código de Procedimento/Pacote inserido tem "Anexos Obrigatórios" cadastrados em Parametrização, a seção Anexos exibe um slot nomeado (com *) por documento exigido, e o botão "Autorizar" fica bloqueado até todos serem anexados e uma checagem rápida da IA confirmar que não há divergência ("não corresponde" bloqueia; "parcial" ou sem IA configurada não bloqueiam). Ao autorizar, os anexos são transferidos para a guia criada. Solicitação de OPME não cria guia nova — localiza uma guia existente pelo número e anexa os OPMEs a ela. Perfil Prestador só vê os tipos habilitados para ele (configurável em Configurações → Permissões, seção "Tipos de Solicitação — perfil Prestador").\n';
+    var MAPA_SISTEMA=getPromptText('mapaSistema','texto');
 
     // Modo "Uso do sistema" — manual + dúvidas de usabilidade
     var CTX_SISTEMA=CTX_BASE+
-      'MODO: USO DO SISTEMA. Você atua como o manual interativo do RegulaAI Saúde, tirando dúvidas sobre usabilidade, telas, fluxos de trabalho e funcionamento da plataforma. NÃO emita pareceres clínicos neste modo; se o usuário quiser análise técnica de uma guia, oriente-o a iniciar uma "Conversa técnica". '+
+      getPromptText('ctxSistemaModo','texto')+
       MAPA_SISTEMA+
-      'CONCEITOS: '+
-      '1) ADERÊNCIA: calculada por critérios ponderados pelos pesos definidos em Parametrização → (fluxo) → "Pesos IA". O TETO é dinâmico — soma apenas os critérios aplicáveis àquela guia (ex.: DUT só entra se a guia tem procedimento com DUT obrigatória; Pacotes só se houver pacote vinculado). '+
-      '2) REPROCESSAR: o botão "Reprocessar" (rodapé do modal da guia) reanalisa a guia considerando itens desmarcados pelo auditor, observações e parecer da operadora. '+
-      '3) PERFIS: Administrador (tudo, incluindo Configurações → Usuários), Gestor (igual ao Administrador, exceto Usuários), Auditor (análise e parecer), Enfermeiro (triagem e complemento nos seus fluxos), Prestador (só Solicitações — tipos configuráveis — e Kanban filtrado só pelas guias do prestador escolhido no FAB, sem abrir guia, sem ver risco/aderência/fluxo-etapa, sem acesso ao Assistente — sem cadastro individual em Usuários, é simulável pelo FAB escolhendo um dos prestadores cadastrados). '+
-      'Exemplo de resposta correta a "onde ajusto os pesos da aderência": "Acesse Parametrização, selecione o fluxo desejado e abra a aba Pesos IA. Lá há um campo de peso (0 a 10) para cada critério (Documental, DUT, Procedimentos, etc.)." '+
-      'Se não souber um caminho específico, diga que não está mapeado e oriente a consultar o Manual — nunca invente.';
+      getPromptText('conceitosSistema','texto');
 
     // Modo "Conversa técnica" — recebe os dados da guia como contexto
     function ctxTecnico(resumoGuia){
       return CTX_BASE+
-        'MODO: CONVERSA TÉCNICA. Você atua como apoio técnico-assistencial ao auditor sobre uma guia específica: esclarece o parecer, discute indicação técnica dos serviços solicitados, contraindicações, alternativas terapêuticas possíveis, e pontos de atenção regulatórios. '+
-        'IMPORTANTE: você é apoio à decisão — NÃO autoriza nem nega procedimentos. A decisão final é exclusiva da operadora/auditor. Baseie-se nos dados fornecidos da guia e em boas práticas clínicas/regulatórias; quando faltar informação, declare a limitação. '+
-        'CONTEXTO INTEGRAL: o dossiê abaixo já reúne TODAS as abas da guia (dados, serviços, análise IA, críticas, observações impressas/internas, histórico, hist. de atendimento, carências, mensalidades, etapas e a lista de anexos). Você NÃO precisa pedir que o usuário cole textos ou envie arquivos — você já tem tudo. '+
-        'ANEXOS: quando arquivos (laudos, exames, imagens/PDF) forem enviados junto na conversa, LEIA o conteúdo deles e cite achados relevantes (ex.: valores de exame, IMC, laudo do médico assistente, evidência de DUT), cruzando com os serviços solicitados e a indicação clínica. Se um anexo estiver listado mas sem conteúdo legível, aponte que o arquivo não pôde ser lido. '+
+        getPromptText('ctxTecnicoModo','texto')+
         'DADOS DA GUIA EM ANÁLISE:\n'+resumoGuia;
     }
 
     // Modo "Relatórios" — conversa sobre os dados analíticos do módulo Relatórios
-    var MAPA_RELATORIOS=
-      'ABAS DO MÓDULO RELATÓRIOS (nomes exatos):\n'+
-      ' - Painel Executivo: KPIs (Guias recebidas, Custo total analisado, Custo de serviços negados, Alertas ativos), Distribuição por risco (clicável p/ filtrar), quebra Ambulatorial × Internação, e rankings de médicos, prestadores e OPME.\n'+
-      ' - Beneficiários: consolidado por paciente (guias, ambulatorial/internação, procedimentos, OPME, negadas, custo, score de recorrência).\n'+
-      ' - Médicos Solicitantes: perfil por médico (especialidade, guias, custo, taxa de aprovação, desvio vs. média da especialidade, concentração em prestador).\n'+
-      ' - Prestadores: consolidado por prestador executante (guias, ambulatorial, internações, OPME, custo médio/total, score). KPI "Acima da média" lista quem supera o custo médio/guia.\n'+
-      ' - Procedimentos: rankings (Mais solicitados / Mais caros) para Procedimentos, Diárias e Taxas, OPME e Mat/Med.\n'+
-      ' - OPME: valor autorizado × cobrado por item, variação de preço; alerta quando ≥25% acima.\n'+
-      ' - Custos: custo total, médio por guia, maior custo, custo de serviços negados; rankings por guia/beneficiário/procedimento.\n'+
-      ' - Alertas Inteligentes: alertas gerados pelo motor (concentração, desvio de especialidade, recorrência, alto custo, inconsistência de OPME) com severidade e ação sugerida.\n'+
-      ' - Comparativos: destaque de cada grupo contra a média do próprio grupo.\n'+
-      'FILTROS: há filtro de Período e de Natureza (Ambulatorial/Internação e subtipos) que valem em todas as abas, exceto Comparativos. Todas as tabelas podem ser exportadas para Excel.\n';
+    var MAPA_RELATORIOS=getPromptText('mapaRelatorios','texto');
 
     // Resumo REAL dos dados analíticos (calculado a partir das guias visíveis)
     function resumoRelatoriosTexto(){
@@ -12042,9 +12355,7 @@
 
     function ctxRelatorios(){
       return CTX_BASE+
-        'MODO: RELATÓRIOS. Você atua como analista de BI assistencial do RegulaAI, conversando sobre os dados dos relatórios (recorrências, custos, desvios, riscos, OPME, alertas). '+
-        'Responda SEMPRE com base nos DADOS ANALÍTICOS fornecidos abaixo — cite números reais (valores, quantidades, nomes). Se o usuário pedir algo que não está nos dados, diga que aquele recorte não está disponível no resumo atual e sugira a aba/filtro do módulo Relatórios onde ele encontra. NÃO invente números. Valores em R$ são estimativas simuladas do sistema para demonstração. '+
-        'PERÍODO: você RECEBE o período atualmente selecionado (linha "PERÍODO SELECIONADO" abaixo) e os dados já correspondem a ele. Quando perguntarem qual período está sendo analisado, INFORME o intervalo exato dessa linha. Os dados são atualizados em tempo real conforme o usuário altera o filtro de Período no módulo — a cada pergunta você recebe o recorte vigente. '+
+        getPromptText('ctxRelatoriosModo','texto')+
         MAPA_RELATORIOS+
         resumoRelatoriosTexto();
     }
@@ -13162,7 +13473,7 @@
       processando=true;
       setStatus('Pensando…');
       historicoVoz.push({role:'user',text:texto});
-      var contexto=(window.ctxSistemaVoz||'')+'\n\nMODO: CONVERSA POR VOZ. Responda de forma curta e natural para ser OUVIDA em áudio — frases diretas, sem listas, sem markdown, sem emojis.';
+      var contexto=(window.ctxSistemaVoz||'')+getPromptText('vozSufixo','texto');
       var cfg=window.getIaCfg();
       var historicoTxt=historicoVoz.slice(-8).map(function(h){ return (h.role==='user'?'Usuário: ':'RAI: ')+h.text; }).join('\n');
       try{
