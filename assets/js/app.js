@@ -221,7 +221,10 @@
         r.readAsDataURL(file);
       });
       var sistema='Você faz uma triagem RÁPIDA e superficial de documentos. Responda SOMENTE com o JSON pedido, sem texto antes ou depois, sem markdown.';
-      var prompt='O documento anexado deveria ser: "'+anexoObrigNome+'". Olhe rapidamente e diga se o documento parece ser esse tipo de documento. '+
+      var prompt='O arquivo anexado precisa CONTER, em alguma página ou seção, um documento do tipo: "'+anexoObrigNome+'". '+
+        'O arquivo pode ser um PDF com VÁRIAS páginas de conteúdo misto (ex.: solicitação médica na página 1, o laudo pedido na página 2, imagens de exame na página 3) — isso é normal e não é motivo para reprovar. '+
+        'Olhe rapidamente TODAS as páginas e diga se o documento exigido aparece em pelo menos uma delas, mesmo que junto com outros documentos. '+
+        'Só responda "nao" se, depois de olhar todas as páginas, esse documento realmente não estiver presente em nenhuma delas. '+
         'Responda em JSON válido, exatamente: {"corresponde":"<sim|nao|parcial>"}';
       var resp=await window.callIAComSistemaEAnexo(cfg, sistema, prompt, {mime:mime, base64:base64, nome:file.name});
       if(!resp || !resp.ok) return {ok:false};
@@ -253,9 +256,14 @@
     var sistema='Você é um assistente de extração de documentos médicos/administrativos (OCR + interpretação). Responda SOMENTE com o JSON solicitado, sem texto antes ou depois, sem markdown.';
     var prompt='Leia o documento anexado (arquivo "'+(anexo.nome||'')+'") e extraia as informações a seguir. '+
       'Identifique o NOME DO PACIENTE constante no documento e confira se é o mesmo da guia ("'+nomeGuia+'"). '+
-      (reqNome?('Este anexo foi enviado para atender à exigência cadastrada: "'+reqNome+'". Avalie se o documento realmente CORRESPONDE a esse tipo de documento (ex.: se foi pedido um "laudo de ultrassom do abdome", confira se o documento é de fato esse laudo, e não outro tipo de documento). '):'')+
+      (reqNome?(
+        'Este anexo foi enviado para atender à exigência cadastrada: "'+reqNome+'". O arquivo pode ser um PDF com VÁRIAS páginas de conteúdo misto '+
+        '(ex.: solicitação médica na página 1, o laudo pedido na página 2, imagens de exame na página 3) — isso é normal e não é motivo para reprovar. '+
+        'Examine TODAS as páginas do arquivo e avalie se o documento exigido ("'+reqNome+'") está presente em pelo menos uma delas, mesmo que junto com outros documentos diferentes. '+
+        'Só marque "nao" se, depois de examinar todas as páginas, esse documento realmente não estiver presente em nenhuma. '
+      ):'')+
       'Responda em JSON válido, exatamente neste formato: {"pacienteDoc":"<nome do paciente no documento ou vazio>","confereNome":"<sim|nao|?>","extrato":"<1-2 frases com o achado principal do documento>"'+
-      (reqNome?',"correspondeAoEsperado":"<sim|nao|parcial>","motivoDivergencia":"<vazio se corresponder, senão explique em 1 frase o que o documento realmente é>"':'')+
+      (reqNome?',"correspondeAoEsperado":"<sim|nao|parcial>","motivoDivergencia":"<vazio se o documento exigido estiver presente em alguma página; senão, explique em 1 frase o que o arquivo contém de fato>"':'')+
       '}';
     try{
       var resp=await window.callIAComSistemaEAnexo(cfg, sistema, prompt, {mime:mime, base64:base64, nome:anexo.nome});
@@ -11463,6 +11471,7 @@
           '<ul>'+
           '<li>O botão <b>Autorizar</b> fica desabilitado até que todos os anexos obrigatórios pendentes tenham um arquivo selecionado.</li>'+
           '<li>Assim que um arquivo é escolhido, uma <b>checagem rápida da IA</b> roda na hora (status "Verificando..."), comparando o conteúdo do arquivo com o nome do documento exigido. Se o resultado for <b>"não corresponde"</b>, o Autorizar é bloqueado até o arquivo ser corrigido. Resultado "parcial" ou a ausência de uma chave de IA configurada não bloqueiam — apenas sinalizam.</li>'+
+          '<li><b>PDF com várias páginas:</b> o arquivo anexado pode ser um PDF combinando vários documentos (ex.: página 1 = solicitação médica, página 2 = o laudo exigido, página 3 = imagens do exame). A IA foi orientada a procurar o documento exigido em <b>qualquer página</b> do arquivo — não é preciso enviar só o documento isolado. Só é reprovado se, examinando todas as páginas, o documento pedido realmente não estiver presente em nenhuma delas.</li>'+
           '<li>Essa checagem é <b>rasa e rápida</b>, feita para não travar o prestador. Uma análise mais completa roda depois, automaticamente, quando a guia é aberta por um auditor (ver abaixo).</li>'+
           '<li>A seção Solicitação de OPME não tem esse recurso, por não possuir itens de Procedimentos/Pacotes.</li>'+
           '</ul>')+
