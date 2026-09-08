@@ -5990,9 +5990,13 @@
         vBtn.innerHTML=ico(VINC_ICO[v]||'link',12)+' '+(VINC_LABELS[v]||v);
         vincBar.appendChild(vBtn);
       });
-      var vBtnIA=el('button',{class:'vinc-tab','data-vinc':'pesosIA'});
-      vBtnIA.innerHTML=ico('brain',12)+' Pesos IA';
-      vincBar.appendChild(vBtnIA);
+      // Some junto com o interruptor "Aderência" (Configurações → Classificação de Risco) —
+      // sem exibição do resultado em lugar nenhum, editar estes pesos fica sem propósito visível.
+      if(aderenciaVisivel()){
+        var vBtnIA=el('button',{class:'vinc-tab','data-vinc':'pesosIA'});
+        vBtnIA.innerHTML=ico('brain',12)+' Pesos IA';
+        vincBar.appendChild(vBtnIA);
+      }
 
       var vincPanel=el('div',{class:'vinc-panel'});
 
@@ -6033,6 +6037,7 @@
       }
 
       function showVinc(vkey){
+        if(vkey==='pesosIA' && !aderenciaVisivel()) vkey='subfluxos'; // aba escondida — via segura para qualquer chamada residual
         $$('.vinc-tab',vincBar).forEach(function(b){b.classList.toggle('active',b.getAttribute('data-vinc')===vkey);});
         vincPanel.innerHTML='';
         if(vkey==='subfluxos'){
@@ -7594,7 +7599,7 @@
       var visCfg=State.pesosVisiveis;
       var VIS_ITENS=[
         {key:'pesoItens',        label:'Peso por item (Procedimentos/Pacotes/Mat-Med/Diárias)', desc:'Coluna "Peso" nas abas de vinculação em Parametrização'},
-        {key:'aderenciaIA',      label:'Aderência (Pesos IA por fluxo)',                          desc:'% de aderência, classificação, gráficos e a aba Concordância IA × Auditor em Relatórios'},
+        {key:'aderenciaIA',      label:'Aderência (Pesos IA por fluxo)',                          desc:'% de aderência, classificação, gráficos, a aba "Pesos IA" em Parametrização e a aba Concordância IA × Auditor em Relatórios'},
         {key:'riscoRegulatorio', label:'Risco Regulatório',                                       desc:'Badge de risco na listagem de guias, Kanban, Dashboard e exportações'},
         {key:'riscoAssistencial',label:'Risco Assistencial / Documental / Contratual',            desc:'Os 3 selos de risco por dimensão no resumo da guia'}
       ];
@@ -11505,7 +11510,7 @@
           '<p>Lista todos os fluxos assistenciais (F1–F9) com suas etapas, responsáveis e prazos. Para cada fluxo é possível configurar:</p>'+
           '<ul><li><b>Subfluxos</b> — etapas internas do fluxo</li>'+
           '<li><b>Vinculações</b> — procedimentos, pacotes, Mat/Med e diárias associados ao fluxo</li>'+
-          '<li><b>Pesos IA</b> — peso de cada critério no cálculo de aderência (sliders 0–10)</li></ul>')+
+          '<li><b>Pesos IA</b> — peso de cada critério no cálculo de aderência (sliders 0–10). Esta aba some quando o interruptor <b>Aderência</b> estiver desativado em Configurações → Classificação de Risco → Visibilidade dos pesos e resultados.</li></ul>')+
         manualBox('Aba: Procedimentos / Pacotes / Mat/Med / Diárias',
           '<p>Cada aba lista os itens da categoria com as colunas:</p>'+
           manualTable(['Coluna','Descrição'],[
@@ -11586,7 +11591,7 @@
           '<p>Logo abaixo, 4 interruptores independentes controlam se o resultado de cada sistema de peso/pontuação aparece na plataforma. Diferente do toggle acima, aqui <b>desativar esconde completamente</b> o elemento — badge, coluna, KPI, gráfico, exportação e até menções do assistente RAI —, sem apagar a configuração por trás:</p>'+
           manualTable(['Interruptor','O que some quando desativado'],[
             ['Peso por item (Procedimentos/Pacotes/Mat-Med/Diárias)','A coluna "Peso" nas 4 abas de vinculação em Parametrização'],
-            ['Aderência (Pesos IA por fluxo)','% de aderência em toda a plataforma (Dashboard, listagem de Guias, Kanban, resumo da guia, Parecer Técnico, exportações Excel) e a aba "Concordância IA × Auditor" inteira em Relatórios, que depende desse dado'],
+            ['Aderência (Pesos IA por fluxo)','% de aderência em toda a plataforma (Dashboard, listagem de Guias, Kanban, resumo da guia, Parecer Técnico, exportações Excel), a própria aba "Pesos IA" em Parametrização (edição dos pesos por critério) e a aba "Concordância IA × Auditor" inteira em Relatórios, que depende desse dado'],
             ['Risco Regulatório','O badge de risco na listagem de guias, Kanban, Dashboard, filtro "Todos os riscos", resumo/rodapé e exportações; o card "Regulatório" some do grid de 4 riscos no resumo da guia (os outros 3 continuam, se o interruptor deles estiver ativo)'],
             ['Risco Assistencial / Documental / Contratual','Os 3 selos dessas dimensões no grid de risco do resumo da guia'],
           ])+
