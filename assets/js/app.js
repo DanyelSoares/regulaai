@@ -94,20 +94,31 @@
     customDutRules: JSON.parse(localStorage.getItem('regula_custom_dut')||'null') || [],
     guiasViewTab: 'filtro',
     logsTab: 'usuarios',
-    filtrosAvancados: {
-      flagOpme:false, flagPrio:false, flagOpm:false, flagInternacao:false,
-      flagUti:false, flagSemParam:false, flagAnexo:false, flagDut:false,
-      flagAuditoriaOrigem:false, flagAguardandoAuth:false, flagAguardandoAuthEmpresa:false,
-      flagAuditoriaOperadora:false, flagMsgNaoLida:false,
-      flagIntercambio:false, flagDemandaJudicial:false, flagInconsistencia:false,
-      status:'', nivelAuditoria:'', especialidade:'', natureza:'',
-      auditor:'', tipo:'', regime:'', executante:'',
-      congenere:'', classificacao:'', origem:'', solicitante:'',
-      fluxo:'', etapa:'', parecer:'', statusGerencial:'',
-      cotacao:'', comAnexo:'', tipoTaxa:'', statusEtapa:'',
-      prestador:'', localAtendimento:'', procedimento:'',
-      dataDeEmissao:'', dataAteEmissao:''
-    },
+    // Filtro aprofundado (tela Guias): a lista só aparece depois que o operador clica em
+    // "Pesquisar" — evita mostrar um resultado que não corresponde aos filtros selecionados na
+    // tela. Fica true pelo resto da sessão do app assim que pesquisado uma vez (não reseta ao
+    // trocar de filtro nem ao trocar de aba/tela — só uma nova pesquisa atualiza o resultado).
+    filtrosAvancadosBuscou: false,
+    filtrosAvancados: (function(){
+      // Período padrão: últimos 30 dias (mesmo padrão do Dashboard) — evidenciado no campo
+      // "Período"; o operador altera as datas se quiser outro intervalo.
+      var hj=new Date(), de=new Date(); de.setDate(hj.getDate()-30);
+      function iso(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+      return {
+        flagOpme:false, flagPrio:false, flagOpm:false, flagInternacao:false,
+        flagUti:false, flagSemParam:false, flagAnexo:false, flagDut:false,
+        flagAuditoriaOrigem:false, flagAguardandoAuth:false, flagAguardandoAuthEmpresa:false,
+        flagAuditoriaOperadora:false, flagMsgNaoLida:false,
+        flagIntercambio:false, flagDemandaJudicial:false, flagInconsistencia:false,
+        status:'', nivelAuditoria:'', especialidade:'', natureza:'',
+        auditor:'', tipo:'', regime:'', executante:'',
+        congenere:'', classificacao:'', origem:'', solicitante:'',
+        fluxo:'', etapa:'', parecer:'', statusGerencial:'',
+        cotacao:'', comAnexo:'', tipoTaxa:'', statusEtapa:'',
+        prestador:'', localAtendimento:'', procedimento:'',
+        dataDeEmissao:iso(de), dataAteEmissao:iso(hj)
+      };
+    })(),
     guias: MOCK.buildGuias(),
     guiasPagina: 1,
     filtros: { q:'', status:'', fluxo:'', origem:'', risco:'', benef:'', prest:'', tipo:'', natureza:'', congenere:'', solicitante:'', opme:'', uti:'', especialidade:'', dataDeEmissao:'', dataAteEmissao:'', sortCol:'', sortDir:'' },
@@ -806,7 +817,7 @@
       ' - Assistente IA: provedor (Gemini/Claude/OpenAI) + chave de API + modelo.\n'+
       ' - Prompts do Sistema: lista, agrupados por categoria, todos os textos ("prompts") enviados de fato ao provedor de IA em cada ponto do sistema — cada um com onde é usado, quando dispara, e um textarea editável por campo com placeholders {{assim}} obrigatórios (salvar sem um deles é bloqueado) e botão "Restaurar padrão".\n'+
       'PARAMETRIZAÇÃO: selecione um fluxo e use as abas internas. Os PESOS do cálculo de aderência ficam na aba "Pesos IA" (ícone de cérebro) DENTRO do fluxo selecionado — lá há um campo de peso (0 a 10) para cada critério: Documental, DUT, Procedimentos, Pacotes, Mat/Med, Diárias/Taxas, Contratual/Histórico. As Regras DUT ficam na aba "Regras DUT". As vinculações (Procedimentos, Pacotes, Mat/Med, Diárias/Taxas) têm suas próprias abas, cada uma com campo de peso por item.\n'+
-      'GUIAS: a relação tem filtros rápidos e o "Filtro aprofundado"; clicar numa guia abre o modal de detalhes com abas (Cabeçalho, Resumo, Beneficiário, Solicitação, Etapas, Procedimentos, Pacotes, Mat/Med, Diárias/Taxas, OPME, Anexos, Críticas, Parecer Técnico, Parecer Operadora, Obs. Impressas, Obs. Não Impressas, Histórico, Logs). O Resumo mostra beneficiário, prestador solicitante/executante, especialidade e os riscos. No rodapé do modal: botão "Reprocessar" e "Parecer da Operadora".\n'+
+      'GUIAS: a relação tem filtros rápidos e o "Filtro aprofundado" (flags + dropdowns + Período, padrão últimos 30 dias); no Filtro aprofundado nenhuma guia aparece até o operador clicar em "Pesquisar" — mudar um filtro depois de já ter pesquisado exige clicar em Pesquisar de novo para atualizar a lista. Clicar numa guia abre o modal de detalhes com abas (Cabeçalho, Resumo, Beneficiário, Solicitação, Etapas, Procedimentos, Pacotes, Mat/Med, Diárias/Taxas, OPME, Anexos, Críticas, Parecer Técnico, Parecer Operadora, Obs. Impressas, Obs. Não Impressas, Histórico, Logs). O Resumo mostra beneficiário, prestador solicitante/executante, especialidade e os riscos. No rodapé do modal: botão "Reprocessar" e "Parecer da Operadora".\n'+
       'DASHBOARD: KPIs clicáveis; o KPI "Etapa com gargalo" abre o "Ranking de Gargalos". Os KPIs se dividem em "período" (Total de guias, Liberadas, Negadas, Com OPME, Baixa aderência, Tempo médio, Etapa com gargalo — respeitam o seletor de período do topo, padrão últimos 30 dias) e "tempo real" (Em análise, Em junta médica, Aguardando complemento, Analisadas, Cotação de OPME — sempre mostram o status atual, ignorando o período selecionado).\n'+
       'SOLICITAÇÕES: hub com 6 tipos (Internação, Prorrogação de Internação, OPME, Quimioterapia, Consulta, Exames e Procedimentos). Cada um abre um formulário próprio. Quando um código de Procedimento/Pacote inserido tem "Anexos Obrigatórios" cadastrados em Parametrização, a seção Anexos exibe um slot nomeado (com *) por documento exigido, e o botão "Autorizar" fica bloqueado até todos serem anexados e uma checagem rápida da IA confirmar que não há divergência ("não corresponde" bloqueia; "parcial" ou sem IA configurada não bloqueiam). Ao autorizar, os anexos são transferidos para a guia criada. Solicitação de OPME não cria guia nova — localiza uma guia existente pelo número e anexa os OPMEs a ela. Perfil Prestador só vê os tipos habilitados para ele (configurável em Configurações → Permissões, seção "Tipos de Solicitação — perfil Prestador").\n';
   }
@@ -5466,15 +5477,18 @@
           State.filtrosAvancados.dataAteEmissao,
           function(de,ate){ State.filtrosAvancados.dataDeEmissao=de; State.filtrosAvancados.dataAteEmissao=ate; }
         );
-        btnApl.onclick=function(){ State.guiasPagina=1; render(); };
+        btnApl.onclick=function(){ State.guiasPagina=1; State.filtrosAvancadosBuscou=true; render(); };
         btnLimpAdv.onclick=function(){
-          State.filtrosAvancados={flagOpme:false,flagPrio:false,flagUti:false,flagDut:false,flagAnexo:false,flagInternacao:false,flagSemParam:false,flagAuditoriaOrigem:false,flagAguardandoAuth:false,flagAguardandoAuthEmpresa:false,flagAuditoriaOperadora:false,flagMsgNaoLida:false,flagIntercambio:false,flagDemandaJudicial:false,flagInconsistencia:false,status:'',nivelAuditoria:'',especialidade:'',natureza:'',auditor:'',tipo:'',regime:'',executante:'',congenere:'',classificacao:'',origem:'',solicitante:'',fluxo:'',etapa:'',parecer:'',statusGerencial:'',cotacao:'',comAnexo:'',tipoTaxa:'',statusEtapa:'',prestador:'',localAtendimento:'',procedimento:'',dataDeEmissao:'',dataAteEmissao:''};
-          if(_fadrp) _fadrp.clear();
+          var hj=new Date(), de30=new Date(); de30.setDate(hj.getDate()-30);
+          function iso(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+          State.filtrosAvancados={flagOpme:false,flagPrio:false,flagUti:false,flagDut:false,flagAnexo:false,flagInternacao:false,flagSemParam:false,flagAuditoriaOrigem:false,flagAguardandoAuth:false,flagAguardandoAuthEmpresa:false,flagAuditoriaOperadora:false,flagMsgNaoLida:false,flagIntercambio:false,flagDemandaJudicial:false,flagInconsistencia:false,status:'',nivelAuditoria:'',especialidade:'',natureza:'',auditor:'',tipo:'',regime:'',executante:'',congenere:'',classificacao:'',origem:'',solicitante:'',fluxo:'',etapa:'',parecer:'',statusGerencial:'',cotacao:'',comAnexo:'',tipoTaxa:'',statusEtapa:'',prestador:'',localAtendimento:'',procedimento:'',dataDeEmissao:iso(de30),dataAteEmissao:iso(hj)};
           render();
         };
-        // show result count
-        var _faRows=box.querySelectorAll('tbody tr.guia-mainrow');
-        countLabel.textContent=(_faRows.length)+' guia(s) listada(s)';
+        // show result count — só depois de pesquisado, senão não há lista para contar ainda
+        if(State.filtrosAvancadosBuscou){
+          var _faRows=box.querySelectorAll('tbody tr.guia-mainrow');
+          countLabel.textContent=(_faRows.length)+' guia(s) listada(s)';
+        }
       },30);
     }
 
@@ -5508,6 +5522,7 @@
     var tb=el('tbody');
     var rows = guias.filter(function(g){
       if(State.guiasViewTab==='filtro'){
+        if(!State.filtrosAvancadosBuscou) return false; // nada aparece até o operador clicar "Pesquisar"
         var fa=State.filtrosAvancados;
         if(fa.flagAuditoriaOrigem&&g.origem!=='Web Prestador') return false;
         if(fa.flagAguardandoAuth&&g.status!=='Aguardando complemento'&&g.status!=='Aguardando documentação') return false;
@@ -5617,7 +5632,9 @@
         render();
         };
       }
-    if(!pageRows.length) tb.appendChild(el('tr',{},'<td colspan="6"><div class="empty"><div class="ico">'+icoLg('inbox')+'</div>Nenhuma guia encontrada com os filtros atuais.</div></td>'));
+    var _aguardandoPesquisa=(State.guiasViewTab==='filtro' && !State.filtrosAvancadosBuscou);
+    if(!pageRows.length) tb.appendChild(el('tr',{},'<td colspan="6"><div class="empty"><div class="ico">'+icoLg(_aguardandoPesquisa?'search':'inbox')+'</div>'+
+      (_aguardandoPesquisa?'Ajuste os filtros desejados e clique em <b>Pesquisar</b> para listar as guias.':'Nenhuma guia encontrada com os filtros atuais.')+'</div></td>'));
     pageRows.forEach(function(g){
       var etAtual=''; for(var i=0;i<g.etapas.length;i++){ if(g.etapas[i].status==='em_execucao'){ etAtual=g.etapas[i].nome; break;} }
       if(!etAtual) etAtual=g.etapas[g.etapas.length-1].nome;
@@ -11711,7 +11728,8 @@
             '<li>Duplo-clique em badge de <b>Especialidade</b> → filtra por especialidade</li></ul>'+
             '<p>Os <b>chips</b> no topo da tabela exibem os filtros ativos. Clique no × de cada chip para removê-lo individualmente.</p>')+
           manualBox('Aba: Filtro aprofundado',
-            '<p>Oferece 15 checkboxes de flags e 20 dropdowns para segmentação avançada. Após configurar os filtros, clique em <b>Pesquisar</b>. O botão <b>Limpar filtros</b> reseta todos os campos.</p>'+
+            '<p>Oferece 15 checkboxes de flags e 20 dropdowns para segmentação avançada, mais o campo <b>Período</b> (datas de emissão). Nenhuma guia é listada até o operador clicar em <b>Pesquisar</b> — ajustar um filtro depois de já ter pesquisado não atualiza a lista sozinho, é preciso clicar em Pesquisar de novo para aplicar a mudança. O botão <b>Limpar filtros</b> reseta todos os campos, inclusive o Período (volta ao padrão de últimos 30 dias), mas não dispara nova pesquisa.</p>'+
+            '<p><b>Período</b> — por padrão já vem preenchido com os últimos 30 dias, exibidos no próprio campo; altere as datas caso deseje consultar outro intervalo.</p>'+
             '<p>Exemplos de flags: OPME, UTI, Demanda judicial, Auditoria na origem, Inconsistência, DUT obrigatória, Documentação anexada.</p>')+
           manualBox('Exportar',
             '<p>O botão <b>Exportar</b> (topo direito) gera uma planilha Excel com duas abas: <b>Guias</b> (dados completos das guias filtradas) e <b>Indicadores</b> (métricas do conjunto).</p>');
